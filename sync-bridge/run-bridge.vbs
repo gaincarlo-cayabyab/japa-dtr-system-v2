@@ -11,3 +11,4 @@ strBridge = strScriptDir & "\bridge.py"
 ' Run with window style 0 (hidden) and bWaitOnReturn = False
 objShell.CurrentDirectory = strScriptDir
 objShell.Run """" & strPython & """ """ & strBridge & """", 0, False
+

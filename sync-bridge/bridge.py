@@ -113,16 +113,11 @@ def sync_device_data(supabase: Client) -> int:
 
     inserted = 0
     try:
-        logger.info('Disabling device screen for safe transfer...')
-        conn.disable_device()
-
-        try:
-            users = conn.get_users()
-            attendances = conn.get_attendance()
-            logger.info(f'Device returned: {len(users)} users, {len(attendances)} attendance records')
-        finally:
-            conn.enable_device()
-            logger.info('Device screen re-enabled')
+        # We deliberately do NOT call disable_device() so the physical screen and keypad
+        # NEVER lock up and employees can punch in seamlessly at any time without interruption
+        users = conn.get_users()
+        attendances = conn.get_attendance()
+        logger.info(f'Device returned: {len(users)} users, {len(attendances)} attendance records')
 
         # 1. Register any missing users into employees table
         new_users = []

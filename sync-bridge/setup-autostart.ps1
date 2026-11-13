@@ -1,4 +1,4 @@
-﻿# Sets up JAPA DTR Sync Bridge to auto-start with Windows in the background
+# Sets up JAPA DTR Sync Bridge to auto-start with Windows in the background
 $startupFolder = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Startup)
 $shortcutPath = Join-Path $startupFolder "JAPA-DTR-SyncBridge.lnk"
 
@@ -19,3 +19,4 @@ Write-Host "✅ Autostart configured successfully!" -ForegroundColor Green
 Write-Host "   Shortcut location: $shortcutPath"
 Write-Host "   Target: $targetVbs"
 Write-Host "The bridge will now start automatically whenever Windows logs in, without needing Antigravity open."
+
