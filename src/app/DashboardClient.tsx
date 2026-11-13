@@ -128,8 +128,26 @@ export function DashboardClient({
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'attendance_logs' },
-        () => {
-          fetchFreshData()
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newPunch = payload.new
+            setRecentPunches((prev) => [newPunch, ...prev.slice(0, 9)])
+            setStats((prev) => ({
+              ...prev,
+              todayPunches: prev.todayPunches + 1,
+            }))
+            fetchFreshData()
+          } else if (payload.eventType === 'DELETE') {
+            setRecentPunches([])
+            setStats((prev) => ({
+              ...prev,
+              todayPunches: 0,
+              presentCount: 0,
+            }))
+            fetchFreshData()
+          } else {
+            fetchFreshData()
+          }
         }
       )
       .on(
@@ -143,10 +161,10 @@ export function DashboardClient({
         setIsLive(status === 'SUBSCRIBED')
       })
 
-    // Fallback polling every 20 seconds to guarantee fresh data
+    // Fallback polling every 10 seconds to guarantee fresh data
     const interval = setInterval(() => {
       fetchFreshData()
-    }, 20000)
+    }, 10000)
 
     return () => {
       supabase.removeChannel(channel)

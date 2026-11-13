@@ -137,8 +137,15 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'attendance_logs' },
-        () => {
-          fetchLatest()
+        (payload) => {
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newLog = payload.new as AttendanceLog
+            setLogs((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)])
+          } else if (payload.eventType === 'DELETE') {
+            setLogs([])
+          } else {
+            fetchLatest()
+          }
         }
       )
       .on(
@@ -152,7 +159,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
         setIsLive(status === 'SUBSCRIBED')
       })
 
-    const interval = setInterval(fetchLatest, 20000)
+    const interval = setInterval(fetchLatest, 10000)
 
     return () => {
       supabase.removeChannel(channel)
