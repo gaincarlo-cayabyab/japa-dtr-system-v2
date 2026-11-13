@@ -47,6 +47,7 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+  const [syncingDevice, setSyncingDevice] = useState(false)
 
   // Auto-dismiss toast
   useEffect(() => {
@@ -77,10 +78,27 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
       )
       .subscribe()
 
+    const interval = setInterval(refreshList, 10000)
+
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(interval)
     }
   }, [])
+
+  async function handleSyncFromDevice() {
+    setSyncingDevice(true)
+    try {
+      const res = await fetch('/api/employees/sync', { method: 'POST' })
+      if (!res.ok) throw new Error('Failed to request device sync')
+      setToast({ message: 'Request sent to TA500! Syncing employees in ~5s...', type: 'success' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error syncing'
+      setToast({ message: msg, type: 'error' })
+    } finally {
+      setTimeout(() => setSyncingDevice(false), 4000)
+    }
+  }
 
   function openAdd() {
     setEditTarget(null)
@@ -273,8 +291,19 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
         )}
       </div>
 
-      {/* Add Employee button (bottom of table) */}
-      <div className="mt-4 flex justify-end">
+      {/* Action buttons (bottom of table) */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <button
+          onClick={handleSyncFromDevice}
+          disabled={syncingDevice}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm disabled:opacity-50 transition-colors"
+          title="Pull all newly registered employees directly from the TA500 biometric machine"
+        >
+          <svg className={`w-4 h-4 text-blue-600 ${syncingDevice ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {syncingDevice ? 'Syncing Device…' : '🔄 Sync from TA500 Device'}
+        </button>
         <button
           onClick={openAdd}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"

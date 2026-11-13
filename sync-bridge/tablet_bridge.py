@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-JAPA DTR Sync Bridge — Samsung Galaxy Tab A8 Edition (v5 Fast & Resilient)
+JAPA DTR Sync Bridge — Samsung Galaxy Tab A8 Edition (v6 Instant Employee & Punch Sync)
 High-performance biometric sync bridge designed for real-world office Wi-Fi.
 
-Key Upgrades in v5:
-  1. Instant Punch Detection: Polling reduced to 6s with <200ms socket hold time.
-  2. Offline Queue / Slow Wi-Fi Resilience: If Wi-Fi to Supabase lags or times out,
-     punches are held in a local queue and retried automatically. Slow Wi-Fi NEVER
-     puts the TA500 to sleep or triggers 60s lockouts!
-  3. Persistent HTTP Session: Reuses TLS connections with HTTP keep-alive and retry
-     adapter, cutting cloud push latency from 2000ms down to ~100ms.
-  4. Instant Realtime Clearing: Checks cloud clear signals efficiently without
-     delaying regular attendance sync.
+Key Upgrades in v6:
+  1. Automatic Enrolled Employee Sync: Continuously checks TA500 enrolled users
+     every ~20s. Any newly registered fingerprint user is automatically uploaded
+     to Supabase IMMEDIATELY — even before their very first punch!
+  2. Manual Web Sync Support: Clicking "Sync from TA500 Device" on the portal
+     triggers an immediate hardware user fetch within 5 seconds.
+  3. Fast 6s Punch Sync: Local attendance reads take <200ms.
+  4. Offline Queue / Weak Wi-Fi Resilience: Punches are never dropped or blocked.
+  5. Persistent HTTP Session: Keeps TLS alive for ultra-fast 100ms cloud uploads.
 """
 
 import os
@@ -98,27 +98,50 @@ def refresh_employee_cache() -> None:
         logger.warning(f'Employee cache refresh failed (will retry): {e}')
 
 
-def auto_register_employees(conn, unknown_uids: Set[str]) -> None:
+def sync_all_device_users(conn) -> int:
+    """
+    Pulls all enrolled users from TA500 hardware memory.
+    If any newly enrolled employee is found, pushes them to Supabase employees table.
+    """
+    global _employee_cache
     try:
         users = conn.get_users()
-        new_emps = []
+        if not users:
+            return 0
+
+        new_or_updated = []
         for u in users:
             uid = str(u.user_id)
-            if uid in unknown_uids:
-                name = (u.name or '').strip() or f'NN-{uid}'
-                new_emps.append({
+            raw_name = (u.name or '').strip()
+            name = raw_name if raw_name else f'NN-{uid}'
+
+            # Check if this is a newly enrolled user or if their name was updated on device
+            if uid not in _employee_cache:
+                new_or_updated.append({
                     'device_user_id': uid,
                     'full_name': name,
                     'branch': 'Dagupan Main',
                 })
-        if new_emps:
+            elif _employee_cache[uid].startswith('NN-') and not name.startswith('NN-'):
+                new_or_updated.append({
+                    'device_user_id': uid,
+                    'full_name': name,
+                    'branch': 'Dagupan Main',
+                })
+
+        if new_or_updated:
+            logger.info(f'👤 Detected {len(new_or_updated)} new employee(s) on TA500: {[e["full_name"] for e in new_or_updated]}')
             url = f'{SUPABASE_URL}/rest/v1/employees?on_conflict=device_user_id'
-            res = session.post(url, headers=_HEADERS_INSERT, json=new_emps, timeout=(3, 5))
+            res = session.post(url, headers=_HEADERS_INSERT, json=new_or_updated, timeout=(3, 5))
             if res.status_code in (200, 201):
-                logger.info(f'Auto-registered employees: {[e["full_name"] for e in new_emps]}')
+                logger.info(f'✅ Successfully auto-registered {len(new_or_updated)} employee(s) in cloud!')
                 refresh_employee_cache()
+                return len(new_or_updated)
+            else:
+                logger.warning(f'Employee upload HTTP {res.status_code}: {res.text[:120]}')
     except Exception as e:
-        logger.error(f'Auto-register employees error: {e}')
+        logger.warning(f'Device user sync notice: {e}')
+    return 0
 
 
 # ─── State Persistence ────────────────────────────────────────────────────────
@@ -144,9 +167,8 @@ def save_seen_set(seen: Set[str]) -> None:
         logger.warning(f'Could not save seen-punch set: {e}')
 
 
-# ─── Cloud Meta Commands (Single Consolidated HTTP Query) ─────────────────────
+# ─── Cloud Meta Commands ──────────────────────────────────────────────────────
 def fetch_cloud_meta() -> Dict[str, int]:
-    """Fetches all sync_meta keys in a single quick HTTP request."""
     try:
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?select=key,value'
         res = session.get(url, headers=_HEADERS_AUTH, timeout=(2, 4))
@@ -157,12 +179,12 @@ def fetch_cloud_meta() -> Dict[str, int]:
     return {}
 
 
-def acknowledge_hardware_clear() -> None:
+def acknowledge_command(key: str) -> None:
     try:
-        url = f'{SUPABASE_URL}/rest/v1/sync_meta?key=eq.clear_hardware'
+        url = f'{SUPABASE_URL}/rest/v1/sync_meta?key=eq.{key}'
         session.patch(url, headers=_HEADERS_INSERT, json={'value': 0}, timeout=(2, 4))
-    except Exception as e:
-        logger.warning(f'Could not acknowledge clear_hardware: {e}')
+    except Exception:
+        pass
 
 
 def load_local_token() -> int:
@@ -210,10 +232,6 @@ def connect_device() -> Optional[object]:
 
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
 def flush_upload_queue(seen: Set[str]) -> bool:
-    """
-    Pushes queued punches to Supabase.
-    If Wi-Fi is slow/down, punches remain in queue safely.
-    """
     global _pending_upload_queue
     if not _pending_upload_queue:
         return True
@@ -245,9 +263,9 @@ def flush_upload_queue(seen: Set[str]) -> bool:
 def main():
     global _pending_upload_queue
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v5')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v6')
     print(f'   Device IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Poll Rate : Fast 6s (Immediate Punch Sync)')
+    print(f'   Poll Rate : Fast 6s (Instant Punch + Enrolled Employee Sync)')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -263,41 +281,41 @@ def main():
     while True:
         cycle_counter += 1
 
-        # ── 1. Check cloud meta once every 3 cycles (~18s) ───────────────────
-        if cycle_counter % 3 == 1:
-            meta = fetch_cloud_meta()
+        # ── 1. Check cloud meta commands ─────────────────────────────────────
+        meta = fetch_cloud_meta()
+        manual_emp_sync = meta.get('sync_employees') == 1
 
-            # Hardware clear requested from web portal
-            if meta.get('clear_hardware') == 1:
-                logger.info('🧹 Remote clear requested from web portal!')
-                conn = connect_device()
-                if conn:
-                    try:
-                        conn.clear_attendance()
-                        logger.info('✅ TA500 physical hardware memory CLEARED!')
-                    except Exception as e:
-                        logger.error(f'Error clearing hardware: {e}')
-                    finally:
-                        safe_disconnect(conn)
-                acknowledge_hardware_clear()
-                seen.clear()
-                save_seen_set(seen)
-                _pending_upload_queue.clear()
-                logger.info('✅ Local cache & queue reset. Ready for fresh punches!')
-                time.sleep(POLL_INTERVAL)
-                continue
+        # Hardware clear requested from web portal
+        if meta.get('clear_hardware') == 1:
+            logger.info('🧹 Remote clear requested from web portal!')
+            conn = connect_device()
+            if conn:
+                try:
+                    conn.clear_attendance()
+                    logger.info('✅ TA500 physical hardware memory CLEARED!')
+                except Exception as e:
+                    logger.error(f'Error clearing hardware: {e}')
+                finally:
+                    safe_disconnect(conn)
+            acknowledge_command('clear_hardware')
+            seen.clear()
+            save_seen_set(seen)
+            _pending_upload_queue.clear()
+            logger.info('✅ Local cache & queue reset. Ready for fresh punches!')
+            time.sleep(POLL_INTERVAL)
+            continue
 
-            # Clear token changed
-            remote_token = meta.get('clear_token', local_token)
-            if remote_token != local_token:
-                logger.info(f'Cloud clear detected (token {local_token} -> {remote_token}). Resetting local cache.')
-                seen.clear()
-                save_seen_set(seen)
-                _pending_upload_queue.clear()
-                local_token = remote_token
-                save_local_token(local_token)
+        # Clear token changed
+        remote_token = meta.get('clear_token', local_token)
+        if remote_token != local_token:
+            logger.info(f'Cloud clear detected (token {local_token} -> {remote_token}). Resetting local cache.')
+            seen.clear()
+            save_seen_set(seen)
+            _pending_upload_queue.clear()
+            local_token = remote_token
+            save_local_token(local_token)
 
-        # ── 2. Flush any pending offline queue first ─────────────────────────
+        # ── 2. Flush any pending offline punches first ───────────────────────
         if _pending_upload_queue:
             flush_upload_queue(seen)
 
@@ -305,7 +323,6 @@ def main():
         conn = connect_device()
         if not conn:
             ta500_fail_count += 1
-            # Light LAN cooldown (5s, 10s, max 15s) — never block for 60s
             cooldown = min(5 * ta500_fail_count, 15)
             logger.warning(f'TA500 LAN busy (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
             time.sleep(cooldown)
@@ -317,14 +334,21 @@ def main():
 
         new_punches_found = 0
         try:
+            # ── Check for new enrolled employees (Periodic every ~18s OR on-demand) ──
+            should_sync_users = manual_emp_sync or (cycle_counter % 3 == 0)
+            if should_sync_users:
+                sync_all_device_users(conn)
+                if manual_emp_sync:
+                    acknowledge_command('sync_employees')
+
+            # ── Check punches ──
             attendances = conn.get_attendance() or []
 
-            # Check unknown employees
+            # Check if any punch has an unknown user ID not in cache
             unknown_uids = {str(a.user_id) for a in attendances
                             if str(a.user_id) not in _employee_cache}
-            if unknown_uids:
-                logger.info(f'Resolving employee names: {unknown_uids}')
-                auto_register_employees(conn, unknown_uids)
+            if unknown_uids and not should_sync_users:
+                sync_all_device_users(conn)
 
             sync_time = datetime.now(timezone.utc).isoformat()
 
@@ -341,7 +365,6 @@ def main():
                 if key in seen:
                     continue
 
-                # Check not already in queue
                 if any(q['_key'] == key for q in _pending_upload_queue):
                     continue
 
@@ -362,7 +385,6 @@ def main():
         except Exception as e:
             logger.warning(f'TA500 read notice: {e}')
         finally:
-            # IMMEDIATELY disconnect socket to keep TA500 free
             safe_disconnect(conn)
 
         # ── 4. If new punches found, push to cloud immediately ───────────────
