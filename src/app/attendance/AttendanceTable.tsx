@@ -9,6 +9,64 @@ import { Badge } from '@/components/ui/Badge'
 
 const PAGE_SIZE = 50
 
+// ── Clear All modal ────────────────────────────────────────────────────────────
+function ClearModal({
+  onConfirm,
+  onCancel,
+  isLoading,
+}: {
+  onConfirm: () => void
+  onCancel: () => void
+  isLoading: boolean
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm mx-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Clear All Attendance Logs</h3>
+            <p className="text-sm text-gray-500">This cannot be undone.</p>
+          </div>
+        </div>
+        <p className="text-sm text-gray-700 mb-6">
+          All attendance records will be permanently deleted from the cloud database. The TA500 device logs will <strong>not</strong> be affected.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onCancel}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={isLoading}
+            className="flex-1 px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                </svg>
+                Clearing…
+              </>
+            ) : (
+              '🗑️ Delete All'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface AttendanceTableProps {
   initialLogs: AttendanceLog[]
   employees: Employee[]
@@ -30,6 +88,29 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
   const [logs, setLogs] = useState<AttendanceLog[]>(initialLogs)
   const [employeesList, setEmployeesList] = useState<Employee[]>(employees)
   const [isLive, setIsLive] = useState(false)
+
+  // Clear-all state
+  const [showClearModal, setShowClearModal] = useState(false)
+  const [isClearing, setIsClearing] = useState(false)
+  const [clearMessage, setClearMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const handleClearAll = async () => {
+    setIsClearing(true)
+    try {
+      const res = await fetch('/api/attendance/clear', { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to clear')
+      setLogs([])
+      setClearMessage({ type: 'success', text: `✅ Cleared ${json.deleted ?? 'all'} attendance records.` })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      setClearMessage({ type: 'error', text: `❌ Error: ${msg}` })
+    } finally {
+      setIsClearing(false)
+      setShowClearModal(false)
+      setTimeout(() => setClearMessage(null), 5000)
+    }
+  }
 
   // Filters
   const today = format(new Date(), 'yyyy-MM-dd')
@@ -106,6 +187,28 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
 
   return (
     <div>
+      {/* Clear All Modal */}
+      {showClearModal && (
+        <ClearModal
+          onConfirm={handleClearAll}
+          onCancel={() => setShowClearModal(false)}
+          isLoading={isClearing}
+        />
+      )}
+
+      {/* Toast notification */}
+      {clearMessage && (
+        <div
+          className={`mb-4 px-4 py-3 rounded-lg text-sm font-medium ${
+            clearMessage.type === 'success'
+              ? 'bg-green-50 text-green-800 border border-green-200'
+              : 'bg-red-50 text-red-800 border border-red-200'
+          }`}
+        >
+          {clearMessage.text}
+        </div>
+      )}
+
       {/* Filter bar */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-end">
         {/* Live badge */}
@@ -178,6 +281,20 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               onChange={(e) => setNameSearch(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* Clear All button */}
+          <div className="flex items-end">
+            <button
+              onClick={() => setShowClearModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-red-50 text-red-700 border border-red-200 rounded-lg hover:bg-red-100 transition-colors font-medium"
+              title="Delete all attendance logs from cloud database"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Clear All Logs
+            </button>
           </div>
         </div>
       </div>
