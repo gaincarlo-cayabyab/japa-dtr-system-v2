@@ -1,0 +1,6 @@
+pyzk==0.9
+supabase==2.5.0
+python-dotenv==1.0.1
+schedule==1.2.1
+requests==2.31.0
+pytz==2024.1
