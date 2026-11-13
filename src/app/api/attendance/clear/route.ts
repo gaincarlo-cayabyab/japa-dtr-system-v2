@@ -5,7 +5,7 @@ export async function DELETE() {
   try {
     const supabase = await createClient()
 
-    // Delete all attendance logs (neq with a non-existent UUID deletes everything)
+    // 1. Delete all attendance logs
     const { error, count } = await supabase
       .from('attendance_logs')
       .delete({ count: 'exact' })
@@ -15,6 +15,10 @@ export async function DELETE() {
       console.error('Clear attendance error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    // 2. Bump the sync_meta clear_token so the tablet bridge knows to wipe
+    //    its local seen-set and re-push all device records fresh.
+    await supabase.rpc('increment_clear_token')
 
     return NextResponse.json({ success: true, deleted: count ?? 0 })
   } catch (err) {
