@@ -55,6 +55,33 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
     return () => clearTimeout(t)
   }, [toast])
 
+  // Real-time synchronization for new/updated employees
+  useEffect(() => {
+    const supabase = createClient()
+    const refreshList = async () => {
+      const { data } = await supabase
+        .from('employees')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (data) setEmployees(data)
+    }
+
+    const channel = supabase
+      .channel('employees-realtime-manager')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        () => {
+          refreshList()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   function openAdd() {
     setEditTarget(null)
     setForm(DEFAULT_FORM)

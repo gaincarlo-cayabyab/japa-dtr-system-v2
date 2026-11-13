@@ -97,8 +97,11 @@ create trigger employees_updated_at
   before update on public.employees
   for each row execute function public.set_updated_at();
 
--- Enable Realtime for attendance_logs
+-- Enable Realtime for attendance_logs and employees
 alter publication supabase_realtime add table public.attendance_logs;
+alter publication supabase_realtime add table public.employees;
+alter table public.attendance_logs replica identity full;
+alter table public.employees replica identity full;
 
 
 

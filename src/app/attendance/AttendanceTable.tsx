@@ -28,6 +28,7 @@ function getEmployeeName(deviceUserId: string, employees: Employee[]) {
 
 export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps) {
   const [logs, setLogs] = useState<AttendanceLog[]>(initialLogs)
+  const [employeesList, setEmployeesList] = useState<Employee[]>(employees)
   const [isLive, setIsLive] = useState(false)
 
   // Filters
@@ -40,28 +41,47 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
 
   useEffect(() => {
     const supabase = createClient()
+
+    const fetchLatest = async () => {
+      const [{ data: freshLogs }, { data: freshEmps }] = await Promise.all([
+        supabase.from('attendance_logs').select('*').order('punch_time', { ascending: false }).limit(200),
+        supabase.from('employees').select('*'),
+      ])
+      if (freshLogs) setLogs(freshLogs)
+      if (freshEmps) setEmployeesList(freshEmps)
+    }
+
     const channel = supabase
       .channel('attendance-realtime')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'attendance_logs' },
-        (payload) => {
-          const newRow = payload.new as AttendanceLog
-          setLogs((prev) => [newRow, ...prev])
+        { event: '*', schema: 'public', table: 'attendance_logs' },
+        () => {
+          fetchLatest()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'employees' },
+        () => {
+          fetchLatest()
         }
       )
       .subscribe((status) => {
         setIsLive(status === 'SUBSCRIBED')
       })
 
+    const interval = setInterval(fetchLatest, 20000)
+
     return () => {
       supabase.removeChannel(channel)
+      clearInterval(interval)
     }
   }, [])
 
   const filtered = useMemo(() => {
     return logs.filter((log) => {
-      const empName = getEmployeeName(log.device_user_id, employees).toLowerCase()
+      const empName = getEmployeeName(log.device_user_id, employeesList).toLowerCase()
 
       if (dateFilter) {
         const logDate = log.punch_time.slice(0, 10)
@@ -76,7 +96,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
 
       return true
     })
-  }, [logs, dateFilter, employeeFilter, statusFilter, nameSearch, employees])
+  }, [logs, dateFilter, employeeFilter, statusFilter, nameSearch, employeesList])
 
   const pageCount = Math.ceil(filtered.length / PAGE_SIZE)
   const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -124,7 +144,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Employees</option>
-              {employees.map((emp) => (
+              {employeesList.map((emp) => (
                 <option key={emp.id} value={emp.device_user_id}>
                   {emp.full_name}
                 </option>

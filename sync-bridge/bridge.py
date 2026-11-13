@@ -8,6 +8,7 @@ Device: 192.168.68.146:4370
 import os
 import sys
 import time
+import socket
 import logging
 import signal
 import threading
@@ -36,13 +37,14 @@ LOG_LEVEL    = os.getenv('LOG_LEVEL', 'INFO')
 TZ           = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Manila'))
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
+log_file = os.path.join(_bridge_dir, 'bridge.log')
 logging.basicConfig(
     level=getattr(logging, LOG_LEVEL),
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S',
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler('bridge.log', encoding='utf-8'),
+        logging.FileHandler(log_file, encoding='utf-8'),
     ]
 )
 logger = logging.getLogger('japa-dtr-bridge')
@@ -75,7 +77,7 @@ def refresh_employee_cache(supabase: Client) -> None:
             _employee_cache.clear()
             for emp in (result.data or []):
                 _employee_cache[str(emp['device_user_id'])] = emp['full_name']
-        logger.info(f'Employee cache refreshed: {len(_employee_cache)} employees')
+        logger.info(f'Employee cache refreshed: {len(_employee_cache)} employees loaded')
     except Exception as e:
         logger.error(f'Failed to refresh employee cache: {e}')
 
@@ -96,36 +98,60 @@ def connect_device() -> Optional[ZK]:
         logger.error(f'Failed to connect to TA500: {e}')
         return None
 
-# ─── Sync logic ───────────────────────────────────────────────────────────────
-def sync_attendance(supabase: Client) -> int:
+# ─── Unified Sync (Users + Attendance in a Single Connection) ──────────────────
+def sync_device_data(supabase: Client) -> int:
     """
-    Pull attendance records from TA500 and push new ones to Supabase.
-    Returns number of new records inserted.
+    Connects to the TA500 once per cycle:
+    1. Downloads all users and auto-registers new users into Supabase `employees` first.
+    2. Downloads attendance punches and upserts them to `attendance_logs`.
+    Guarantees zero foreign-key constraint conflicts.
     """
     conn = connect_device()
     if not conn:
-        logger.warning('Skipping sync — device not reachable')
+        logger.warning('Skipping sync cycle — TA500 not reachable')
         return 0
 
     inserted = 0
     try:
-        logger.info('Disabling device screen for safe data transfer...')
+        logger.info('Disabling device screen for safe transfer...')
         conn.disable_device()
 
         try:
+            users = conn.get_users()
             attendances = conn.get_attendance()
-            logger.info(f'Retrieved {len(attendances)} total attendance records from device')
+            logger.info(f'Device returned: {len(users)} users, {len(attendances)} attendance records')
         finally:
             conn.enable_device()
             logger.info('Device screen re-enabled')
 
-        # Build Supabase payload, skipping records for unknown users (not in DB)
+        # 1. Register any missing users into employees table
+        new_users = []
+        with _cache_lock:
+            for u in users:
+                uid = str(u.user_id)
+                if uid not in _employee_cache:
+                    name = u.name.strip() if u.name and u.name.strip() else f'NN-{uid}'
+                    new_users.append({
+                        'device_user_id': uid,
+                        'full_name': name,
+                        'branch': 'Dagupan Main',
+                    })
+
+        if new_users:
+            logger.info(f'Registering {len(new_users)} new device users in Supabase: {[u["full_name"] for u in new_users]}')
+            supabase.table('employees').upsert(
+                new_users,
+                on_conflict='device_user_id',
+                ignore_duplicates=True,
+            ).execute()
+            refresh_employee_cache(supabase)
+
+        # 2. Push attendance records to Supabase
         to_insert = []
         sync_time = datetime.now(timezone.utc).isoformat()
 
         for att in attendances:
             uid = str(att.user_id)
-            # Localize punch_time (device stores local time, naive)
             naive_dt = att.timestamp
             if isinstance(naive_dt, str):
                 from dateutil import parser as dp
@@ -145,7 +171,6 @@ def sync_attendance(supabase: Client) -> int:
             logger.info('No attendance records to sync')
             return 0
 
-        # Upsert in batches of 100 — unique constraint on (device_user_id, punch_time) prevents duplication
         BATCH = 100
         for i in range(0, len(to_insert), BATCH):
             batch = to_insert[i:i+BATCH]
@@ -159,10 +184,10 @@ def sync_attendance(supabase: Client) -> int:
             except Exception as e:
                 logger.error(f'Batch upsert error (batch {i//BATCH + 1}): {e}')
 
-        logger.info(f'Sync complete: {inserted} new records inserted (of {len(to_insert)} total on device)')
+        logger.info(f'Sync cycle complete: {inserted} new records inserted (of {len(to_insert)} total on device)')
 
     except Exception as e:
-        logger.error(f'Sync error: {e}', exc_info=True)
+        logger.error(f'Sync cycle error: {e}', exc_info=True)
     finally:
         try:
             conn.disconnect()
@@ -171,52 +196,22 @@ def sync_attendance(supabase: Client) -> int:
 
     return inserted
 
-# ─── Auto-register unknown users ─────────────────────────────────────────────
-def auto_register_unknown_users(supabase: Client) -> None:
-    """
-    Scan device users and insert placeholder records (NN-<id>) for any
-    device user IDs not yet in the employees table.
-    """
-    conn = connect_device()
-    if not conn:
-        return
+# ─── Single-Instance Socket Lock ──────────────────────────────────────────────
+_lock_socket: Optional[socket.socket] = None
+
+def acquire_instance_lock():
+    global _lock_socket
     try:
-        conn.disable_device()
-        try:
-            users = conn.get_users()
-        finally:
-            conn.enable_device()
-
-        new_users = []
-        for u in users:
-            uid = str(u.user_id)
-            with _cache_lock:
-                if uid not in _employee_cache:
-                    name = u.name.strip() if u.name and u.name.strip() else f'NN-{uid}'
-                    new_users.append({
-                        'device_user_id': uid,
-                        'full_name': name,
-                        'branch': 'Dagupan Main',
-                    })
-
-        if new_users:
-            supabase.table('employees').upsert(
-                new_users,
-                on_conflict='device_user_id',
-                ignore_duplicates=True,
-            ).execute()
-            logger.info(f'Auto-registered {len(new_users)} new device users (placeholders)')
-            refresh_employee_cache(supabase)
-    except Exception as e:
-        logger.error(f'Auto-register error: {e}')
-    finally:
-        try:
-            conn.disconnect()
-        except Exception:
-            pass
+        _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.bind(('127.0.0.1', 43701))
+    except socket.error:
+        logger.warning('Another instance of JAPA DTR Sync Bridge is already running. Exiting silently.')
+        sys.exit(0)
 
 # ─── Main loop ────────────────────────────────────────────────────────────────
 def main():
+    acquire_instance_lock()
+
     logger.info('=' * 60)
     logger.info('JAPA DTR Sync Bridge starting...')
     logger.info(f'Device: {ZK_IP}:{ZK_PORT}  |  Poll: every {POLL_INTERVAL}s')
@@ -224,17 +219,15 @@ def main():
 
     supabase = get_supabase()
     refresh_employee_cache(supabase)
-    auto_register_unknown_users(supabase)
 
-    # Run immediately on start
-    sync_attendance(supabase)
+    # Initial sync
+    sync_device_data(supabase)
 
-    # Schedule recurring sync
-    schedule.every(POLL_INTERVAL).seconds.do(sync_attendance, supabase)
+    # Periodic schedule
+    schedule.every(POLL_INTERVAL).seconds.do(sync_device_data, supabase)
     schedule.every(5).minutes.do(refresh_employee_cache, supabase)
-    schedule.every(10).minutes.do(auto_register_unknown_users, supabase)
 
-    logger.info(f'Polling every {POLL_INTERVAL} seconds. Press Ctrl+C to stop.')
+    logger.info(f'Bridge active and polling every {POLL_INTERVAL} seconds. Press Ctrl+C to stop.')
 
     while not _shutdown.is_set():
         schedule.run_pending()
