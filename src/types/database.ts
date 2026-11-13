@@ -6,85 +6,112 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
+      attendance_logs: {
+        Row: {
+          created_at: string
+          device_user_id: string
+          id: string
+          punch_time: string
+          raw_status: number | null
+          status: number
+          synced_at: string
+        }
+        Insert: {
+          created_at?: string
+          device_user_id: string
+          id?: string
+          punch_time: string
+          raw_status?: number | null
+          status?: number
+          synced_at?: string
+        }
+        Update: {
+          created_at?: string
+          device_user_id?: string
+          id?: string
+          punch_time?: string
+          raw_status?: number | null
+          status?: number
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_logs_device_user_id_fkey"
+            columns: ["device_user_id"]
+            isOneToOne: false
+            referencedRelation: "daily_dtr"
+            referencedColumns: ["device_user_id"]
+          },
+          {
+            foreignKeyName: "attendance_logs_device_user_id_fkey"
+            columns: ["device_user_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["device_user_id"]
+          },
+        ]
+      }
       employees: {
         Row: {
-          id: string
+          branch: string
+          created_at: string
+          department: string | null
           device_user_id: string
           full_name: string
-          branch: string
+          id: string
           position: string | null
-          department: string | null
-          created_at: string
           updated_at: string
         }
         Insert: {
-          id?: string
+          branch?: string
+          created_at?: string
+          department?: string | null
           device_user_id: string
           full_name: string
-          branch?: string
+          id?: string
           position?: string | null
-          department?: string | null
-          created_at?: string
           updated_at?: string
         }
         Update: {
-          id?: string
+          branch?: string
+          created_at?: string
+          department?: string | null
           device_user_id?: string
           full_name?: string
-          branch?: string
+          id?: string
           position?: string | null
-          department?: string | null
           updated_at?: string
         }
-      }
-      attendance_logs: {
-        Row: {
-          id: string
-          device_user_id: string
-          punch_time: string
-          status: number
-          raw_status: number | null
-          synced_at: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          device_user_id: string
-          punch_time: string
-          status?: number
-          raw_status?: number | null
-          synced_at?: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          device_user_id?: string
-          punch_time?: string
-          status?: number
-          raw_status?: number | null
-          synced_at?: string
-        }
+        Relationships: []
       }
     }
     Views: {
       daily_dtr: {
         Row: {
-          employee_id: string
-          full_name: string
-          device_user_id: string
           branch: string
-          work_date: string
+          device_user_id: string
+          employee_id: string
           first_check_in: string | null
+          full_name: string
           last_check_out: string | null
           total_punches: number
+          work_date: string
         }
+        Relationships: []
       }
     }
-    Functions: {}
-    Enums: {}
+    Functions: {
+      [_ in never]: never
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
 }
 

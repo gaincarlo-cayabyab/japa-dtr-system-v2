@@ -97,11 +97,8 @@ create trigger employees_updated_at
   before update on public.employees
   for each row execute function public.set_updated_at();
 
--- ============================================================
--- SEED DATA (sample employees — adjust as needed)
--- ============================================================
-insert into public.employees (device_user_id, full_name, branch, position)
-values
-  ('1', 'Gain Carlo',    'Dagupan Main', 'Administrator'),
-  ('2', 'Sample Employee', 'Dagupan Main', 'Staff')
-on conflict (device_user_id) do nothing;
+-- Enable Realtime for attendance_logs
+alter publication supabase_realtime add table public.attendance_logs;
+
+
+

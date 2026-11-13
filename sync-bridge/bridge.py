@@ -20,7 +20,9 @@ from dotenv import load_dotenv
 from zk import ZK, const
 from supabase import create_client, Client
 
-load_dotenv()
+_bridge_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_bridge_dir, '.env'))
+load_dotenv()  # fallback to current dir if any
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 ZK_IP        = os.getenv('ZK_DEVICE_IP', '192.168.68.146')
@@ -84,7 +86,7 @@ def get_employee_name(device_user_id: str) -> str:
 # ─── Device connection ────────────────────────────────────────────────────────
 def connect_device() -> Optional[ZK]:
     """Connect to TA500 with retry logic."""
-    zk = ZK(ZK_IP, port=ZK_PORT, timeout=ZK_TIMEOUT, password=ZK_PASSWORD, force_udp=False, ommit_ping=False)
+    zk = ZK(ZK_IP, port=ZK_PORT, timeout=ZK_TIMEOUT, password=ZK_PASSWORD, force_udp=False, ommit_ping=True)
     try:
         logger.info(f'Connecting to TA500 at {ZK_IP}:{ZK_PORT}...')
         conn = zk.connect()

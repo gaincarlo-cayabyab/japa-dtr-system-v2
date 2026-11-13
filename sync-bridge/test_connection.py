@@ -4,12 +4,14 @@ import os
 from dotenv import load_dotenv
 from zk import ZK
 
+_bridge_dir = os.path.dirname(os.path.abspath(__file__))
+load_dotenv(os.path.join(_bridge_dir, '.env'))
 load_dotenv()
 IP   = os.getenv('ZK_DEVICE_IP', '192.168.68.146')
 PORT = int(os.getenv('ZK_DEVICE_PORT', '4370'))
 
 print(f'Testing connection to TA500 at {IP}:{PORT}...')
-zk = ZK(IP, port=PORT, timeout=10, password=0)
+zk = ZK(IP, port=PORT, timeout=10, password=0, force_udp=False, ommit_ping=True)
 try:
     conn = zk.connect()
     info = conn.get_firmware_version()

@@ -29,7 +29,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
   const { id } = params
 
   // Get employee's device_user_id first
-  const { data: emp, error: empError } = await supabase
+  const { data: emp, error: empError } = await (supabase as any)
     .from('employees')
     .select('device_user_id')
     .eq('id', id)
@@ -39,11 +39,13 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
   }
 
+  const employeeData = emp as { device_user_id: string }
+
   // Check for existing attendance logs before deleting
-  const { count, error: checkError } = await supabase
+  const { count, error: checkError } = await (supabase as any)
     .from('attendance_logs')
     .select('*', { count: 'exact', head: true })
-    .eq('device_user_id', emp.device_user_id)
+    .eq('device_user_id', employeeData.device_user_id)
 
   if (checkError) return NextResponse.json({ error: checkError.message }, { status: 500 })
 
