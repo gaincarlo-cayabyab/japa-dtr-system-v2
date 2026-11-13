@@ -231,7 +231,10 @@ def main():
     logger.info(f'Bridge active and polling every {POLL_INTERVAL} seconds. Press Ctrl+C to stop.')
 
     while not _shutdown.is_set():
-        schedule.run_pending()
+        try:
+            schedule.run_pending()
+        except Exception as e:
+            logger.error(f'Unexpected error in main schedule loop: {e}')
         _shutdown.wait(timeout=1)
 
     logger.info('Bridge shut down cleanly.')
