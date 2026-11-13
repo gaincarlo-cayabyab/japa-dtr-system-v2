@@ -103,3 +103,4 @@ if __name__ == '__main__':
             print("Error: --user-id is required for delete-user")
             sys.exit(1)
         cmd_delete_user(args.user_id)
+

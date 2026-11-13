@@ -113,33 +113,39 @@ def sync_device_data(supabase: Client) -> int:
 
     inserted = 0
     try:
-        # We deliberately do NOT call disable_device() so the physical screen and keypad
-        # NEVER lock up and employees can punch in seamlessly at any time without interruption
-        users = conn.get_users()
+        # Fast attendance read (< 200ms) without locking device or fetching heavy user templates
         attendances = conn.get_attendance()
-        logger.info(f'Device returned: {len(users)} users, {len(attendances)} attendance records')
+        logger.info(f'Device returned: {len(attendances)} attendance records')
 
-        # 1. Register any missing users into employees table
-        new_users = []
+        # Check if any punch belongs to an unknown user not yet in our employee cache
+        unknown_uids = set()
         with _cache_lock:
-            for u in users:
-                uid = str(u.user_id)
-                if uid not in _employee_cache:
-                    name = u.name.strip() if u.name and u.name.strip() else f'NN-{uid}'
-                    new_users.append({
-                        'device_user_id': uid,
-                        'full_name': name,
-                        'branch': 'Dagupan Main',
-                    })
+            for att in attendances:
+                if str(att.user_id) not in _employee_cache:
+                    unknown_uids.add(str(att.user_id))
 
-        if new_users:
-            logger.info(f'Registering {len(new_users)} new device users in Supabase: {[u["full_name"] for u in new_users]}')
-            supabase.table('employees').upsert(
-                new_users,
-                on_conflict='device_user_id',
-                ignore_duplicates=True,
-            ).execute()
-            refresh_employee_cache(supabase)
+        if unknown_uids:
+            logger.info(f'Resolving new employee names from device for IDs: {unknown_uids}...')
+            users = conn.get_users()
+            new_users = []
+            with _cache_lock:
+                for u in users:
+                    uid = str(u.user_id)
+                    if uid in unknown_uids:
+                        name = u.name.strip() if u.name and u.name.strip() else f'NN-{uid}'
+                        new_users.append({
+                            'device_user_id': uid,
+                            'full_name': name,
+                            'branch': 'Dagupan Main',
+                        })
+            if new_users:
+                logger.info(f'Auto-registering {len(new_users)} new device users in Supabase: {[u["full_name"] for u in new_users]}')
+                supabase.table('employees').upsert(
+                    new_users,
+                    on_conflict='device_user_id',
+                    ignore_duplicates=True,
+                ).execute()
+                refresh_employee_cache(supabase)
 
         # 2. Push attendance records to Supabase
         to_insert = []
