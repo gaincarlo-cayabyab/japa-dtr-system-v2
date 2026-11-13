@@ -32,7 +32,7 @@ ZK_TIMEOUT   = int(os.getenv('ZK_TIMEOUT', '30'))
 ZK_PASSWORD  = int(os.getenv('ZK_PASSWORD', '0'))
 SUPABASE_URL = os.getenv('SUPABASE_URL', '')
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
-POLL_INTERVAL = int(os.getenv('POLL_INTERVAL_SECONDS', '30'))
+POLL_INTERVAL = int(os.getenv('POLL_INTERVAL_SECONDS', '10'))
 LOG_LEVEL    = os.getenv('LOG_LEVEL', 'INFO')
 TZ           = pytz.timezone(os.getenv('TIMEZONE', 'Asia/Manila'))
 
@@ -204,7 +204,9 @@ def acquire_instance_lock():
     global _lock_socket
     try:
         _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         _lock_socket.bind(('127.0.0.1', 43701))
+        _lock_socket.listen(1)
     except socket.error:
         logger.warning('Another instance of JAPA DTR Sync Bridge is already running. Exiting silently.')
         sys.exit(0)
