@@ -34,7 +34,7 @@ function ClearModal({
           </div>
         </div>
         <p className="text-sm text-gray-700 mb-6">
-          All attendance records will be permanently deleted from the cloud database. The TA500 device logs will <strong>not</strong> be affected.
+          All attendance records will be permanently deleted from the cloud database and cleared from the TA500 biometric machine for a fresh test.
         </p>
         <div className="flex gap-3">
           <button

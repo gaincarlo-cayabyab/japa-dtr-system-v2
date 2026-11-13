@@ -5,7 +5,7 @@ export async function DELETE() {
   try {
     const supabase = await createClient()
 
-    // 1. Delete all attendance logs
+    // 1. Delete all attendance logs from Supabase
     const { error, count } = await supabase
       .from('attendance_logs')
       .delete({ count: 'exact' })
@@ -16,11 +16,19 @@ export async function DELETE() {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // 2. Bump the sync_meta clear_token so the tablet bridge knows to wipe
-    //    its local seen-set and re-push all device records fresh.
+    // 2. Bump the sync_meta clear_token
     await supabase.rpc('increment_clear_token')
 
-    return NextResponse.json({ success: true, deleted: count ?? 0 })
+    // 3. Request the tablet bridge to clear the physical TA500 hardware memory
+    await supabase
+      .from('sync_meta')
+      .upsert({ key: 'clear_hardware', value: 1 })
+
+    return NextResponse.json({
+      success: true,
+      deleted: count ?? 0,
+      hardware_clear_requested: true,
+    })
   } catch (err) {
     console.error('Unexpected error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

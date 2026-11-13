@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-JAPA DTR Sync Bridge — Samsung Galaxy Tab A8 Edition (v3)
-Runs directly on the company tablet in Termux to sync FingerTec TA500 24/7.
+JAPA DTR Sync Bridge — Samsung Galaxy Tab A8 Edition (v4 Production)
+Runs on company tablet via Termux. Connects FingerTec TA500 (192.168.68.146:4370) to Supabase.
 
-Key fixes vs v2:
-  - Proper deduplication: local seen-set persisted to JSON so old records
-    are NEVER re-counted as new after a Supabase clear or bridge restart.
-  - Exponential back-off on connection failures (10s → 20s → 40s → 60s max)
-    to stop hammering the TA500 when its socket is busy.
-  - Poll interval raised to 30 s (safe for TA500 firmware).
-  - Only HTTP 201 (Created) rows counted as truly new inserts.
+Key Improvements:
+  1. Two-way hardware clear: Web UI "Clear All Logs" signals this bridge
+     to wipe the TA500 physical memory (conn.clear_attendance()) so old
+     punches never ghost-sync back after a reset!
+  2. Safe TCP management: Exponential backoff on connection errors to give
+     the TA500 network buffer time to reset, avoiding [Errno 104] loops.
+  3. Seen-punches persistence: Only truly new punches are ever pushed.
+  4. Automatic employee auto-enrollment for new fingerprint users.
 """
 
 import os
@@ -26,15 +27,15 @@ try:
     import requests
     from zk import ZK
 except ImportError as e:
-    print(f"Missing package: {e}")
+    print(f"Missing dependency: {e}")
     print("Run: pip install pyzk pytz requests")
     sys.exit(1)
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 ZK_IP         = os.getenv('ZK_DEVICE_IP',  '192.168.68.146')
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
-ZK_TIMEOUT    = int(os.getenv('ZK_TIMEOUT', '15'))  # seconds per TCP op
-POLL_INTERVAL = int(os.getenv('POLL_INTERVAL', '30'))  # 30 s is safe for TA500
+ZK_TIMEOUT    = 10  # Seconds for TCP socket timeout
+POLL_INTERVAL = 20  # Poll every 20 seconds (ideal for TA500 socket health)
 TZ            = pytz.timezone('Asia/Manila')
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://blmthmojjnonbmwitzmc.supabase.co')
@@ -43,10 +44,9 @@ SUPABASE_KEY = os.getenv(
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsbXRobW9qam5vbmJtd2l0em1jIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NDUzOTI3MCwiZXhwIjoyMTEwMTE1MjcwfQ.hsO_inZ9Faei67c5edyo4iGk9E96hMO5VYhiMKi9m6o'
 )
 
-# Path to persist the "already synced" record hashes across restarts
-_SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
-_SEEN_FILE    = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
-_TOKEN_FILE   = os.path.join(_SCRIPT_DIR, 'sync_token.json')
+_SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+_SEEN_FILE   = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
+_TOKEN_FILE  = os.path.join(_SCRIPT_DIR, 'sync_token.json')
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -57,19 +57,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger('tablet-bridge')
 
-# ─── Supabase REST Helpers ────────────────────────────────────────────────────
-# Use ignore-duplicates so Supabase skips existing rows silently.
-# With return=representation + ignore-duplicates Supabase returns ONLY
-# the newly inserted rows (HTTP 201), not the skipped ones.
-_HEADERS_INSERT = {
+# ─── HTTP Headers ─────────────────────────────────────────────────────────────
+_HEADERS_AUTH = {
     'apikey':        SUPABASE_KEY,
     'Authorization': f'Bearer {SUPABASE_KEY}',
+}
+
+_HEADERS_INSERT = {
+    **_HEADERS_AUTH,
     'Content-Type':  'application/json',
     'Prefer':        'return=representation,resolution=ignore-duplicates',
-}
-_HEADERS_GET = {
-    'apikey':        SUPABASE_KEY,
-    'Authorization': f'Bearer {SUPABASE_KEY}',
 }
 
 _employee_cache: dict[str, str] = {}
@@ -79,7 +76,7 @@ def refresh_employee_cache() -> None:
     global _employee_cache
     try:
         url = f'{SUPABASE_URL}/rest/v1/employees?select=device_user_id,full_name'
-        res = requests.get(url, headers=_HEADERS_GET, timeout=10)
+        res = requests.get(url, headers=_HEADERS_AUTH, timeout=8)
         if res.status_code == 200:
             _employee_cache = {str(e['device_user_id']): e['full_name'] for e in res.json()}
             logger.info(f'Employee cache: {len(_employee_cache)} employees loaded')
@@ -88,7 +85,6 @@ def refresh_employee_cache() -> None:
 
 
 def auto_register_employees(conn, unknown_uids: Set[str]) -> None:
-    """Fetch user templates from device and register unknowns in Supabase."""
     try:
         users = conn.get_users()
         new_emps = []
@@ -103,17 +99,16 @@ def auto_register_employees(conn, unknown_uids: Set[str]) -> None:
                 })
         if new_emps:
             url = f'{SUPABASE_URL}/rest/v1/employees?on_conflict=device_user_id'
-            res = requests.post(url, headers=_HEADERS_INSERT, json=new_emps, timeout=10)
+            res = requests.post(url, headers=_HEADERS_INSERT, json=new_emps, timeout=8)
             if res.status_code in (200, 201):
-                logger.info(f'Auto-registered: {[e["full_name"] for e in new_emps]}')
+                logger.info(f'Auto-registered new employees: {[e["full_name"] for e in new_emps]}')
                 refresh_employee_cache()
     except Exception as e:
         logger.error(f'Auto-register employees error: {e}')
 
 
-# ─── Seen-punch persistence ───────────────────────────────────────────────────
+# ─── Seen-Punch State Persistence ─────────────────────────────────────────────
 def _punch_key(uid: str, punch_time_utc: str) -> str:
-    """Stable hash key for a punch record (uid + UTC ISO timestamp)."""
     return hashlib.md5(f'{uid}|{punch_time_utc}'.encode()).hexdigest()
 
 
@@ -135,17 +130,36 @@ def save_seen_set(seen: Set[str]) -> None:
         logger.warning(f'Could not save seen-punch set: {e}')
 
 
-# ─── Sync token (clear detection) ────────────────────────────────────────────
+# ─── Cloud Sync Tokens & Hardware Clear Requests ──────────────────────────────
+def check_hardware_clear_requested() -> bool:
+    try:
+        url = f'{SUPABASE_URL}/rest/v1/sync_meta?select=value&key=eq.clear_hardware'
+        res = requests.get(url, headers=_HEADERS_AUTH, timeout=6)
+        if res.status_code == 200:
+            rows = res.json()
+            return bool(rows and int(rows[0]['value']) == 1)
+    except Exception:
+        pass
+    return False
+
+
+def acknowledge_hardware_clear() -> None:
+    try:
+        url = f'{SUPABASE_URL}/rest/v1/sync_meta?key=eq.clear_hardware'
+        requests.patch(url, headers=_HEADERS_INSERT, json={'value': 0}, timeout=6)
+    except Exception as e:
+        logger.warning(f'Could not acknowledge clear_hardware: {e}')
+
+
 def get_remote_token() -> int:
-    """Fetch the cloud clear_token. Returns -1 on network error."""
     try:
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?select=value&key=eq.clear_token'
-        res = requests.get(url, headers=_HEADERS_GET, timeout=8)
+        res = requests.get(url, headers=_HEADERS_AUTH, timeout=6)
         if res.status_code == 200:
             rows = res.json()
             return int(rows[0]['value']) if rows else 0
-    except Exception as e:
-        logger.warning(f'Could not fetch sync token: {e}')
+    except Exception:
+        pass
     return -1
 
 
@@ -167,7 +181,22 @@ def save_local_token(token: int) -> None:
         logger.warning(f'Could not save local token: {e}')
 
 
-# ─── Device connection ────────────────────────────────────────────────────────
+# ─── Safe Device Connection & Disconnect ──────────────────────────────────────
+def safe_disconnect(conn: Optional[object]) -> None:
+    if not conn:
+        return
+    try:
+        conn.disconnect()
+    except Exception:
+        pass
+    try:
+        # Guarantee socket is closed even if protocol disconnect threw
+        if hasattr(conn, '_ZK__sock') and conn._ZK__sock:
+            conn._ZK__sock.close()
+    except Exception:
+        pass
+
+
 def connect_device() -> Optional[object]:
     zk = ZK(ZK_IP, port=ZK_PORT, timeout=ZK_TIMEOUT,
              password=0, force_udp=False, ommit_ping=True)
@@ -178,33 +207,50 @@ def connect_device() -> Optional[object]:
         return None
 
 
-# ─── Main sync cycle ─────────────────────────────────────────────────────────
+# ─── Sync Cycle ───────────────────────────────────────────────────────────────
 def sync_cycle(seen: Set[str]) -> int:
     """
-    Pull attendance from TA500, push only NEW punches to Supabase.
-    Returns the count of genuinely new records inserted.
+    Connects to TA500:
+    - Checks for pending hardware clear. If requested, calls conn.clear_attendance()
+      and wipes local seen cache.
+    - Otherwise pulls new punches and pushes to Supabase.
+    Returns:
+      0 on success / no work
+      -1 on connection error
     """
     conn = connect_device()
     if not conn:
-        return -1  # signal: device unreachable
+        return -1
 
-    new_count = 0
     try:
-        attendances = conn.get_attendance()
-        if not attendances:
-            logger.info('TA500: no attendance records found.')
+        # 1. Check if user clicked "Clear All Logs" on the portal
+        if check_hardware_clear_requested():
+            logger.info('🧹 Remote clear requested from web portal!')
+            try:
+                conn.clear_attendance()
+                logger.info('✅ TA500 physical hardware memory CLEARED!')
+            except Exception as e:
+                logger.error(f'Failed to clear hardware attendance: {e}')
+            finally:
+                acknowledge_hardware_clear()
+                seen.clear()
+                save_seen_set(seen)
+                logger.info('✅ Local cache cleared. Fresh slate ready!')
             return 0
 
-        logger.info(f'TA500: {len(attendances)} total punch(es) on device.')
+        # 2. Read punches from hardware
+        attendances = conn.get_attendance()
+        if not attendances:
+            return 0
 
-        # Auto-register unknown employees
+        # Check for unknown employees
         unknown_uids = {str(a.user_id) for a in attendances
                         if str(a.user_id) not in _employee_cache}
         if unknown_uids:
-            logger.info(f'Unknown employee IDs on device: {unknown_uids} — registering…')
+            logger.info(f'Unknown employee IDs on device: {unknown_uids} — registering...')
             auto_register_employees(conn, unknown_uids)
 
-        # Build records, skipping already-seen punches
+        # Filter out already seen punches
         to_push = []
         sync_time = datetime.now(timezone.utc).isoformat()
 
@@ -219,7 +265,7 @@ def sync_cycle(seen: Set[str]) -> int:
 
             key = _punch_key(uid, utc_iso)
             if key in seen:
-                continue  # already synced — skip entirely
+                continue
 
             status_val = getattr(att, 'punch', None)
             if status_val is None:
@@ -231,58 +277,43 @@ def sync_cycle(seen: Set[str]) -> int:
                 'status':         int(status_val),
                 'raw_status':     int(att.status or 0),
                 'synced_at':      sync_time,
-                '_key':           key,   # temp field, removed before POST
+                '_key':           key,
             })
 
         if not to_push:
-            logger.info('No new punches to sync (all already seen).')
             return 0
 
-        logger.info(f'{len(to_push)} new punch(es) to push…')
-
-        # Remove temp key before sending to Supabase
+        logger.info(f'Pushing {len(to_push)} new punch(es) to Supabase...')
         payload = [{k: v for k, v in r.items() if k != '_key'} for r in to_push]
 
-        url = (f'{SUPABASE_URL}/rest/v1/attendance_logs'
-               f'?on_conflict=device_user_id,punch_time')
-        res = requests.post(url, headers=_HEADERS_INSERT, json=payload, timeout=15)
+        url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
+        res = requests.post(url, headers=_HEADERS_INSERT, json=payload, timeout=10)
 
         if res.status_code in (200, 201):
             inserted = res.json() or []
-            new_count = len(inserted)
-            # Mark every record we tried to push as "seen" regardless — so
-            # they won't be re-tried next cycle even if Supabase ignored them
             for r in to_push:
                 seen.add(r['_key'])
             save_seen_set(seen)
-            if new_count > 0:
-                logger.info(f'✅ SYNCED: {new_count} new punch(es) pushed to cloud!')
-            else:
-                # Already existed in Supabase (returned 0 rows) but we still
-                # mark them seen so we stop trying
-                logger.info(f'Sync complete — {len(to_push)} punch(es) already in cloud.')
+            emp_name = _employee_cache.get(to_push[0]['device_user_id'], to_push[0]['device_user_id'])
+            logger.info(f'✅ SYNCED: {len(to_push)} new punch(es) pushed to cloud! (Latest: {emp_name})')
         else:
-            logger.error(f'Supabase insert failed: HTTP {res.status_code} — {res.text[:200]}')
+            logger.error(f'Supabase insert failed: HTTP {res.status_code} — {res.text[:150]}')
 
     except Exception as e:
         logger.error(f'Sync cycle error: {e}')
-        new_count = -1
+        return -1
     finally:
-        try:
-            conn.disconnect()
-        except Exception:
-            pass
+        safe_disconnect(conn)
 
-    return new_count
+    return 0
 
 
-# ─── Main loop with exponential back-off ─────────────────────────────────────
+# ─── Main Process Loop ────────────────────────────────────────────────────────
 def main():
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v3')
-    print(f'   Device  : {ZK_IP}:{ZK_PORT}')
-    print(f'   Poll    : every {POLL_INTERVAL}s (backoff up to 60s on errors)')
-    print(f'   Seen DB : {_SEEN_FILE}')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v4')
+    print(f'   Device IP : {ZK_IP}:{ZK_PORT}')
+    print(f'   Poll Rate : Every {POLL_INTERVAL} seconds')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -291,19 +322,17 @@ def main():
     refresh_employee_cache()
     logger.info('Tablet bridge active. Press Ctrl+C to stop.')
 
-    fail_count      = 0
-    MAX_BACKOFF     = 60   # seconds
-    BASE_BACKOFF    = 10   # seconds
-    local_token     = load_local_token()
+    fail_count   = 0
+    MAX_BACKOFF  = 60
+    BASE_BACKOFF = 15
+
+    local_token = load_local_token()
 
     while True:
-        # ── Check if web UI cleared attendance logs ──────────────────────────
+        # Detect cloud clear token changes
         remote_token = get_remote_token()
         if remote_token >= 0 and remote_token != local_token:
-            logger.info(
-                f'🔄 Cloud clear detected (token {local_token} → {remote_token}). '
-                f'Wiping local seen-set so all device records will re-sync.'
-            )
+            logger.info(f'Cloud clear detected (token {local_token} -> {remote_token}). Resetting local cache.')
             seen.clear()
             save_seen_set(seen)
             local_token = remote_token
@@ -312,14 +341,11 @@ def main():
         result = sync_cycle(seen)
 
         if result == -1:
-            # Device unreachable — apply exponential back-off
             fail_count += 1
             backoff = min(BASE_BACKOFF * (2 ** (fail_count - 1)), MAX_BACKOFF)
-            logger.warning(f'Device unreachable (fail #{fail_count}). '
-                           f'Waiting {backoff}s before retry…')
+            logger.warning(f'TA500 unreachable (attempt #{fail_count}). Cooling down for {backoff}s...')
             time.sleep(backoff)
         else:
-            # Success (or no records) — reset fail counter, normal poll interval
             if fail_count > 0:
                 logger.info('TA500 connection restored ✅')
             fail_count = 0

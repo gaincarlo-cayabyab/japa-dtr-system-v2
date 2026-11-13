@@ -28,3 +28,4 @@ ALTER TABLE public.sync_meta ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "allow_all_sync_meta" ON public.sync_meta
   FOR ALL USING (true) WITH CHECK (true);
+
