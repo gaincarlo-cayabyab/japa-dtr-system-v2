@@ -19,6 +19,11 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Sparkles,
+  Plus,
+  Edit2,
+  X,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react'
 
 const PAGE_SIZE = 50
@@ -41,66 +46,6 @@ function getAvatarColor(name: string) {
 
 function getInitials(name: string) {
   return name.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-}
-
-// Clear All Modal
-function ClearModal({
-  onConfirm,
-  onCancel,
-  isLoading,
-}: {
-  onConfirm: () => void
-  onCancel: () => void
-  isLoading: boolean
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-8 w-full max-w-md border border-slate-100 animate-in fade-in zoom-in-95">
-        <div className="flex items-center gap-4 mb-4">
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
-            <Trash2 className="w-6 h-6" />
-          </div>
-          <div>
-            <h3 className="text-lg font-black text-slate-900">Clear Attendance Logs</h3>
-            <p className="text-xs text-slate-400">Permanently delete logs from database</p>
-          </div>
-        </div>
-
-        <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-          Are you sure you want to delete all attendance logs? This action will reset live logs from Supabase so you can perform fresh synchronizations.
-        </p>
-
-        <div className="flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={isLoading}
-            className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold shadow-md shadow-rose-600/20 transition-all disabled:opacity-50 flex items-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-                Clearing…
-              </>
-            ) : (
-              'Confirm Delete'
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
 }
 
 interface AttendanceTableProps {
@@ -128,56 +73,51 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
   // Clear modal state
   const [showClearModal, setShowClearModal] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
-  const [clearMessage, setClearMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  const handleClearAll = async () => {
-    setIsClearing(true)
-    try {
-      const res = await fetch('/api/attendance/clear', { method: 'DELETE' })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? 'Failed to clear')
-      setLogs([])
-      setClearMessage({ type: 'success', text: `✅ Successfully cleared ${json.deleted ?? 'all'} attendance records.` })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Unknown error'
-      setClearMessage({ type: 'error', text: `❌ Error: ${msg}` })
-    } finally {
-      setIsClearing(false)
-      setShowClearModal(false)
-      setTimeout(() => setClearMessage(null), 5000)
-    }
-  }
+  // Add / Edit / Delete Modal State
+  const [punchModalOpen, setPunchModalOpen] = useState(false)
+  const [punchModalMode, setPunchModalMode] = useState<'add' | 'edit'>('add')
+  const [targetPunchId, setTargetPunchId] = useState<string | null>(null)
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('1')
+  const [punchDate, setPunchDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
+  const [punchTime, setPunchTime] = useState<string>('09:00')
+  const [punchStatus, setPunchStatus] = useState<number>(0)
+  const [savingPunch, setSavingPunch] = useState(false)
+
+  // Delete single punch confirmation
+  const [deleteTarget, setDeleteTarget] = useState<AttendanceLog | null>(null)
+  const [isDeletingSingle, setIsDeletingSingle] = useState(false)
 
   // Filters
-  const today = format(new Date(), 'yyyy-MM-dd')
   const [dateFilter, setDateFilter] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [nameSearch, setNameSearch] = useState('')
   const [page, setPage] = useState(0)
 
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMessage({ type, text })
+    setTimeout(() => setToastMessage(null), 4000)
+  }
+
+  // Fetch Latest Logs
+  const fetchLatest = async () => {
+    const supabase = createClient()
+    const [{ data: freshLogs }, { data: freshEmps }] = await Promise.all([
+      supabase.from('attendance_logs').select('*').order('punch_time', { ascending: false }).limit(500),
+      supabase.from('employees').select('*').order('full_name', { ascending: true }),
+    ])
+    if (freshLogs) setLogs(freshLogs)
+    if (freshEmps) setEmployeesList(freshEmps)
+  }
+
   useEffect(() => {
     const supabase = createClient()
-    const fetchLatest = async () => {
-      const [{ data: freshLogs }, { data: freshEmps }] = await Promise.all([
-        supabase.from('attendance_logs').select('*').order('punch_time', { ascending: false }).limit(300),
-        supabase.from('employees').select('*').order('full_name', { ascending: true }),
-      ])
-      if (freshLogs) setLogs(freshLogs)
-      if (freshEmps) setEmployeesList(freshEmps)
-    }
-
     const channel = supabase
       .channel('attendance-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, (payload) => {
-        if (payload.eventType === 'INSERT' && payload.new) {
-          const newLog = payload.new as AttendanceLog
-          setLogs((prev) => [newLog, ...prev.filter((l) => l.id !== newLog.id)])
-        } else if (payload.eventType === 'DELETE') {
-          setLogs([])
-        } else {
-          fetchLatest()
-        }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
+        fetchLatest()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
         fetchLatest()
@@ -186,12 +126,118 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
         setIsLive(status === 'SUBSCRIBED')
       })
 
-    const interval = setInterval(fetchLatest, 12000)
+    const interval = setInterval(fetchLatest, 15000)
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
   }, [])
+
+  // Clear all logs handler
+  const handleClearAll = async () => {
+    setIsClearing(true)
+    try {
+      const res = await fetch('/api/attendance/clear', { method: 'DELETE' })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to clear')
+      setLogs([])
+      showToast(`Cleared ${json.deleted ?? 'all'} attendance records.`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      showToast(`Error: ${msg}`, 'error')
+    } finally {
+      setIsClearing(false)
+      setShowClearModal(false)
+    }
+  }
+
+  // Open Add Punch Modal
+  const openAddModal = () => {
+    setPunchModalMode('add')
+    setTargetPunchId(null)
+    setSelectedEmpId(employeesList[0]?.device_user_id || '1')
+    setPunchDate('2026-11-02')
+    setPunchTime('09:00')
+    setPunchStatus(0)
+    setPunchModalOpen(true)
+  }
+
+  // Open Edit Punch Modal
+  const openEditModal = (log: AttendanceLog) => {
+    setPunchModalMode('edit')
+    setTargetPunchId(log.id)
+    setSelectedEmpId(log.device_user_id)
+    const pDate = new Date(log.punch_time)
+    setPunchDate(format(pDate, 'yyyy-MM-dd'))
+    setPunchTime(format(pDate, 'HH:mm'))
+    setPunchStatus(log.status)
+    setPunchModalOpen(true)
+  }
+
+  // Submit Add / Edit Punch
+  const handleSavePunch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingPunch(true)
+    try {
+      const fullIso = `${punchDate}T${punchTime}:00+08:00`
+      if (punchModalMode === 'add') {
+        const res = await fetch('/api/attendance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            device_user_id: selectedEmpId,
+            punch_time: fullIso,
+            status: punchStatus,
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error)
+        showToast('Attendance punch added successfully!')
+      } else {
+        const res = await fetch('/api/attendance', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: targetPunchId,
+            device_user_id: selectedEmpId,
+            punch_time: fullIso,
+            status: punchStatus,
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error)
+        showToast('Attendance punch updated successfully!')
+      }
+      setPunchModalOpen(false)
+      fetchLatest()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error saving punch'
+      showToast(msg, 'error')
+    } finally {
+      setSavingPunch(false)
+    }
+  }
+
+  // Confirm Single Delete
+  const handleDeleteSingle = async () => {
+    if (!deleteTarget) return
+    setIsDeletingSingle(true)
+    try {
+      const res = await fetch(`/api/attendance?id=${deleteTarget.id}`, {
+        method: 'DELETE',
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      showToast('Attendance record deleted.')
+      setDeleteTarget(null)
+      fetchLatest()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error deleting punch'
+      showToast(msg, 'error')
+    } finally {
+      setIsDeletingSingle(false)
+    }
+  }
 
   // Smart punch detection (Time In vs Time Out with 4:00 AM cutoff)
   const smartRoles = useMemo(() => {
@@ -269,24 +315,31 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
   }, [dateFilter, employeeFilter, statusFilter, nameSearch])
 
   // Count summaries
-  const todayCount = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd')
-    return logs.filter((l) => l.punch_time.slice(0, 10) === todayStr).length
-  }, [logs])
-
   const uniqueEmpsCount = useMemo(() => {
     return new Set(logs.map((l) => l.device_user_id)).size
   }, [logs])
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Clear Modal */}
-      {showClearModal && (
-        <ClearModal
-          onConfirm={handleClearAll}
-          onCancel={() => setShowClearModal(false)}
-          isLoading={isClearing}
-        />
+      {/* Toast Alert */}
+      {toastMessage && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
+            toastMessage.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
+          }`}
+        >
+          {toastMessage.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+          )}
+          <span>{toastMessage.text}</span>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold">
+            ×
+          </button>
+        </div>
       )}
 
       {/* Header */}
@@ -297,31 +350,37 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               <Clock className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Attendance Logs</h1>
-              <p className="text-xs text-slate-500">Live biometric punch records from FingerTec TA500</p>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Attendance Logs Management</h1>
+              <p className="text-xs text-slate-500">Live biometric punch records · Full Administrator Edit &amp; Add Controls</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={openAddModal}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95"
+          >
+            <Plus className="w-4 h-4" />
+            Add Punch
+          </button>
+
           <span
-            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold border transition-colors ${
-              isLive
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-amber-50 border-amber-200 text-amber-700'
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+              isLive ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'
             }`}
           >
             <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse' : ''}`} />
-            {isLive ? 'Live Sync Active' : 'Connecting…'}
+            {isLive ? 'Live Sync' : 'Connecting…'}
           </span>
 
           <button
             onClick={() => setShowClearModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
-            title="Delete all attendance logs"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
+            title="Clear all logs"
           >
-            <Trash2 className="w-4 h-4" />
-            Clear Logs
+            <Trash2 className="w-3.5 h-3.5" />
+            Clear
           </button>
         </div>
       </div>
@@ -333,7 +392,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             <Clock className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Stored Punches</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Recorded Punches</p>
             <p className="text-xl font-black text-slate-900 mt-0.5">{logs.length}</p>
           </div>
         </div>
@@ -343,34 +402,21 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Active Employees</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Employees</p>
             <p className="text-xl font-black text-slate-900 mt-0.5">{uniqueEmpsCount}</p>
           </div>
         </div>
 
         <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
             <Calendar className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Today&apos;s Activity</p>
-            <p className="text-xl font-black text-indigo-600 mt-0.5">{todayCount} punches</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Filtered View Count</p>
+            <p className="text-xl font-black text-purple-700 mt-0.5">{filtered.length} entries</p>
           </div>
         </div>
       </div>
-
-      {/* Clear notification toast */}
-      {clearMessage && (
-        <div
-          className={`p-4 rounded-2xl text-sm font-semibold border flex items-center gap-2 ${
-            clearMessage.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
-          }`}
-        >
-          {clearMessage.text}
-        </div>
-      )}
 
       {/* Filters Bar */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-wrap gap-3 items-end">
@@ -384,7 +430,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               placeholder="Search by name…"
               value={nameSearch}
               onChange={(e) => setNameSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             />
           </div>
         </div>
@@ -396,7 +442,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             type="date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
 
@@ -406,7 +452,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           <select
             value={employeeFilter}
             onChange={(e) => setEmployeeFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="">All Employees ({employeesList.length})</option>
             {employeesList.map((emp) => (
@@ -423,7 +469,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="all">All Types</option>
             <option value="in">Time In</option>
@@ -443,7 +489,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             }}
             className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
           >
-            Reset Filters
+            Reset
           </button>
         )}
       </div>
@@ -456,7 +502,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               <Clock className="w-8 h-8 text-slate-300" />
             </div>
             <p className="font-bold text-slate-600">No attendance logs found</p>
-            <p className="text-xs text-slate-400 mt-1">Try adjusting your filters or wait for the biometric bridge to sync.</p>
+            <p className="text-xs text-slate-400 mt-1">Adjust filters or click &ldquo;Add Punch&rdquo; to insert records manually.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -464,10 +510,11 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-left">
                   <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Employee Name</th>
-                  <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Device ID</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">ID</th>
                   <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Punch Time</th>
-                  <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Smart Type</th>
-                  <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Synced At</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Smart Type</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Raw Status</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Admin Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -478,7 +525,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                   const initials = getInitials(empName)
 
                   return (
-                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors group">
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
@@ -487,15 +534,15 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                           <span className="font-bold text-slate-900">{empName}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-3.5">
-                        <span className="font-mono text-xs font-bold bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg">
+                      <td className="px-4 py-3.5">
+                        <span className="font-mono text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
                           #{log.device_user_id}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-700 font-medium">
+                      <td className="px-5 py-3.5 text-slate-700 font-semibold text-xs">
                         {formatPunchTime(log.punch_time)}
                       </td>
-                      <td className="px-5 py-3.5 text-center">
+                      <td className="px-4 py-3.5 text-center">
                         {role ? (
                           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${role.badgeClass}`}>
                             <span>{role.icon}</span>
@@ -505,8 +552,28 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                           <span className="text-slate-400 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-5 py-3.5 text-slate-400 text-xs font-mono">
-                        {formatPunchTime(log.synced_at)}
+                      <td className="px-4 py-3.5 text-center">
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {log.status === 0 ? 'Check In (0)' : log.status === 1 ? 'Check Out (1)' : `Status ${log.status}`}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <div className="inline-flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => openEditModal(log)}
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Edit this punch"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(log)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                            title="Delete this punch"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -548,6 +615,190 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           </div>
         )}
       </div>
+
+      {/* Add / Edit Punch Modal */}
+      {punchModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-7 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  {punchModalMode === 'add' ? 'Add Attendance Punch' : 'Edit Attendance Punch'}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Administrator manual adjustment</p>
+              </div>
+              <button onClick={() => setPunchModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePunch} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Employee</label>
+                <select
+                  value={selectedEmpId}
+                  onChange={(e) => setSelectedEmpId(e.target.value)}
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {employeesList.map((emp) => (
+                    <option key={emp.id} value={emp.device_user_id}>
+                      #{emp.device_user_id} — {emp.full_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Punch Date</label>
+                  <input
+                    type="date"
+                    required
+                    value={punchDate}
+                    onChange={(e) => setPunchDate(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Punch Time</label>
+                  <input
+                    type="time"
+                    required
+                    value={punchTime}
+                    onChange={(e) => setPunchTime(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Punch Status</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPunchStatus(0)}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                      punchStatus === 0
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-700 shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    🟢 Check In (0)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPunchStatus(1)}
+                    className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                      punchStatus === 1
+                        ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600'
+                    }`}
+                  >
+                    🔴 Check Out (1)
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setPunchModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingPunch}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 disabled:opacity-50"
+                >
+                  {savingPunch ? 'Saving…' : punchModalMode === 'add' ? 'Create Punch' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Single Punch Modal */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Delete Punch?</h3>
+                <p className="text-xs text-slate-400">This action removes this specific punch record.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+              Employee: <span className="font-bold text-slate-900">{getEmployeeName(deleteTarget.device_user_id, employeesList)}</span><br />
+              Time: <span className="font-bold text-slate-900">{formatPunchTime(deleteTarget.punch_time)}</span>
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingSingle}
+                onClick={handleDeleteSingle}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 disabled:opacity-50"
+              >
+                {isDeletingSingle ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear All Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-md border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Clear Attendance Logs</h3>
+                <p className="text-xs text-slate-400">Permanently delete logs from database</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
+              Are you sure you want to delete all attendance logs? This action will reset live logs from Supabase so you can perform fresh synchronizations.
+            </p>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowClearModal(false)}
+                disabled={isClearing}
+                className="px-5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAll}
+                disabled={isClearing}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {isClearing ? 'Clearing…' : 'Confirm Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

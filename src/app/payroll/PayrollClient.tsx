@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import type { EmployeePayrollSummary, DailyPayrollRecord } from '@/types/database'
+import type { EmployeePayrollSummary, DailyPayrollRecord, PayrollPayment } from '@/types/database'
 import { format } from 'date-fns'
 import {
   Calculator,
@@ -26,6 +26,9 @@ import {
   User,
   ArrowDownLeft,
   ArrowUpRight,
+  CreditCard,
+  Banknote,
+  Receipt,
 } from 'lucide-react'
 
 interface PayrollClientProps {
@@ -80,9 +83,9 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const lastDay = new Date(year, now.getMonth() + 1, 0).getDate()
 
-  // Default to full current month
+  // Default to 1st half of current month (1st–15th bi-monthly cutoff)
   const [startDate, setStartDate] = useState(`${year}-${month}-01`)
-  const [endDate, setEndDate] = useState(`${year}-${month}-${String(lastDay).padStart(2, '0')}`)
+  const [endDate, setEndDate] = useState(`${year}-${month}-15`)
   const [branchFilter, setBranchFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -92,6 +95,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     totals: Record<string, number>
     employees: EmployeePayrollSummary[]
   } | null>(null)
+  const [payments, setPayments] = useState<PayrollPayment[]>([])
 
   // Modals
   const [selectedEmployee, setSelectedEmployee] = useState<EmployeePayrollSummary | null>(null)
@@ -107,9 +111,24 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const [newHourlyRate, setNewHourlyRate] = useState<number>(68.75)
   const [newScheduleType, setNewScheduleType] = useState<'mon_sat' | 'mon_fri'>('mon_sat')
   const [savingRate, setSavingRate] = useState(false)
+
+  // Payment Modal State
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false)
+  const [paymentTarget, setPaymentTarget] = useState<{
+    id: string
+    name: string
+    grossPay: number
+    currentPayment?: PayrollPayment
+  } | null>(null)
+  const [paymentStatus, setPaymentStatus] = useState<'unpaid' | 'paid' | 'partial'>('unpaid')
+  const [paymentAmount, setPaymentAmount] = useState<number>(0)
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer' | 'check' | 'gcash'>('cash')
+  const [paymentNotes, setPaymentNotes] = useState<string>('')
+  const [savingPayment, setSavingPayment] = useState(false)
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
-  // Preset Handlers
+  // Bi-monthly Preset Handlers
   const handlePreset = (preset: 'first_half' | 'second_half' | 'full_month') => {
     if (preset === 'first_half') {
       setStartDate(`${year}-${month}-01`)
@@ -123,8 +142,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     }
   }
 
-  // Fetch Payroll Data
-  const fetchPayroll = async () => {
+  // Fetch Payroll and Payment Records
+  const fetchPayrollAndPayments = async () => {
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -133,13 +152,22 @@ export function PayrollClient({ branches }: PayrollClientProps) {
       })
       if (branchFilter) params.append('branch', branchFilter)
 
-      const res = await fetch(`/api/payroll/compute?${params.toString()}`)
-      const json = await res.json()
-      if (!json.success) throw new Error(json.error)
+      const [payrollRes, paymentsRes] = await Promise.all([
+        fetch(`/api/payroll/compute?${params.toString()}`),
+        fetch(`/api/payroll/payments?period_start=${startDate}&period_end=${endDate}`),
+      ])
+
+      const payrollJson = await payrollRes.json()
+      const paymentsJson = await paymentsRes.json()
+
+      if (!payrollJson.success) throw new Error(payrollJson.error)
       setPayrollData({
-        totals: json.totals,
-        employees: json.employees,
+        totals: payrollJson.totals,
+        employees: payrollJson.employees,
       })
+      if (paymentsJson.success) {
+        setPayments(paymentsJson.data || [])
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error computing payroll'
       setToast({ message: msg, type: 'error' })
@@ -149,8 +177,39 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   }
 
   useEffect(() => {
-    fetchPayroll()
+    fetchPayrollAndPayments()
   }, [startDate, endDate, branchFilter])
+
+  // Payment Map lookup
+  const paymentsMap = useMemo(() => {
+    const map = new Map<string, PayrollPayment>()
+    payments.forEach((p) => map.set(p.device_user_id, p))
+    return map
+  }, [payments])
+
+  // Aggregate Payment Totals
+  const paymentStats = useMemo(() => {
+    const totalGross = payrollData?.totals?.total_gross_pay || 0
+    let totalPaid = 0
+    let fullyPaidCount = 0
+    let partialPaidCount = 0
+
+    payrollData?.employees?.forEach((emp) => {
+      const p = paymentsMap.get(emp.device_user_id)
+      if (p) {
+        if (p.payment_status === 'paid') {
+          totalPaid += emp.gross_pay
+          fullyPaidCount++
+        } else if (p.payment_status === 'partial') {
+          totalPaid += p.amount_paid
+          partialPaidCount++
+        }
+      }
+    })
+
+    const balanceUnpaid = Math.max(0, totalGross - totalPaid)
+    return { totalPaid, balanceUnpaid, fullyPaidCount, partialPaidCount }
+  }, [payrollData, paymentsMap])
 
   // Filtered employees
   const filteredEmployees = useMemo(() => {
@@ -192,12 +251,61 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
       setToast({ message: `Updated compensation for ${rateTarget.name}!`, type: 'success' })
       setRateModalOpen(false)
-      fetchPayroll() // recalculate immediately
+      fetchPayrollAndPayments()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error updating rate'
       setToast({ message: msg, type: 'error' })
     } finally {
       setSavingRate(false)
+    }
+  }
+
+  // Open Record Payment Modal
+  const openPaymentModal = (emp: EmployeePayrollSummary) => {
+    const existing = paymentsMap.get(emp.device_user_id)
+    setPaymentTarget({
+      id: emp.device_user_id,
+      name: emp.employee_name,
+      grossPay: emp.gross_pay,
+      currentPayment: existing,
+    })
+    setPaymentStatus(existing?.payment_status || 'unpaid')
+    setPaymentAmount(existing?.amount_paid || (existing?.payment_status === 'paid' ? emp.gross_pay : 0))
+    setPaymentMethod(existing?.payment_method || 'cash')
+    setPaymentNotes(existing?.notes || '')
+    setPaymentModalOpen(true)
+  }
+
+  // Save Payment Record
+  const handleSavePayment = async () => {
+    if (!paymentTarget) return
+    setSavingPayment(true)
+    try {
+      const res = await fetch('/api/payroll/payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_user_id: paymentTarget.id,
+          period_start: startDate,
+          period_end: endDate,
+          payment_status: paymentStatus,
+          amount_paid: paymentStatus === 'paid' ? paymentTarget.grossPay : paymentAmount,
+          gross_pay: paymentTarget.grossPay,
+          payment_method: paymentMethod,
+          notes: paymentNotes,
+        }),
+      })
+      const json = await res.json()
+      if (!json.success) throw new Error(json.error)
+
+      setToast({ message: `Updated disbursement status for ${paymentTarget.name}!`, type: 'success' })
+      setPaymentModalOpen(false)
+      fetchPayrollAndPayments()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error recording payment'
+      setToast({ message: msg, type: 'error' })
+    } finally {
+      setSavingPayment(false)
     }
   }
 
@@ -213,14 +321,13 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Toast Notification */}
+      {/* Toast Alert */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
-            toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
-          }`}
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${toast.type === 'success'
+            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+            : 'bg-rose-50 text-rose-800 border-rose-200'
+            }`}
         >
           {toast.type === 'success' ? (
             <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -228,10 +335,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
           )}
           <span>{toast.message}</span>
-          <button
-            onClick={() => setToast(null)}
-            className="ml-2 text-slate-400 hover:text-slate-600 font-bold"
-          >
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold">
             ×
           </button>
         </div>
@@ -245,8 +349,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               <Calculator className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Payroll &amp; Salary Computation</h1>
-              <p className="text-xs text-slate-500">Official Philippine DOLE labor standard calculation (9:00 AM–6:00 PM shift)</p>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Bi-Monthly Payroll &amp; Disbursements</h1>
+              <p className="text-xs text-slate-500">Official Philippine DOLE labor calculations · Payday on 15th &amp; 30th/31st</p>
             </div>
           </div>
         </div>
@@ -265,32 +369,45 @@ export function PayrollClient({ branches }: PayrollClientProps) {
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <DollarSign className="w-6 h-6" />
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Gross Payroll</p>
-            <p className="text-2xl font-black text-emerald-700 mt-0.5">
+            <p className="text-2xl font-black text-slate-900 mt-0.5">
               {formatCurrency(payrollData?.totals?.total_gross_pay || 0)}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
-              {payrollData?.totals?.active_employees || 0} employees active
+              {payrollData?.totals?.active_employees || 0} active staff in period
             </p>
           </div>
         </div>
 
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <Clock className="w-6 h-6" />
+          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+            <Banknote className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Regular Work Pay</p>
-            <p className="text-2xl font-black text-slate-900 mt-0.5">
-              {formatCurrency(payrollData?.totals?.total_regular_pay || 0)}
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Disbursed (Paid)</p>
+            <p className="text-2xl font-black text-emerald-700 mt-0.5">
+              {formatCurrency(paymentStats.totalPaid)}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {payrollData?.totals?.total_regular_hours?.toFixed(1) || 0} total regular hrs
+            <p className="text-xs text-emerald-600 font-bold mt-0.5">
+              {paymentStats.fullyPaidCount} Paid · {paymentStats.partialPaidCount} Partial
             </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+            <Receipt className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Unpaid Balance</p>
+            <p className="text-2xl font-black text-amber-600 mt-0.5">
+              {formatCurrency(paymentStats.balanceUnpaid)}
+            </p>
+            <p className="text-xs text-slate-400 mt-0.5">Pending disbursement</p>
           </div>
         </div>
 
@@ -308,57 +425,39 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             </p>
           </div>
         </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-            <Clock className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Late Deductions</p>
-            <p className="text-2xl font-black text-rose-600 mt-0.5">
-              -{formatCurrency(payrollData?.totals?.total_tardiness_deduction || 0)}
-            </p>
-            <p className="text-xs text-rose-400 font-semibold mt-0.5">
-              {payrollData?.totals?.total_tardiness_minutes || 0} total minutes late
-            </p>
-          </div>
-        </div>
       </div>
 
-      {/* Control Bar: Period Presets & Filters */}
+      {/* Control Bar: Bi-Monthly Period Presets & Filters */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {/* Period Selection */}
+        {/* Bi-monthly Cutoff Selection */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">
-            Cutoff Period:
+            Bi-Monthly Cutoff:
           </span>
           <button
             onClick={() => handlePreset('first_half')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              startDate.endsWith('-01') && endDate.endsWith('-15')
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${startDate.endsWith('-01') && endDate.endsWith('-15')
+              ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
           >
-            1st Half (1st–15th)
+            1st Half (1st–15th) · Payday: 15th
           </button>
           <button
             onClick={() => handlePreset('second_half')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              startDate.endsWith('-16')
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${startDate.endsWith('-16')
+              ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
           >
-            2nd Half (16th–End)
+            2nd Half (16th–End) · Payday: 30/31st
           </button>
           <button
             onClick={() => handlePreset('full_month')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              startDate.endsWith('-01') && !endDate.endsWith('-15')
-                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
-                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-            }`}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${startDate.endsWith('-01') && !endDate.endsWith('-15')
+              ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
           >
             Full Month
           </button>
@@ -368,14 +467,14 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-medium"
+              className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-bold"
             />
             <span className="text-slate-400 text-xs">to</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-medium"
+              className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-bold"
             />
           </div>
         </div>
@@ -389,7 +488,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               placeholder="Search employee..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2 w-56 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2 w-52 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
           </div>
 
@@ -420,7 +519,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             </span>
           </div>
           <span className="text-xs text-slate-400 font-medium">
-            Standard: 9:00 AM – 6:00 PM · Late deduction starts 9:01 AM
+            Cutoff: {startDate} to {endDate}
           </span>
         </div>
 
@@ -433,7 +532,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           <div className="py-24 flex flex-col items-center justify-center text-slate-400">
             <Calculator className="w-12 h-12 text-slate-300 mb-3" />
             <p className="text-sm font-bold text-slate-600">No payroll records found for this period.</p>
-            <p className="text-xs text-slate-400 mt-1">Check selected date range or ensure employee punches are synced.</p>
+            <p className="text-xs text-slate-400 mt-1">Adjust dates above or ensure attendance punches are synced.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -443,13 +542,12 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                   <th className="px-5 py-3.5">Employee Name</th>
                   <th className="px-4 py-3.5 text-center">Schedule</th>
                   <th className="px-4 py-3.5 text-right">Daily Rate</th>
-                  <th className="px-4 py-3.5 text-right">Hourly Rate</th>
-                  <th className="px-4 py-3.5 text-center">Days Worked</th>
+                  <th className="px-4 py-3.5 text-center">Days</th>
                   <th className="px-4 py-3.5 text-right">Regular Pay</th>
                   <th className="px-4 py-3.5 text-right">OT Pay</th>
-                  <th className="px-4 py-3.5 text-right">Night Diff</th>
-                  <th className="px-4 py-3.5 text-right">Late Deduction</th>
+                  <th className="px-4 py-3.5 text-right">Late Ded.</th>
                   <th className="px-4 py-3.5 text-right font-black text-slate-900">Gross Salary</th>
+                  <th className="px-4 py-3.5 text-center">Payment Status</th>
                   <th className="px-4 py-3.5 text-center">Breakdown</th>
                 </tr>
               </thead>
@@ -459,6 +557,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                   const initials = getInitials(emp.employee_name)
                   const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
                   const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
+                  const payment = paymentsMap.get(emp.device_user_id)
 
                   return (
                     <tr
@@ -474,7 +573,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                           <div>
                             <p className="font-bold text-slate-900 leading-tight">{emp.employee_name}</p>
                             <p className="text-xs text-slate-400 font-mono mt-0.5">
-                              ID: #{emp.device_user_id} • {emp.branch || 'JAPA Main'}
+                              #{emp.device_user_id} • ₱{hourly.toFixed(2)}/hr
                             </p>
                           </div>
                         </div>
@@ -483,7 +582,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       {/* Work Schedule Badge */}
                       <td className="px-4 py-3.5 text-center">
                         <span
-                          className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${
                             isMonFri
                               ? 'bg-purple-50 text-purple-700 border-purple-200'
                               : 'bg-blue-50 text-blue-700 border-blue-200'
@@ -517,42 +616,24 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                         </button>
                       </td>
 
-                      {/* Hourly Rate */}
-                      <td className="px-4 py-3.5 text-right font-mono text-xs font-semibold text-slate-600">
-                        ₱{hourly.toFixed(2)}/hr
-                      </td>
-
                       {/* Days Worked */}
                       <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
-                          {emp.days_worked} days
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
+                          {emp.days_worked}d
                         </span>
                       </td>
 
                       {/* Regular Pay */}
-                      <td className="px-4 py-3.5 text-right text-slate-800 font-semibold">
+                      <td className="px-4 py-3.5 text-right text-slate-800 font-semibold text-xs">
                         {formatCurrency(emp.total_regular_pay)}
-                        <p className="text-[11px] text-slate-400 font-mono">{emp.total_regular_hours.toFixed(1)}h</p>
                       </td>
 
                       {/* OT Pay */}
-                      <td className="px-4 py-3.5 text-right text-purple-700 font-semibold">
+                      <td className="px-4 py-3.5 text-right text-purple-700 font-semibold text-xs">
                         {emp.total_overtime_pay > 0 ? (
                           <>
                             {formatCurrency(emp.total_overtime_pay)}
-                            <p className="text-[11px] text-purple-400 font-mono">+{emp.total_overtime_hours.toFixed(1)}h</p>
-                          </>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Night Diff Pay */}
-                      <td className="px-4 py-3.5 text-right text-indigo-700 font-semibold">
-                        {emp.total_night_diff_pay > 0 ? (
-                          <>
-                            {formatCurrency(emp.total_night_diff_pay)}
-                            <p className="text-[11px] text-indigo-400 font-mono">{emp.total_night_diff_hours.toFixed(1)}h</p>
+                            <p className="text-[10px] text-purple-400 font-mono">+{emp.total_overtime_hours.toFixed(1)}h</p>
                           </>
                         ) : (
                           <span className="text-slate-300">—</span>
@@ -560,11 +641,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       </td>
 
                       {/* Late Deduction */}
-                      <td className="px-4 py-3.5 text-right text-rose-600 font-semibold">
+                      <td className="px-4 py-3.5 text-right text-rose-600 font-semibold text-xs">
                         {emp.total_tardiness_deduction > 0 ? (
                           <>
                             -{formatCurrency(emp.total_tardiness_deduction)}
-                            <p className="text-[11px] text-rose-400 font-mono">{emp.total_tardiness_minutes}m late</p>
+                            <p className="text-[10px] text-rose-400 font-mono">{emp.total_tardiness_minutes}m</p>
                           </>
                         ) : (
                           <span className="text-slate-300">—</span>
@@ -573,16 +654,41 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
                       {/* Gross Salary */}
                       <td className="px-4 py-3.5 text-right">
-                        <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-100">
+                        <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
                           {formatCurrency(emp.gross_pay)}
                         </span>
+                      </td>
+
+                      {/* Payment Status Column */}
+                      <td className="px-4 py-3.5 text-center">
+                        <button
+                          onClick={() => openPaymentModal(emp)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-bold transition-all hover:scale-105 active:scale-95"
+                        >
+                          {payment?.payment_status === 'paid' ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              Paid
+                            </span>
+                          ) : payment?.payment_status === 'partial' ? (
+                            <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg">
+                              <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                              Half/Partial (₱{payment.amount_paid.toFixed(0)})
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              Unpaid
+                            </span>
+                          )}
+                        </button>
                       </td>
 
                       {/* Action Breakdown */}
                       <td className="px-4 py-3.5 text-center">
                         <button
                           onClick={() => setSelectedEmployee(emp)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors"
                         >
                           View
                           <ChevronRight className="w-3.5 h-3.5" />
@@ -597,6 +703,156 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         )}
       </div>
 
+      {/* Record Payment Status Modal */}
+      {paymentModalOpen && paymentTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-7 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Record Salary Disbursement</h3>
+                <p className="text-xs text-slate-400 mt-0.5">Bi-monthly payroll payment tracking</p>
+              </div>
+              <button onClick={() => setPaymentModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-900">{paymentTarget.name}</p>
+                <p className="text-xs text-slate-400 font-mono">Period: {startDate} to {endDate}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-slate-400 uppercase font-bold">Gross Due</p>
+                <p className="text-base font-black text-emerald-700">{formatCurrency(paymentTarget.grossPay)}</p>
+              </div>
+            </div>
+
+            {/* Quick Status Buttons */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Payment Status
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentStatus('paid')
+                    setPaymentAmount(paymentTarget.grossPay)
+                  }}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                    paymentStatus === 'paid'
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600'
+                  }`}
+                >
+                  ✓ Paid Full
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentStatus('partial')
+                    setPaymentAmount(Math.round((paymentTarget.grossPay / 2) * 100) / 100)
+                  }}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                    paymentStatus === 'partial'
+                      ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600'
+                  }`}
+                >
+                  ½ Paid Half
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPaymentStatus('unpaid')
+                    setPaymentAmount(0)
+                  }}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
+                    paymentStatus === 'unpaid'
+                      ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-600'
+                  }`}
+                >
+                  ✕ Unpaid
+                </button>
+              </div>
+            </div>
+
+            {/* Amount Paid */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Amount Disbursed (PHP ₱)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold">₱</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(Number(e.target.value))}
+                  className="w-full border border-slate-200 rounded-xl pl-8 pr-4 py-2.5 text-base font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {paymentStatus === 'partial' && (
+                <p className="text-[11px] text-amber-600 font-bold mt-1">
+                  Remaining balance: {formatCurrency(Math.max(0, paymentTarget.grossPay - paymentAmount))}
+                </p>
+              )}
+            </div>
+
+            {/* Payment Method */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Payment Method
+              </label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value as any)}
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="cash">Cash</option>
+                <option value="bank_transfer">Bank Transfer</option>
+                <option value="gcash">GCash</option>
+                <option value="check">Check</option>
+              </select>
+            </div>
+
+            {/* Remarks / Notes */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Remarks / Notes
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Paid cash advance on the 15th"
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setPaymentModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={savingPayment}
+                onClick={handleSavePayment}
+                className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 disabled:opacity-50"
+              >
+                {savingPayment ? 'Saving…' : 'Save Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Compensation Modal */}
       {rateModalOpen && rateTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
@@ -606,10 +862,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                 <h3 className="text-lg font-black text-slate-900">Edit Employee Compensation</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Rates used for DOLE labor calculations</p>
               </div>
-              <button
-                onClick={() => setRateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100"
-              >
+              <button onClick={() => setRateModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100">
                 <X className="w-5 h-5" />
               </button>
             </div>

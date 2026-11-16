@@ -107,6 +107,22 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
     return Array.from(counts.values()).sort((a, b) => a.date.localeCompare(b.date))
   }, [filtered])
 
+  // Top Overtime Staff
+  const topOvertimeEmployees = useMemo(() => {
+    const map = new Map<string, { name: string; regularHours: number; otHours: number }>()
+    filtered.forEach((r) => {
+      const key = String(r.device_user_id)
+      const prev = map.get(key) || { name: r.full_name, regularHours: 0, otHours: 0 }
+      prev.regularHours += Math.min(8, Number(r.hours_worked || 0))
+      prev.otHours += Number(r.overtime_hours || 0)
+      map.set(key, prev)
+    })
+    return Array.from(map.values())
+      .filter((e) => e.otHours > 0)
+      .sort((a, b) => b.otHours - a.otHours)
+      .slice(0, 5)
+  }, [filtered])
+
   const maxDailyCount = Math.max(...dailyAttendanceData.map((d) => d.count), 1)
 
   function exportExcel() {
@@ -306,6 +322,46 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
               <span>Overtime Total:</span>
               <span className="font-black text-purple-700">+{totalOvertimeHours.toFixed(1)} hrs</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Top Overtime Staff Leaderboard Strip */}
+      {topOvertimeEmployees.length > 0 && (
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-purple-600" />
+              <h3 className="text-sm font-bold text-slate-900">Top Overtime Performers</h3>
+            </div>
+            <span className="text-xs text-slate-400">DOLE +25% premium work hours</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {topOvertimeEmployees.map((emp, idx) => {
+              const maxOt = topOvertimeEmployees[0]?.otHours || 1
+              const percent = Math.min(100, Math.round((emp.otHours / maxOt) * 100))
+              return (
+                <div key={emp.name} className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="w-5 h-5 rounded-md bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-xs font-black text-purple-700">+{emp.otHours.toFixed(1)}h OT</span>
+                    </div>
+                    <p className="text-xs font-bold text-slate-900 truncate">{emp.name}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{emp.regularHours.toFixed(1)}h regular</p>
+                  </div>
+                  <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-2.5">
+                    <div
+                      className="bg-gradient-to-r from-purple-500 to-indigo-600 h-full rounded-full"
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

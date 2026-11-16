@@ -199,6 +199,21 @@ export interface EmployeePayrollSummary {
   records: DailyPayrollRecord[]
 }
 
+export interface PayrollPayment {
+  id: string
+  device_user_id: string
+  period_start: string
+  period_end: string
+  payment_status: 'unpaid' | 'paid' | 'partial'
+  amount_paid: number
+  gross_pay: number
+  payment_method: 'cash' | 'bank_transfer' | 'check' | 'gcash'
+  paid_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 // Convenience types
 export type Employee = Database['public']['Tables']['employees']['Row']
 export type AttendanceLog = Database['public']['Tables']['attendance_logs']['Row']
