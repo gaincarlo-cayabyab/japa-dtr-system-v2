@@ -158,6 +158,15 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
+  // Auto-dismiss notification after 3 seconds
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => {
+      setToast(null)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
   // Bi-monthly Preset Handlers
   const handlePreset = (preset: 'first_half' | 'second_half' | 'full_month') => {
     if (preset === 'first_half') {

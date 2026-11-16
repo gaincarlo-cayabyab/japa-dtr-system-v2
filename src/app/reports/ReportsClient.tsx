@@ -216,6 +216,15 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   const [deletingShift, setDeletingShift] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
+  // Auto-dismiss notification after 3 seconds
+  useEffect(() => {
+    if (!toast) return
+    const timer = setTimeout(() => {
+      setToast(null)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [toast])
+
   const filtered = useMemo(() => {
     const weekRange = viewMode === 'weekly' ? getWeekRange(weekAnchor) : null
     return data.filter((row) => {

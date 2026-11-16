@@ -253,13 +253,13 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
 
   return (
     <div className="space-y-6">
-      {/* Toast Notification */}
+      {/* Toast Notification (Middle Top) */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
+          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-500/10'
+              : 'bg-rose-50 text-rose-800 border-rose-200 shadow-rose-500/10'
           }`}
         >
           {toast.type === 'success' ? (

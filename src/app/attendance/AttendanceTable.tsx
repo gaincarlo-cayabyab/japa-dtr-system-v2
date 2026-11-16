@@ -113,7 +113,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ type, text })
-    setTimeout(() => setToastMessage(null), 4000)
+    setTimeout(() => setToastMessage(null), 3000)
   }
 
   // Fetch Latest Logs
@@ -345,13 +345,13 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Toast Alert */}
+      {/* Toast Alert (Middle Top) */}
       {toastMessage && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
+          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
             toastMessage.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-500/10'
+              : 'bg-rose-50 text-rose-800 border-rose-200 shadow-rose-500/10'
           }`}
         >
           {toastMessage.type === 'success' ? (
