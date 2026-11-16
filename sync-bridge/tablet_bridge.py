@@ -18,6 +18,7 @@ import os
 import sys
 import time
 import json
+import socket
 import hashlib
 import logging
 from datetime import datetime, timezone
@@ -50,13 +51,33 @@ SUPABASE_KEY = os.getenv(
 _SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 _SEEN_FILE   = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
 _TOKEN_FILE  = os.path.join(_SCRIPT_DIR, 'sync_token.json')
+_LOG_FILE    = os.path.join(_SCRIPT_DIR, 'bridge.log')
+
+# ─── Single-Instance Protection ───────────────────────────────────────────────
+_lock_socket: Optional[socket.socket] = None
+
+def acquire_instance_lock():
+    global _lock_socket
+    try:
+        _lock_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _lock_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        _lock_socket.bind(('127.0.0.1', 43701))
+        _lock_socket.listen(1)
+    except socket.error:
+        print("⚠️ [WARNING] Another instance of tablet_bridge is already running in background!")
+        print("   Only 1 bridge instance can connect to TA500 to prevent connection collisions.")
+        print("   If you want to restart it fresh, run: pkill -f python")
+        sys.exit(0)
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
     datefmt='%H:%M:%S',
-    handlers=[logging.StreamHandler(sys.stdout)],
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(_LOG_FILE, mode='a', encoding='utf-8')
+    ],
 )
 logger = logging.getLogger('tablet-bridge')
 
@@ -261,9 +282,10 @@ def flush_upload_queue(seen: Set[str]) -> bool:
 
 # ─── Main Polling Engine ──────────────────────────────────────────────────────
 def main():
+    acquire_instance_lock()
     global _pending_upload_queue
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v6')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v7')
     print(f'   Device IP : {ZK_IP}:{ZK_PORT}')
     print(f'   Poll Rate : Fast 6s (Instant Punch + Enrolled Employee Sync)')
     print('=' * 60)
