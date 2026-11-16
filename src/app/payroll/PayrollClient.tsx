@@ -382,7 +382,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                   <th className="px-4 py-3.5 text-right">OT Pay</th>
                   <th className="px-4 py-3.5 text-right">Night Diff</th>
                   <th className="px-4 py-3.5 text-right">Holiday Pay</th>
-                  <th className="px-4 py-3.5 text-right">Tardiness</th>
+                  <th className="px-4 py-3.5 text-center">Time Late</th>
                   <th className="px-4 py-3.5 text-right font-bold text-slate-900">Gross Salary</th>
                   <th className="px-4 py-3.5 text-center">Action</th>
                 </tr>
@@ -469,13 +469,13 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       )}
                     </td>
 
-                    {/* Tardiness */}
-                    <td className="px-4 py-3 text-right text-rose-600 font-medium">
-                      {emp.total_tardiness_deduction > 0 ? (
-                        <>
-                          -{formatCurrency(emp.total_tardiness_deduction)}
-                          <p className="text-[11px] text-rose-400">{emp.total_tardiness_minutes}m late</p>
-                        </>
+                    {/* Time Late (no monetary deduction) */}
+                    <td className="px-4 py-3 text-center">
+                      {emp.total_tardiness_minutes > 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                          {Math.floor(emp.total_tardiness_minutes / 60) > 0 ? `${Math.floor(emp.total_tardiness_minutes / 60)}h ` : ''}
+                          {emp.total_tardiness_minutes % 60}m late
+                        </span>
                       ) : (
                         <span className="text-slate-300">—</span>
                       )}
@@ -606,7 +606,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <th className="px-3 py-2.5 text-right">Hours</th>
                       <th className="px-3 py-2.5 text-right">OT</th>
                       <th className="px-3 py-2.5 text-right">Night</th>
-                      <th className="px-3 py-2.5 text-right">Late</th>
+                      <th className="px-3 py-2.5 text-center">Time Late</th>
                       <th className="px-3 py-2.5 text-right font-bold text-slate-900">Day Total</th>
                     </tr>
                   </thead>
@@ -632,7 +632,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                         <td className="px-3 py-2.5 text-right text-indigo-700 font-semibold">
                           {rec.night_diff_hours > 0 ? `${rec.night_diff_hours.toFixed(1)}h` : '—'}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-rose-600 font-semibold">
+                        <td className="px-3 py-2.5 text-center text-amber-700 font-semibold">
                           {rec.tardiness_minutes > 0 ? `${rec.tardiness_minutes}m` : '—'}
                         </td>
                         <td className="px-3 py-2.5 text-right font-bold text-emerald-700">

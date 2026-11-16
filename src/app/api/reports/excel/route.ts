@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Title Block
-    payrollSheet.mergeCells('A1:Q1')
+    payrollSheet.mergeCells('A1:P1')
     const titleCell = payrollSheet.getCell('A1')
     titleCell.value = 'JAPA ENTERPRISE — PAYROLL & SALARY SUMMARY'
     titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFF' } }
@@ -147,7 +147,7 @@ export async function GET(request: NextRequest) {
     titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
     payrollSheet.getRow(1).height = 32
 
-    payrollSheet.mergeCells('A2:Q2')
+    payrollSheet.mergeCells('A2:P2')
     const subTitleCell = payrollSheet.getCell('A2')
     subTitleCell.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Generated: ${format(new Date(), 'PPpp')}`
     subTitleCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } }
@@ -172,8 +172,7 @@ export async function GET(request: NextRequest) {
       'Night Diff Hrs',
       'Night Diff Pay',
       'Holiday Pay',
-      'Tardiness (m)',
-      'Tardiness Ded.',
+      'Time Late (Mins)',
       'Gross Salary',
     ]
 
@@ -205,7 +204,6 @@ export async function GET(request: NextRequest) {
         emp.total_night_diff_pay,
         emp.total_holiday_pay,
         emp.total_tardiness_minutes,
-        emp.total_tardiness_deduction,
         emp.gross_pay,
       ])
       row.height = 22
@@ -235,7 +233,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Highlight Gross Salary
-        if (colNumber === 17) {
+        if (colNumber === 16) {
           cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '047857' } }
         }
       })
@@ -261,7 +259,6 @@ export async function GET(request: NextRequest) {
       { formula: `SUM(N${startDataRow}:N${endDataRow})` },
       { formula: `SUM(O${startDataRow}:O${endDataRow})` },
       { formula: `SUM(P${startDataRow}:P${endDataRow})` },
-      { formula: `SUM(Q${startDataRow}:Q${endDataRow})` },
     ])
     totalRow.height = 26
     totalRow.eachCell((cell, colNumber) => {
@@ -301,8 +298,7 @@ export async function GET(request: NextRequest) {
       { width: 14 }, // Night Diff Hrs
       { width: 15 }, // Night Diff Pay
       { width: 14 }, // Holiday Pay
-      { width: 14 }, // Tardiness Mins
-      { width: 15 }, // Tardiness Ded
+      { width: 16 }, // Time Late (Mins)
       { width: 18 }, // Gross Salary
     ]
 

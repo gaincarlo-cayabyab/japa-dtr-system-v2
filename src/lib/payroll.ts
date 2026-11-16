@@ -163,7 +163,8 @@ export function computeDailyPayroll(
     8,
     0
   )
-  const tardinessDeduction = tardinessMinutes * minuteRate
+  // Per company policy: no late cash deduction, only track late duration/time
+  const tardinessDeduction = 0
 
   // Base Pay calculation
   // For regular days: (regularHours / 8) * dailyRate
@@ -195,7 +196,7 @@ export function computeDailyPayroll(
 
   const totalDayPay = Math.max(
     0,
-    regularPay + overtimePay + nightDiffPay - tardinessDeduction
+    regularPay + overtimePay + nightDiffPay
   )
 
   return {
@@ -249,11 +250,11 @@ export function computeEmployeePayroll(
   const totalNightDiffPay = records.reduce((acc, r) => acc + r.night_diff_pay, 0)
   const totalHolidayPay = records.reduce((acc, r) => acc + r.holiday_premium_pay, 0)
   const totalTardinessMinutes = records.reduce((acc, r) => acc + r.tardiness_minutes, 0)
-  const totalTardinessDeduction = records.reduce((acc, r) => acc + r.tardiness_deduction, 0)
+  const totalTardinessDeduction = 0 // No late cash deductions
 
   const grossPay = Math.max(
     0,
-    totalRegularPay + totalOvertimePay + totalNightDiffPay - totalTardinessDeduction
+    totalRegularPay + totalOvertimePay + totalNightDiffPay
   )
 
   return {
@@ -272,8 +273,20 @@ export function computeEmployeePayroll(
     total_night_diff_pay: Math.round(totalNightDiffPay * 100) / 100,
     total_holiday_pay: Math.round(totalHolidayPay * 100) / 100,
     total_tardiness_minutes: totalTardinessMinutes,
-    total_tardiness_deduction: Math.round(totalTardinessDeduction * 100) / 100,
+    total_tardiness_deduction: 0,
     gross_pay: Math.round(grossPay * 100) / 100,
     records,
   }
+}
+
+/**
+ * Format tardiness minutes into human readable text (e.g. 15m late, 1h 20m late)
+ */
+export function formatLateDuration(minutes: number): string {
+  if (!minutes || minutes <= 0) return '—'
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h > 0 && m > 0) return `${h}h ${m}m late`
+  if (h > 0) return `${h}h late`
+  return `${m}m late`
 }
