@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import type { DailyDtr } from '@/types/database'
-import { format } from 'date-fns'
+import { format, startOfWeek, endOfWeek, addDays } from 'date-fns'
 import {
   Clock,
   Download,
-  Filter,
   Calendar,
   Users,
   Moon,
@@ -21,11 +20,27 @@ import {
   Edit2,
   X,
   ShieldCheck,
+  MessageSquarePlus,
+  Sparkles,
+  Table2,
+  LayoutList,
+  Star,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
+import { getHolidayForDate, getHolidayTypeBadge } from '@/lib/holidays'
 
 interface ReportsClientProps {
   initialData: DailyDtr[]
   branches: string[]
+}
+
+interface ShiftNote {
+  device_user_id: string
+  work_date: string
+  ot_reason: string
+  created_by_username: string
+  updated_at: string
 }
 
 const AVATAR_GRADIENTS = [
@@ -63,12 +78,30 @@ function formatHoursWorked(hours: number): string {
   return m > 0 ? `${h}h ${m}m` : `${h}h`
 }
 
+// Get week range (Mon–Sun) for a given date string
+function getWeekRange(dateStr: string): { start: string; end: string } {
+  const d = new Date(`${dateStr}T12:00:00`)
+  const start = startOfWeek(d, { weekStartsOn: 1 }) // Monday
+  const end = endOfWeek(d, { weekStartsOn: 1 })     // Sunday
+  return {
+    start: format(start, 'yyyy-MM-dd'),
+    end: format(end, 'yyyy-MM-dd'),
+  }
+}
+
 export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   const [data, setData] = useState<DailyDtr[]>(initialData)
   const currentMonth = format(new Date(), 'yyyy-MM')
-  const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly')
+  const today = format(new Date(), 'yyyy-MM-dd')
+
+  // View mode: 'daily' | 'weekly' | 'monthly'  — default: daily
+  const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily')
+  // Display style: 'scroll' (card rows) | 'table' (Excel-like compact grid)
+  const [displayMode, setDisplayMode] = useState<'scroll' | 'table'>('scroll')
+
   const [monthFilter, setMonthFilter] = useState(currentMonth)
-  const [dateFilter, setDateFilter] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [dateFilter, setDateFilter] = useState(today)
+  const [weekAnchor, setWeekAnchor] = useState(today) // any date within the target week
   const [branchFilter, setBranchFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -85,6 +118,32 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   }, [])
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
+  // OT Reason Modal state (super admin can add reasons; all roles can view)
+  const [shiftNotes, setShiftNotes] = useState<Record<string, ShiftNote>>({}) // key: `${devId}_${date}`
+  const [otModalOpen, setOtModalOpen] = useState(false)
+  const [otModalRow, setOtModalRow] = useState<DailyDtr | null>(null)
+  const [otReasonInput, setOtReasonInput] = useState('')
+  const [savingOtReason, setSavingOtReason] = useState(false)
+
+  // Fetch shift notes for visible data
+  const fetchShiftNotes = useCallback(async (rows: DailyDtr[]) => {
+    if (rows.length === 0) return
+    // Build query params for unique date range
+    const dates = Array.from(new Set(rows.map((r) => r.work_date))).join(',')
+    try {
+      const res = await fetch(`/api/attendance/ot-reason?dates=${dates}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const map: Record<string, ShiftNote> = {}
+      ;(json.data ?? []).forEach((n: ShiftNote) => {
+        map[`${n.device_user_id}_${n.work_date}`] = n
+      })
+      setShiftNotes(map)
+    } catch {
+      // silent
+    }
+  }, [])
+
   // Edit Shift Modal State
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editRow, setEditRow] = useState<DailyDtr | null>(null)
@@ -96,6 +155,7 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const filtered = useMemo(() => {
+    const weekRange = viewMode === 'weekly' ? getWeekRange(weekAnchor) : null
     return data.filter((row) => {
       if (branchFilter && row.branch !== branchFilter) return false
       if (statusFilter !== 'all' && row.shift_status !== statusFilter) return false
@@ -105,13 +165,11 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
         const matchId = String(row.device_user_id).includes(q)
         if (!matchName && !matchId) return false
       }
-      if (viewMode === 'monthly') {
-        return row.work_date.startsWith(monthFilter)
-      } else {
-        return row.work_date === dateFilter
-      }
+      if (viewMode === 'monthly') return row.work_date.startsWith(monthFilter)
+      if (viewMode === 'weekly' && weekRange) return row.work_date >= weekRange.start && row.work_date <= weekRange.end
+      return row.work_date === dateFilter
     })
-  }, [data, viewMode, monthFilter, dateFilter, branchFilter, statusFilter, searchQuery])
+  }, [data, viewMode, monthFilter, dateFilter, weekAnchor, branchFilter, statusFilter, searchQuery])
 
   // Summary statistics
   const uniqueEmployees = new Set(filtered.map((r) => r.employee_id)).size
@@ -148,6 +206,50 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
       .sort((a, b) => b.otHours - a.otHours)
       .slice(0, 5)
   }, [filtered])
+
+  // Fetch shift notes when filtered data changes
+  useEffect(() => {
+    fetchShiftNotes(filtered)
+  }, [filtered, fetchShiftNotes])
+
+  // Open OT Reason Modal
+  const openOtModal = (row: DailyDtr) => {
+    setOtModalRow(row)
+    const key = `${row.device_user_id}_${row.work_date}`
+    setOtReasonInput(shiftNotes[key]?.ot_reason ?? '')
+    setOtModalOpen(true)
+  }
+
+  // Save OT Reason
+  const handleSaveOtReason = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!otModalRow) return
+    setSavingOtReason(true)
+    try {
+      const res = await fetch('/api/attendance/ot-reason', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_user_id: otModalRow.device_user_id,
+          work_date: otModalRow.work_date,
+          ot_reason: otReasonInput,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+      setShiftNotes((prev) => ({
+        ...prev,
+        [`${otModalRow.device_user_id}_${otModalRow.work_date}`]: json.data,
+      }))
+      setToast({ message: `OT reason saved for ${otModalRow.full_name}!`, type: 'success' })
+      setOtModalOpen(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error saving OT reason'
+      setToast({ message: msg, type: 'error' })
+    } finally {
+      setSavingOtReason(false)
+    }
+  }
 
   const maxDailyCount = Math.max(...dailyAttendanceData.map((d) => d.count), 1)
 
@@ -485,50 +587,78 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
           </div>
         </div>
 
-        {/* View Mode Toggle */}
+        {/* View Mode Toggle — Day / Week / Month */}
         <div>
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">View Mode</label>
-          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50">
-            <button
-              onClick={() => setViewMode('monthly')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                viewMode === 'monthly'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setViewMode('daily')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                viewMode === 'daily'
-                  ? 'bg-white text-blue-700 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Daily
-            </button>
+          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+            {(['daily', 'weekly', 'monthly'] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all capitalize ${
+                  viewMode === mode ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {mode === 'daily' ? 'Day' : mode === 'weekly' ? 'Week' : 'Month'}
+              </button>
+            ))}
           </div>
         </div>
 
-        {viewMode === 'monthly' ? (
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Month</label>
-            <input
-              type="month"
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
-        ) : (
+        {/* Date / Week / Month Picker */}
+        {viewMode === 'daily' && (
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
             <input
               type="date"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
+              className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            />
+          </div>
+        )}
+        {viewMode === 'weekly' && (
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Week of {getWeekRange(weekAnchor).start} → {getWeekRange(weekAnchor).end}
+            </label>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  const prev = new Date(`${weekAnchor}T12:00:00`)
+                  prev.setDate(prev.getDate() - 7)
+                  setWeekAnchor(format(prev, 'yyyy-MM-dd'))
+                }}
+                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <input
+                type="date"
+                value={weekAnchor}
+                onChange={(e) => setWeekAnchor(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <button
+                onClick={() => {
+                  const next = new Date(`${weekAnchor}T12:00:00`)
+                  next.setDate(next.getDate() + 7)
+                  setWeekAnchor(format(next, 'yyyy-MM-dd'))
+                }}
+                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        {viewMode === 'monthly' && (
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Month</label>
+            <input
+              type="month"
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
               className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             />
           </div>
@@ -564,6 +694,27 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
           </select>
         </div>
 
+        {/* Display Mode Toggle */}
+        <div>
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Display</label>
+          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+            <button
+              onClick={() => setDisplayMode('scroll')}
+              title="Card / Scroll view"
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'scroll' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              <LayoutList className="w-3.5 h-3.5" /> Cards
+            </button>
+            <button
+              onClick={() => setDisplayMode('table')}
+              title="Excel-like compact table"
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+            >
+              <Table2 className="w-3.5 h-3.5" /> Table
+            </button>
+          </div>
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={exportExcel}
@@ -583,15 +734,121 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
         </div>
       </div>
 
-      {/* DTR Table */}
+      {/* DTR Records — scroll view or table view */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-slate-400">
             <Clock className="w-12 h-12 text-slate-300 mb-3" />
             <p className="font-bold text-slate-600">No smart DTR records found for selected filters.</p>
-            <p className="text-xs text-slate-400 mt-1">Adjust month or date filters to view recorded shifts.</p>
+            <p className="text-xs text-slate-400 mt-1">Adjust filters to view recorded shifts.</p>
+          </div>
+        ) : displayMode === 'table' ? (
+          /* ─── EXCEL-LIKE TABLE VIEW ──────────────────────────────────────── */
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse">
+              <thead>
+                <tr className="bg-slate-50 border-b-2 border-slate-200">
+                  <th className="px-3 py-2.5 text-left font-black text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[180px]">
+                    Employee Name
+                  </th>
+                  <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[64px]">Date</th>
+                  <th className="px-3 py-2.5 text-center font-black text-emerald-700 border-r border-slate-100 min-w-[80px]">Time In</th>
+                  <th className="px-3 py-2.5 text-center font-black text-rose-700 border-r border-slate-100 min-w-[80px]">Time Out</th>
+                  <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[64px]">Hours</th>
+                  <th className="px-3 py-2.5 text-center font-black text-purple-700 border-r border-slate-100 min-w-[64px]">OT</th>
+                  <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[90px]">Status</th>
+                  <th className="px-3 py-2.5 text-left font-black text-amber-700 min-w-[160px]">OT Reason / Notes</th>
+                  {isSuperAdmin && <th className="px-3 py-2.5 text-center font-black text-blue-700 min-w-[120px]">Admin</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row, i) => {
+                  const ot = Number(row.overtime_hours || 0)
+                  const holiday = getHolidayForDate(row.work_date)
+                  const hBadge = holiday ? getHolidayTypeBadge(holiday.type) : null
+                  const noteKey = `${row.device_user_id}_${row.work_date}`
+                  const note = shiftNotes[noteKey]
+                  return (
+                    <tr key={`${row.employee_id}-${row.work_date}-${i}`} className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${holiday ? 'bg-amber-50/30' : ''}`}>
+                      <td className="px-3 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${getAvatarColor(row.full_name)} flex items-center justify-center text-white text-[10px] font-black flex-shrink-0`}>
+                            {getInitials(row.full_name)}
+                          </div>
+                          <span className="font-bold text-slate-900 text-xs">{row.full_name}</span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
+                        <div>
+                          <span className="font-bold text-slate-800">{row.work_date.slice(5)}</span>
+                          {holiday && (
+                            <span className={`block text-[9px] font-bold mt-0.5 ${hBadge!.text}`}>🎌 Holiday</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
+                        <span className="font-mono font-bold text-emerald-700">{formatTime(row.first_check_in)}</span>
+                      </td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
+                        {row.last_check_out ? (
+                          <span className="font-mono font-bold text-rose-700">{formatTime(row.last_check_out)}</span>
+                        ) : (
+                          <span className="text-slate-400 italic">Pending</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
+                        <span className="font-black text-slate-800">{formatHoursWorked(Number(row.hours_worked || 0))}</span>
+                      </td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
+                        {ot > 0 ? (
+                          <span className="text-purple-700 font-black">+{ot.toFixed(1)}h</span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-center border-r border-slate-100">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          row.shift_status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          row.shift_status === 'On Duty' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                          'bg-amber-50 text-amber-700 border border-amber-200'
+                        }`}>
+                          {row.shift_status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {ot > 0 && (
+                          <div className="flex items-start gap-1.5">
+                            {note?.ot_reason ? (
+                              <span className="text-[11px] text-amber-800 font-semibold leading-relaxed">💬 {note.ot_reason}</span>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">No OT reason</span>
+                            )}
+                            {isSuperAdmin && (
+                              <button onClick={() => openOtModal(row)} className="text-amber-600 hover:text-amber-800 ml-1 flex-shrink-0" title="Add/Edit OT reason">
+                                <MessageSquarePlus className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      {isSuperAdmin && (
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => openEditShift(row)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 text-[10px] font-bold transition-colors"
+                          >
+                            <Edit2 className="w-2.5 h-2.5" /> Edit Shift
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         ) : (
+          /* ─── SCROLL / CARD VIEW (original) ─────────────────────────────── */
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -615,11 +872,15 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
                   const ot = Number(row.overtime_hours || 0)
                   const gradient = getAvatarColor(row.full_name)
                   const initials = getInitials(row.full_name)
+                  const holiday = getHolidayForDate(row.work_date)
+                  const hBadge = holiday ? getHolidayTypeBadge(holiday.type) : null
+                  const noteKey = `${row.device_user_id}_${row.work_date}`
+                  const note = shiftNotes[noteKey]
 
                   return (
                     <tr
                       key={`${row.employee_id}-${row.work_date}-${i}`}
-                      className="hover:bg-slate-50/70 transition-colors"
+                      className={`hover:bg-slate-50/70 transition-colors ${holiday ? 'bg-amber-50/20' : ''}`}
                     >
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
@@ -633,7 +894,20 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
                         #{row.device_user_id}
                       </td>
                       <td className="px-4 py-3.5 text-slate-600 font-medium">{row.branch || 'JAPA Main'}</td>
-                      <td className="px-4 py-3.5 text-slate-800 font-bold">{row.work_date}</td>
+                      <td className="px-4 py-3.5">
+                        <div>
+                          <span className="font-bold text-slate-800">{row.work_date}</span>
+                          {holiday && hBadge && (
+                            <div className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${hBadge.bg} ${hBadge.text} ${hBadge.border}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${hBadge.dot}`} />
+                              🎌 {holiday.name}
+                            </div>
+                          )}
+                          {holiday && (
+                            <p className="text-[10px] text-slate-400 mt-0.5">{holiday.rateDescription}</p>
+                          )}
+                        </div>
+                      </td>
                       <td className="px-4 py-3.5">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
                           {formatTime(row.first_check_in)}
@@ -653,9 +927,34 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         {ot > 0 ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
-                            +{ot.toFixed(1)}h OT
-                          </span>
+                          <div>
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
+                              +{ot.toFixed(1)}h OT
+                            </span>
+                            {/* OT Reason display */}
+                            {note?.ot_reason ? (
+                              <p className="text-[10px] text-amber-700 font-semibold mt-1 max-w-[120px] break-words">💬 {note.ot_reason}</p>
+                            ) : (
+                              isSuperAdmin && (
+                                <button
+                                  onClick={() => openOtModal(row)}
+                                  className="text-[10px] text-amber-500 hover:text-amber-700 mt-1 flex items-center gap-0.5 font-semibold"
+                                  title="Add OT reason"
+                                >
+                                  <MessageSquarePlus className="w-3 h-3" /> Add reason
+                                </button>
+                              )
+                            )}
+                            {note?.ot_reason && isSuperAdmin && (
+                              <button
+                                onClick={() => openOtModal(row)}
+                                className="text-[10px] text-slate-400 hover:text-amber-600 mt-0.5 flex items-center gap-0.5"
+                                title="Edit OT reason"
+                              >
+                                <Edit2 className="w-2.5 h-2.5" /> Edit reason
+                              </button>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-slate-300 text-xs">—</span>
                         )}
@@ -696,6 +995,69 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
           </div>
         )}
       </div>
+
+      {/* OT Reason Modal — visible to all, editable by super admin */}
+      {otModalOpen && otModalRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+                  <MessageSquarePlus className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Overtime Reason</h3>
+                  <p className="text-xs text-slate-400">Document why overtime was required</p>
+                </div>
+              </div>
+              <button onClick={() => setOtModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-100">
+              <p className="text-sm font-bold text-slate-900">{otModalRow.full_name}</p>
+              <p className="text-xs text-slate-500 font-mono mt-0.5">
+                {otModalRow.work_date} · +{Number(otModalRow.overtime_hours || 0).toFixed(1)}h OT
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveOtReason} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Overtime Reason / Description
+                </label>
+                <textarea
+                  rows={4}
+                  value={otReasonInput}
+                  onChange={(e) => setOtReasonInput(e.target.value)}
+                  placeholder="e.g. Finishing IPSJ project deliverable for client, rush order deadline…"
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed"
+                />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  This reason will be visible to JAPA Dee, JAPA Manager, and JAPA Pearly on the DTR Reports page.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setOtModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingOtReason}
+                  className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-500/20 disabled:opacity-50"
+                >
+                  {savingOtReason ? 'Saving…' : 'Save OT Reason'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Super Admin Edit Shift Modal */}
       {editModalOpen && editRow && (

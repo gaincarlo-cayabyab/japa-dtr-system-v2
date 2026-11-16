@@ -82,8 +82,11 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
   }, [])
   const isSuperAdmin = currentUser?.role === 'super_admin'
 
-  // Clear modal state
+  // Smart Clear modal state
   const [showClearModal, setShowClearModal] = useState(false)
+  const [clearMode, setClearMode] = useState<'all' | 'date' | 'employee' | 'date_employee'>('date')
+  const [clearDate, setClearDate] = useState(format(new Date(), 'yyyy-MM-dd'))
+  const [clearEmpId, setClearEmpId] = useState('')
   const [isClearing, setIsClearing] = useState(false)
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -145,15 +148,24 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
     }
   }, [])
 
-  // Clear all logs handler
+  // Smart Clear logs handler
   const handleClearAll = async () => {
     setIsClearing(true)
     try {
-      const res = await fetch('/api/attendance/clear', { method: 'DELETE' })
+      const body: Record<string, string> = { mode: clearMode }
+      if ((clearMode === 'date' || clearMode === 'date_employee') && clearDate) body.date = clearDate
+      if ((clearMode === 'employee' || clearMode === 'date_employee') && clearEmpId) body.device_user_id = clearEmpId
+
+      const res = await fetch('/api/attendance/clear', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to clear')
-      setLogs([])
-      showToast(`Cleared ${json.deleted ?? 'all'} attendance records.`)
+      // Refresh logs
+      await fetchLatest()
+      showToast(`Cleared ${json.deleted ?? 0} attendance record(s).`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       showToast(`Error: ${msg}`, 'error')
@@ -782,25 +794,93 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
         </div>
       )}
 
-      {/* Clear All Confirmation Modal */}
+      {/* Smart Clear Logs Modal */}
       {showClearModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-md border border-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-4 mb-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-lg border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-4 mb-5">
               <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
                 <Trash2 className="w-6 h-6" />
               </div>
               <div>
                 <h3 className="text-lg font-black text-slate-900">Clear Attendance Logs</h3>
-                <p className="text-xs text-slate-400">Permanently delete logs from database</p>
+                <p className="text-xs text-slate-400">Super Admin · Select what to remove</p>
+              </div>
+              <button onClick={() => setShowClearModal(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Mode Selector */}
+            <div className="mb-5">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Clear Mode</p>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { mode: 'date', label: '📅 By Date', desc: 'Clear all employees on a specific day' },
+                  { mode: 'employee', label: '👤 By Employee', desc: 'Clear all logs for one employee' },
+                  { mode: 'date_employee', label: '🎯 Date + Employee', desc: 'Clear a specific employee on a specific day' },
+                  { mode: 'all', label: '🗑️ Clear All', desc: 'Remove every log (irreversible)' },
+                ] as const).map(({ mode, label, desc }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setClearMode(mode)}
+                    className={`p-3 rounded-2xl border text-left transition-all ${
+                      clearMode === mode
+                        ? mode === 'all'
+                          ? 'bg-rose-50 border-rose-300 shadow-xs'
+                          : 'bg-blue-50 border-blue-300 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
+                    <p className={`text-xs font-black ${clearMode === mode ? (mode === 'all' ? 'text-rose-700' : 'text-blue-700') : 'text-slate-700'}`}>{label}</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">{desc}</p>
+                  </button>
+                ))}
               </div>
             </div>
 
-            <p className="text-sm text-slate-600 mb-6 leading-relaxed">
-              Are you sure you want to delete all attendance logs? This action will reset live logs from Supabase so you can perform fresh synchronizations.
-            </p>
+            {/* Dynamic Inputs */}
+            <div className="space-y-3 mb-5">
+              {(clearMode === 'date' || clearMode === 'date_employee') && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select Date</label>
+                  <input
+                    type="date"
+                    value={clearDate}
+                    onChange={(e) => setClearDate(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+              {(clearMode === 'employee' || clearMode === 'date_employee') && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Select Employee</label>
+                  <select
+                    value={clearEmpId}
+                    onChange={(e) => setClearEmpId(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Choose Employee —</option>
+                    {[...employeesList].sort((a, b) => a.full_name.localeCompare(b.full_name)).map((emp) => (
+                      <option key={emp.device_user_id} value={emp.device_user_id}>
+                        {emp.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {clearMode === 'all' && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl flex items-start gap-2.5">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <p className="text-xs text-rose-700 font-semibold leading-relaxed">
+                    This will permanently delete <strong>ALL</strong> attendance logs from the database. This action cannot be undone.
+                  </p>
+                </div>
+              )}
+            </div>
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setShowClearModal(false)}
@@ -812,10 +892,19 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               <button
                 type="button"
                 onClick={handleClearAll}
-                disabled={isClearing}
-                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/20 transition-all disabled:opacity-50 flex items-center gap-2"
+                disabled={
+                  isClearing ||
+                  ((clearMode === 'date' || clearMode === 'date_employee') && !clearDate) ||
+                  ((clearMode === 'employee' || clearMode === 'date_employee') && !clearEmpId)
+                }
+                className={`px-5 py-2 rounded-xl text-white text-xs font-bold shadow-md transition-all disabled:opacity-50 flex items-center gap-2 ${
+                  clearMode === 'all'
+                    ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-600/20'
+                    : 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/20'
+                }`}
               >
-                {isClearing ? 'Clearing…' : 'Confirm Delete All'}
+                <Trash2 className="w-3.5 h-3.5" />
+                {isClearing ? 'Clearing…' : clearMode === 'all' ? 'Delete ALL Logs' : 'Confirm Clear'}
               </button>
             </div>
           </div>
