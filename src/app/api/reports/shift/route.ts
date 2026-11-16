@@ -18,13 +18,25 @@ export async function PUT(request: NextRequest) {
 
     const supabase = await createClient()
     const body = await request.json()
-    const { device_user_id, work_date, first_check_in, last_check_out } = body
+    const { device_user_id, work_date, first_check_in, last_check_out, attendance_status, notes } = body
 
     if (!device_user_id || !work_date) {
       return NextResponse.json(
         { error: 'device_user_id and work_date are required.' },
         { status: 400 }
       )
+    }
+
+    // Save attendance status (e.g. absent, leave, sick_leave) and notes in shift_notes
+    if (attendance_status !== undefined || notes !== undefined) {
+      await supabase.from('shift_notes').upsert({
+        device_user_id: String(device_user_id),
+        work_date,
+        attendance_status: attendance_status || 'present',
+        notes: notes?.trim() || '',
+        created_by_username: session.username,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'device_user_id,work_date' })
     }
 
     // Shift operational window: from 04:00 AM of work_date to 03:59:59 AM of next day
@@ -48,48 +60,58 @@ export async function PUT(request: NextRequest) {
 
     const punches = existingPunches || []
 
-    // 1. Handle First Check In
-    if (first_check_in) {
-      const inTime = first_check_in.includes('T') ? first_check_in : `${work_date}T${first_check_in}:00+08:00`
-      const firstPunch = punches[0]
-      if (firstPunch) {
+    // If marked as absent, vacation leave, or sick leave, remove any accidental punches for this date window
+    if (attendance_status && attendance_status !== 'present') {
+      if (punches.length > 0) {
         await supabase
           .from('attendance_logs')
-          .update({ punch_time: inTime, status: 0 })
-          .eq('id', firstPunch.id)
-      } else {
-        await supabase.from('attendance_logs').insert({
-          device_user_id: String(device_user_id),
-          punch_time: inTime,
-          status: 0,
-          synced_at: new Date().toISOString(),
-        })
+          .delete()
+          .in('id', punches.map((p) => p.id))
       }
-    }
-
-    // 2. Handle Last Check Out
-    if (last_check_out) {
-      let outTime = last_check_out.includes('T') ? last_check_out : `${work_date}T${last_check_out}:00+08:00`
-      // Check if checkout is after midnight (e.g. 00:00 to 03:59) -> belongs to nextDate
-      const timePart = last_check_out.includes('T') ? last_check_out.slice(11, 16) : last_check_out
-      const hourNum = parseInt(timePart.slice(0, 2))
-      if (hourNum < 4 && !last_check_out.includes('T')) {
-        outTime = `${nextDate}T${last_check_out}:00+08:00`
+    } else {
+      // 1. Handle First Check In (when status is present)
+      if (first_check_in) {
+        const inTime = first_check_in.includes('T') ? first_check_in : `${work_date}T${first_check_in}:00+08:00`
+        const firstPunch = punches[0]
+        if (firstPunch) {
+          await supabase
+            .from('attendance_logs')
+            .update({ punch_time: inTime, status: 0 })
+            .eq('id', firstPunch.id)
+        } else {
+          await supabase.from('attendance_logs').insert({
+            device_user_id: String(device_user_id),
+            punch_time: inTime,
+            status: 0,
+            synced_at: new Date().toISOString(),
+          })
+        }
       }
 
-      if (punches.length > 1) {
-        const lastPunch = punches[punches.length - 1]
-        await supabase
-          .from('attendance_logs')
-          .update({ punch_time: outTime, status: 1 })
-          .eq('id', lastPunch.id)
-      } else {
-        await supabase.from('attendance_logs').insert({
-          device_user_id: String(device_user_id),
-          punch_time: outTime,
-          status: 1,
-          synced_at: new Date().toISOString(),
-        })
+      // 2. Handle Last Check Out (when status is present)
+      if (last_check_out) {
+        let outTime = last_check_out.includes('T') ? last_check_out : `${work_date}T${last_check_out}:00+08:00`
+        // Check if checkout is after midnight (e.g. 00:00 to 03:59) -> belongs to nextDate
+        const timePart = last_check_out.includes('T') ? last_check_out.slice(11, 16) : last_check_out
+        const hourNum = parseInt(timePart.slice(0, 2))
+        if (hourNum < 4 && !last_check_out.includes('T')) {
+          outTime = `${nextDate}T${last_check_out}:00+08:00`
+        }
+
+        if (punches.length > 1) {
+          const lastPunch = punches[punches.length - 1]
+          await supabase
+            .from('attendance_logs')
+            .update({ punch_time: outTime, status: 1 })
+            .eq('id', lastPunch.id)
+        } else {
+          await supabase.from('attendance_logs').insert({
+            device_user_id: String(device_user_id),
+            punch_time: outTime,
+            status: 1,
+            synced_at: new Date().toISOString(),
+          })
+        }
       }
     }
 

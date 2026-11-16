@@ -214,6 +214,18 @@ export interface PayrollPayment {
   updated_at: string
 }
 
+export interface ShiftNote {
+  id: string
+  device_user_id: string
+  work_date: string
+  ot_reason: string
+  attendance_status?: 'present' | 'absent' | 'leave' | 'sick_leave'
+  notes?: string
+  created_by_username: string
+  created_at: string
+  updated_at: string
+}
+
 // Convenience types
 export type Employee = Database['public']['Tables']['employees']['Row']
 export type AttendanceLog = Database['public']['Tables']['attendance_logs']['Row']

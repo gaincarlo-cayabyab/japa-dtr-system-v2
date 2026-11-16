@@ -15,7 +15,8 @@ export default async function ReportsPage() {
 
   const { data: employeesData } = await supabase
     .from('employees')
-    .select('branch')
+    .select('id, device_user_id, full_name, branch, position, department')
+    .order('full_name')
 
   const branches = Array.from(
     new Set((employeesData ?? []).map((e) => e.branch).filter(Boolean))
@@ -33,6 +34,7 @@ export default async function ReportsPage() {
 
       <ReportsClient
         initialData={(dtrData ?? []) as DailyDtr[]}
+        employees={employeesData ?? []}
         branches={branches}
       />
     </div>

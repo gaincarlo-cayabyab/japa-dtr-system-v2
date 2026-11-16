@@ -230,9 +230,28 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     })
   }, [payrollData, searchQuery])
 
-  // Table summary totals for Excel spreadsheet footer
-  const tableTotals = useMemo(() => {
-    return filteredEmployees.reduce(
+  // Split into Dagupan Main and Manila Branch, both sorted strictly A to Z by employee name
+  const { dagupanEmployees, manilaEmployees } = useMemo(() => {
+    const dagupan: EmployeePayrollSummary[] = []
+    const manila: EmployeePayrollSummary[] = []
+
+    const sorted = [...filteredEmployees].sort((a, b) =>
+      a.employee_name.localeCompare(b.employee_name)
+    )
+
+    sorted.forEach((emp) => {
+      if (emp.branch === 'Manila') {
+        manila.push(emp)
+      } else {
+        dagupan.push(emp)
+      }
+    })
+
+    return { dagupanEmployees: dagupan, manilaEmployees: manila }
+  }, [filteredEmployees])
+
+  const calcPayrollTotals = (list: EmployeePayrollSummary[]) => {
+    return list.reduce(
       (acc, emp) => {
         acc.daysWorked += emp.days_worked
         acc.regularHours += emp.total_regular_hours
@@ -255,6 +274,14 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         grossPay: 0,
       }
     )
+  }
+
+  const dagupanTotals = useMemo(() => calcPayrollTotals(dagupanEmployees), [dagupanEmployees])
+  const manilaTotals = useMemo(() => calcPayrollTotals(manilaEmployees), [manilaEmployees])
+
+  // Table summary totals for combined Excel spreadsheet footer
+  const tableTotals = useMemo(() => {
+    return calcPayrollTotals(filteredEmployees)
   }, [filteredEmployees])
 
   // Handle daily rate input change in modal
@@ -349,6 +376,386 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     })
     if (branchFilter) params.append('branch', branchFilter)
     window.open(`/api/reports/excel?${params.toString()}`, '_blank')
+  }
+
+  // Helper to render an Excel-like spreadsheet table for a specific branch group
+  const renderBranchTable = (
+    empList: EmployeePayrollSummary[],
+    subTotals: ReturnType<typeof calcPayrollTotals>,
+    branchTitle: string,
+    badgeBg: string,
+    badgeText: string,
+    badgeBorder: string
+  ) => {
+    if (empList.length === 0) return null
+    return (
+      <div className="overflow-x-auto border-t border-slate-300">
+        {/* Branch Section Banner */}
+        <div className={`px-4 py-2.5 flex items-center justify-between border-b border-slate-300 ${badgeBg}`}>
+          <div className="flex items-center gap-2.5">
+            <h3 className={`text-xs font-black uppercase tracking-wider ${badgeText}`}>
+              {branchTitle}
+            </h3>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeBorder} ${badgeText}`}>
+              {empList.length} Staff (A–Z)
+            </span>
+          </div>
+          <div className="text-xs font-mono font-bold text-slate-700 flex items-center gap-2">
+            <span className="text-slate-500 font-sans text-[11px] font-semibold">Subtotal:</span>
+            <span className="text-emerald-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+              {formatCurrency(subTotals.grossPay)}
+            </span>
+          </div>
+        </div>
+
+        <table className="w-full text-xs border-collapse border-b border-slate-300">
+          <thead>
+            <tr className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-tight select-none border-b-2 border-slate-300">
+              <th className="px-2 py-1.5 text-center border-r border-slate-300 w-10">#</th>
+              <th className="px-2.5 py-1.5 text-left border-r border-slate-300 min-w-[200px]">Employee Name</th>
+              <th className="px-2 py-1.5 text-center border-r border-slate-300 w-16">Sched</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Daily Rate</th>
+              <th className="px-2 py-1.5 text-center border-r border-slate-300 w-14">Days</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Regular Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-amber-800 bg-amber-50/50">Holiday Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-purple-800">OT Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-20 text-rose-800">Late Ded.</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 font-black text-slate-900 bg-emerald-50/50">Gross Salary</th>
+              <th className="px-2.5 py-1.5 text-center border-r border-slate-300 w-28">Payment</th>
+              <th className="px-2 py-1.5 text-center w-16">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200">
+            {empList.map((emp, idx) => {
+              const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
+              const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
+              const payment = paymentsMap.get(emp.device_user_id)
+              const isEven = idx % 2 === 0
+
+              return (
+                <tr
+                  key={emp.device_user_id}
+                  className={`h-8 transition-colors ${
+                    isEven ? 'bg-white' : 'bg-slate-50/40'
+                  } hover:bg-blue-50/60`}
+                >
+                  <td className="px-2 py-1 text-center font-mono text-[11px] font-bold text-slate-500 border-r border-slate-200">
+                    {emp.device_user_id}
+                  </td>
+                  <td className="px-2.5 py-1 border-r border-slate-200">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-900 text-xs truncate max-w-[210px]" title={emp.employee_name}>
+                        {emp.employee_name}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-1.5 py-1 text-center border-r border-slate-200">
+                    <span
+                      className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                        isMonFri
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {isMonFri ? 'M–F' : 'M–S'}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-1 text-right font-mono text-xs text-slate-800 border-r border-slate-200">
+                    <button
+                      onClick={() => {
+                        setRateTarget({
+                          id: emp.device_user_id,
+                          name: emp.employee_name,
+                          dailyRate: emp.daily_rate,
+                          hourlyRate: hourly,
+                          scheduleType: isMonFri ? 'mon_fri' : 'mon_sat',
+                        })
+                        setNewDailyRate(emp.daily_rate)
+                        setNewHourlyRate(hourly)
+                        setNewScheduleType(isMonFri ? 'mon_fri' : 'mon_sat')
+                        setRateModalOpen(true)
+                      }}
+                      className="hover:text-blue-600 hover:underline font-bold inline-flex items-center justify-end gap-1 w-full group"
+                      title="Click to edit daily rate"
+                    >
+                      <span>₱{emp.daily_rate.toFixed(2)}</span>
+                      <Edit2 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-blue-500" />
+                    </button>
+                  </td>
+                  <td className="px-2 py-1 text-center font-mono font-bold text-slate-700 text-xs border-r border-slate-200">
+                    {emp.days_worked}d
+                  </td>
+                  <td className="px-2.5 py-1 text-right font-mono text-xs text-slate-800 font-semibold border-r border-slate-200">
+                    {formatCurrency(emp.total_regular_pay)}
+                  </td>
+                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
+                    {emp.total_holiday_pay > 0 ? (
+                      <span className="font-bold text-amber-700">
+                        +{formatCurrency(emp.total_holiday_pay)}
+                      </span>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
+                    {emp.total_overtime_pay > 0 ? (
+                      <div className="leading-tight">
+                        <span className="font-bold text-purple-700">
+                          +{formatCurrency(emp.total_overtime_pay)}
+                        </span>
+                        <span className="block text-[9px] text-purple-500">
+                          +{emp.total_overtime_hours.toFixed(1)}h
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
+                    {emp.total_tardiness_deduction > 0 ? (
+                      <div className="leading-tight">
+                        <span className="font-semibold text-rose-600">
+                          -{formatCurrency(emp.total_tardiness_deduction)}
+                        </span>
+                        <span className="block text-[9px] text-rose-400">
+                          {emp.total_tardiness_minutes}m
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-1 text-right font-mono text-xs font-black text-emerald-700 bg-emerald-50/40 border-r border-slate-200">
+                    {formatCurrency(emp.gross_pay)}
+                  </td>
+                  <td className="px-2 py-1 text-center border-r border-slate-200">
+                    <button
+                      onClick={() => openPaymentModal(emp)}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold transition-all hover:scale-105 active:scale-95"
+                    >
+                      {payment?.payment_status === 'paid' ? (
+                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                          ✓ Paid
+                        </span>
+                      ) : payment?.payment_status === 'partial' ? (
+                        <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                          Half (₱{payment.amount_paid.toFixed(0)})
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
+                          Unpaid
+                        </span>
+                      )}
+                    </button>
+                  </td>
+                  <td className="px-2 py-1 text-center">
+                    <button
+                      onClick={() => setSelectedEmployee(emp)}
+                      className="px-2 py-0.5 rounded bg-slate-100 hover:bg-blue-100 text-[10px] font-bold text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors"
+                    >
+                      View
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+          <tfoot>
+            <tr className="bg-slate-100 text-slate-800 font-black text-xs border-t-2 border-slate-300">
+              <td colSpan={2} className="px-2.5 py-1.5 text-left border-r border-slate-300 uppercase tracking-wider">
+                {branchTitle} Subtotal ({empList.length} Staff)
+              </td>
+              <td className="px-2 py-1.5 text-center border-r border-slate-300">—</td>
+              <td className="px-2.5 py-1.5 text-right border-r border-slate-300">—</td>
+              <td className="px-2.5 py-1.5 text-center font-mono border-r border-slate-300">
+                {subTotals.daysWorked}d
+              </td>
+              <td className="px-2.5 py-1.5 text-right font-mono border-r border-slate-300">
+                {formatCurrency(subTotals.regularPay)}
+              </td>
+              <td className="px-2.5 py-1.5 text-right font-mono text-amber-800 bg-amber-50/60 border-r border-slate-300">
+                {subTotals.holidayPay > 0 ? `+${formatCurrency(subTotals.holidayPay)}` : '₱0.00'}
+              </td>
+              <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300">
+                {subTotals.otPay > 0 ? `+${formatCurrency(subTotals.otPay)}` : '₱0.00'}
+              </td>
+              <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300">
+                {subTotals.tardinessDed > 0 ? `-${formatCurrency(subTotals.tardinessDed)}` : '₱0.00'}
+              </td>
+              <td className="px-2.5 py-1.5 text-right font-mono text-emerald-800 bg-emerald-100/70 border-r border-slate-300">
+                {formatCurrency(subTotals.grossPay)}
+              </td>
+              <td colSpan={2} className="px-2.5 py-1.5 text-center text-[10px] text-slate-500 font-bold uppercase">
+                SUBTOTAL
+              </td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )
+  }
+
+  // Helper to render Cards for a specific branch group
+  const renderBranchCards = (
+    empList: EmployeePayrollSummary[],
+    branchTitle: string,
+    badgeBg: string,
+    badgeText: string,
+    badgeBorder: string
+  ) => {
+    if (empList.length === 0) return null
+    return (
+      <div className="space-y-4">
+        <div className={`px-4 py-2.5 rounded-xl border flex items-center justify-between ${badgeBg} ${badgeBorder}`}>
+          <div className="flex items-center gap-2">
+            <h3 className={`text-xs font-black uppercase tracking-wider ${badgeText}`}>
+              {branchTitle}
+            </h3>
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgeBorder} ${badgeText}`}>
+              {empList.length} Staff (A–Z)
+            </span>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {empList.map((emp) => {
+            const gradient = getAvatarColor(emp.employee_name)
+            const initials = getInitials(emp.employee_name)
+            const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
+            const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
+            const payment = paymentsMap.get(emp.device_user_id)
+
+            return (
+              <div
+                key={emp.device_user_id}
+                className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+              >
+                {/* Card Header */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                      {initials}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-slate-900 text-sm leading-snug">{emp.employee_name}</h3>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.position || 'Staff'}</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${isMonFri
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                  >
+                    {isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
+                  </span>
+                </div>
+
+                {/* Compensation Row */}
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[11px]">Daily Rate: </span>
+                    <span className="font-bold text-slate-800">₱{emp.daily_rate.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[11px]">Hourly: </span>
+                    <span className="font-bold text-slate-800">₱{hourly.toFixed(2)}/h</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setRateTarget({
+                        id: emp.device_user_id,
+                        name: emp.employee_name,
+                        dailyRate: emp.daily_rate,
+                        hourlyRate: hourly,
+                        scheduleType: isMonFri ? 'mon_fri' : 'mon_sat',
+                      })
+                      setNewDailyRate(emp.daily_rate)
+                      setNewHourlyRate(hourly)
+                      setNewScheduleType(isMonFri ? 'mon_fri' : 'mon_sat')
+                      setRateModalOpen(true)
+                    }}
+                    className="p-1 rounded-lg hover:bg-slate-200 text-slate-500 hover:text-blue-600 transition-colors"
+                    title="Edit Rate"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* 4 Metric Boxes */}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <p className="text-[10px] uppercase font-bold text-slate-400">Regular Pay</p>
+                    <p className="font-black text-slate-800 text-sm mt-0.5">{formatCurrency(emp.total_regular_pay)}</p>
+                    <p className="text-[10px] text-slate-500">{emp.days_worked} days ({emp.total_regular_hours.toFixed(1)}h)</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-100">
+                    <p className="text-[10px] uppercase font-bold text-amber-700">Holiday Pay</p>
+                    <p className="font-black text-amber-800 text-sm mt-0.5">
+                      {emp.total_holiday_pay > 0 ? `+${formatCurrency(emp.total_holiday_pay)}` : '₱0.00'}
+                    </p>
+                    <p className="text-[10px] text-amber-600">DOLE Premium</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-100">
+                    <p className="text-[10px] uppercase font-bold text-purple-700">Overtime Pay</p>
+                    <p className="font-black text-purple-800 text-sm mt-0.5">
+                      {emp.total_overtime_pay > 0 ? `+${formatCurrency(emp.total_overtime_pay)}` : '₱0.00'}
+                    </p>
+                    <p className="text-[10px] text-purple-600">+{emp.total_overtime_hours.toFixed(1)}h OT</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-rose-50/70 border border-rose-100">
+                    <p className="text-[10px] uppercase font-bold text-rose-700">Late Deduction</p>
+                    <p className="font-black text-rose-800 text-sm mt-0.5">
+                      {emp.total_tardiness_deduction > 0 ? `-${formatCurrency(emp.total_tardiness_deduction)}` : '₱0.00'}
+                    </p>
+                    <p className="text-[10px] text-rose-600">{emp.total_tardiness_minutes}m late</p>
+                  </div>
+                </div>
+
+                {/* Gross Salary Banner */}
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase font-black tracking-wider text-emerald-800">Gross Salary</p>
+                  </div>
+                  <p className="text-lg font-black text-emerald-700">{formatCurrency(emp.gross_pay)}</p>
+                </div>
+
+                {/* Actions (Disbursement & Breakdown) */}
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => openPaymentModal(emp)}
+                    className="flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                  >
+                    {payment?.payment_status === 'paid' ? (
+                      <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Paid Full
+                      </span>
+                    ) : payment?.payment_status === 'partial' ? (
+                      <span className="text-amber-700 font-bold inline-flex items-center gap-1">
+                        <Banknote className="w-3.5 h-3.5 text-amber-600" /> Partial (₱{payment.amount_paid.toFixed(0)})
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 font-bold inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" /> Record Pay
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => setSelectedEmployee(emp)}
+                    className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors flex items-center gap-1"
+                  >
+                    Details
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -600,357 +1007,94 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             <p className="text-xs text-slate-400 mt-1">Adjust dates above or ensure attendance punches are synced.</p>
           </div>
         ) : displayMode === 'table' ? (
-          <div className="overflow-x-auto border-t border-slate-300">
-            <table className="w-full text-xs border-collapse border-b border-slate-300">
-              <thead>
-                <tr className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-tight select-none border-b-2 border-slate-300">
-                  <th className="px-2 py-1.5 text-center border-r border-slate-300 w-10">#</th>
-                  <th className="px-2.5 py-1.5 text-left border-r border-slate-300 min-w-[200px]">Employee Name</th>
-                  <th className="px-2 py-1.5 text-center border-r border-slate-300 w-16">Sched</th>
-                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Daily Rate</th>
-                  <th className="px-2 py-1.5 text-center border-r border-slate-300 w-14">Days</th>
-                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Regular Pay</th>
-                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-amber-800 bg-amber-50/50">Holiday Pay</th>
-                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-purple-800">OT Pay</th>
-                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-20 text-rose-800">Late Ded.</th>
-                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 font-black text-slate-900 bg-emerald-50/50">Gross Salary</th>
-                  <th className="px-2.5 py-1.5 text-center border-r border-slate-300 w-28">Payment</th>
-                  <th className="px-2 py-1.5 text-center w-16">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200">
-                {filteredEmployees.map((emp, idx) => {
-                  const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
-                  const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
-                  const payment = paymentsMap.get(emp.device_user_id)
-                  const isEven = idx % 2 === 0
+          <div className="space-y-0">
+            {/* 1. Dagupan Main Branch Section (A-Z) */}
+            {renderBranchTable(
+              dagupanEmployees,
+              dagupanTotals,
+              '🏢 Dagupan Main Branch',
+              'bg-blue-50/70',
+              'text-blue-900',
+              'border-blue-200'
+            )}
 
-                  return (
-                    <tr
-                      key={emp.device_user_id}
-                      className={`h-8 transition-colors ${
-                        isEven ? 'bg-white' : 'bg-slate-50/40'
-                      } hover:bg-blue-50/60`}
-                    >
-                      {/* Device ID */}
-                      <td className="px-2 py-1 text-center font-mono text-[11px] font-bold text-slate-500 border-r border-slate-200">
-                        {emp.device_user_id}
-                      </td>
+            {/* 2. Manila Branch Section (A-Z) with Prominent Space & Separator */}
+            {manilaEmployees.length > 0 && (
+              <div className="mt-8 pt-6 border-t-4 border-slate-300 bg-slate-50/40">
+                {renderBranchTable(
+                  manilaEmployees,
+                  manilaTotals,
+                  '📍 Manila Branch Staff',
+                  'bg-amber-50/90',
+                  'text-amber-950',
+                  'border-amber-300'
+                )}
+              </div>
+            )}
 
-                      {/* Employee Name */}
-                      <td className="px-2.5 py-1 border-r border-slate-200">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-slate-900 text-xs truncate max-w-[210px]" title={emp.employee_name}>
-                            {emp.employee_name}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Work Schedule Badge */}
-                      <td className="px-1.5 py-1 text-center border-r border-slate-200">
-                        <span
-                          className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
-                            isMonFri
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
-                          }`}
-                        >
-                          {isMonFri ? 'M–F' : 'M–S'}
-                        </span>
-                      </td>
-
-                      {/* Daily Rate with Edit Button */}
-                      <td className="px-2.5 py-1 text-right font-mono text-xs text-slate-800 border-r border-slate-200">
-                        <button
-                          onClick={() => {
-                            setRateTarget({
-                              id: emp.device_user_id,
-                              name: emp.employee_name,
-                              dailyRate: emp.daily_rate,
-                              hourlyRate: hourly,
-                              scheduleType: isMonFri ? 'mon_fri' : 'mon_sat',
-                            })
-                            setNewDailyRate(emp.daily_rate)
-                            setNewHourlyRate(hourly)
-                            setNewScheduleType(isMonFri ? 'mon_fri' : 'mon_sat')
-                            setRateModalOpen(true)
-                          }}
-                          className="hover:text-blue-600 hover:underline font-bold inline-flex items-center justify-end gap-1 w-full group"
-                          title="Click to edit daily rate"
-                        >
-                          <span>₱{emp.daily_rate.toFixed(2)}</span>
-                          <Edit2 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-blue-500" />
-                        </button>
-                      </td>
-
-                      {/* Days Worked */}
-                      <td className="px-2 py-1 text-center font-mono font-bold text-slate-700 text-xs border-r border-slate-200">
-                        {emp.days_worked}d
-                      </td>
-
-                      {/* Regular Pay */}
-                      <td className="px-2.5 py-1 text-right font-mono text-xs text-slate-800 font-semibold border-r border-slate-200">
-                        {formatCurrency(emp.total_regular_pay)}
-                      </td>
-
-                      {/* Holiday Pay (DOLE Premium) */}
-                      <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
-                        {emp.total_holiday_pay > 0 ? (
-                          <span className="font-bold text-amber-700">
-                            +{formatCurrency(emp.total_holiday_pay)}
-                          </span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-
-                      {/* OT Pay */}
-                      <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
-                        {emp.total_overtime_pay > 0 ? (
-                          <div className="leading-tight">
-                            <span className="font-bold text-purple-700">
-                              +{formatCurrency(emp.total_overtime_pay)}
-                            </span>
-                            <span className="block text-[9px] text-purple-500">
-                              +{emp.total_overtime_hours.toFixed(1)}h
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Late Deduction */}
-                      <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
-                        {emp.total_tardiness_deduction > 0 ? (
-                          <div className="leading-tight">
-                            <span className="font-semibold text-rose-600">
-                              -{formatCurrency(emp.total_tardiness_deduction)}
-                            </span>
-                            <span className="block text-[9px] text-rose-400">
-                              {emp.total_tardiness_minutes}m
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-
-                      {/* Gross Salary */}
-                      <td className="px-2.5 py-1 text-right font-mono text-xs font-black text-emerald-700 bg-emerald-50/40 border-r border-slate-200">
-                        {formatCurrency(emp.gross_pay)}
-                      </td>
-
-                      {/* Payment Status Column */}
-                      <td className="px-2 py-1 text-center border-r border-slate-200">
-                        <button
-                          onClick={() => openPaymentModal(emp)}
-                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold transition-all hover:scale-105 active:scale-95"
-                        >
-                          {payment?.payment_status === 'paid' ? (
-                            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
-                              ✓ Paid
-                            </span>
-                          ) : payment?.payment_status === 'partial' ? (
-                            <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
-                              Half (₱{payment.amount_paid.toFixed(0)})
-                            </span>
-                          ) : (
-                            <span className="text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
-                              Unpaid
-                            </span>
-                          )}
-                        </button>
-                      </td>
-
-                      {/* Action Breakdown */}
-                      <td className="px-2 py-1 text-center">
-                        <button
-                          onClick={() => setSelectedEmployee(emp)}
-                          className="px-2 py-0.5 rounded bg-slate-100 hover:bg-blue-100 text-[10px] font-bold text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              {/* Excel Spreadsheet Total Summary Row */}
-              <tfoot>
-                <tr className="bg-slate-100 text-slate-800 font-black text-xs border-t-2 border-slate-300">
-                  <td colSpan={2} className="px-2.5 py-1.5 text-left border-r border-slate-300 uppercase tracking-wider">
-                    Total ({filteredEmployees.length} Staff)
-                  </td>
-                  <td className="px-2 py-1.5 text-center border-r border-slate-300">—</td>
-                  <td className="px-2.5 py-1.5 text-right border-r border-slate-300">—</td>
-                  <td className="px-2 py-1.5 text-center font-mono border-r border-slate-300">
-                    {tableTotals.daysWorked}d
-                  </td>
-                  <td className="px-2.5 py-1.5 text-right font-mono border-r border-slate-300">
-                    {formatCurrency(tableTotals.regularPay)}
-                  </td>
-                  <td className="px-2.5 py-1.5 text-right font-mono text-amber-800 bg-amber-50/60 border-r border-slate-300">
-                    {tableTotals.holidayPay > 0 ? `+${formatCurrency(tableTotals.holidayPay)}` : '₱0.00'}
-                  </td>
-                  <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300">
-                    {tableTotals.otPay > 0 ? `+${formatCurrency(tableTotals.otPay)}` : '₱0.00'}
-                  </td>
-                  <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300">
-                    {tableTotals.tardinessDed > 0 ? `-${formatCurrency(tableTotals.tardinessDed)}` : '₱0.00'}
-                  </td>
-                  <td className="px-2.5 py-1.5 text-right font-mono text-emerald-800 bg-emerald-100/70 border-r border-slate-300">
-                    {formatCurrency(tableTotals.grossPay)}
-                  </td>
-                  <td colSpan={2} className="px-2 py-1.5 text-center text-[10px] text-slate-400">
-                    DOLE STANDARDS
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+            {/* Combined Overall Grand Total Bar for Both Branches */}
+            <div className="p-4 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-4 border-t-2 border-slate-700">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                  💰 Combined Grand Total Payroll ({filteredEmployees.length} Total Employees)
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Dagupan Main ({dagupanEmployees.length}): <span className="text-white font-mono">{formatCurrency(dagupanTotals.grossPay)}</span> · Manila ({manilaEmployees.length}): <span className="text-white font-mono">{formatCurrency(manilaTotals.grossPay)}</span>
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+                <span className="bg-slate-800 px-2.5 py-1 rounded-lg">Days: <strong className="text-white">{tableTotals.daysWorked}d</strong></span>
+                <span className="bg-slate-800 px-2.5 py-1 rounded-lg">Regular: <strong className="text-white">{formatCurrency(tableTotals.regularPay)}</strong></span>
+                <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-amber-300">Holiday: +{formatCurrency(tableTotals.holidayPay)}</span>
+                <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-purple-300">OT: +{formatCurrency(tableTotals.otPay)}</span>
+                <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-rose-300">Late: -{formatCurrency(tableTotals.tardinessDed)}</span>
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-lg text-sm font-black">
+                  {formatCurrency(tableTotals.grossPay)}
+                </span>
+              </div>
+            </div>
           </div>
         ) : (
           /* Cards Display Mode */
-          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50/50">
-            {filteredEmployees.map((emp) => {
-              const gradient = getAvatarColor(emp.employee_name)
-              const initials = getInitials(emp.employee_name)
-              const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
-              const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
-              const payment = paymentsMap.get(emp.device_user_id)
+          <div className="p-5 space-y-8 bg-slate-50/50">
+            {/* 1. Dagupan Main Cards */}
+            {renderBranchCards(
+              dagupanEmployees,
+              '🏢 Dagupan Main Branch',
+              'bg-blue-50/70',
+              'text-blue-900',
+              'border-blue-200'
+            )}
 
-              return (
-                <div
-                  key={emp.device_user_id}
-                  className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
-                >
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
-                        {initials}
-                      </div>
-                      <div>
-                        <h3 className="font-black text-slate-900 text-sm leading-snug">{emp.employee_name}</h3>
-                        <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.position || 'Staff'}</p>
-                      </div>
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${isMonFri
-                        ? 'bg-purple-50 text-purple-700 border-purple-200'
-                        : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}
-                    >
-                      {isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
-                    </span>
-                  </div>
+            {/* 2. Manila Branch Cards with Prominent Space */}
+            {manilaEmployees.length > 0 && (
+              <div className="pt-8 border-t-4 border-slate-300">
+                {renderBranchCards(
+                  manilaEmployees,
+                  '📍 Manila Branch Staff',
+                  'bg-amber-50/80',
+                  'text-amber-950',
+                  'border-amber-300'
+                )}
+              </div>
+            )}
 
-                  {/* Compensation Row */}
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                    <div>
-                      <span className="text-slate-400 font-semibold text-[11px]">Daily Rate: </span>
-                      <span className="font-bold text-slate-800">₱{emp.daily_rate.toFixed(2)}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 font-semibold text-[11px]">Hourly: </span>
-                      <span className="font-bold text-slate-800">₱{hourly.toFixed(2)}/h</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setRateTarget({
-                          id: emp.device_user_id,
-                          name: emp.employee_name,
-                          dailyRate: emp.daily_rate,
-                          hourlyRate: hourly,
-                          scheduleType: isMonFri ? 'mon_fri' : 'mon_sat',
-                        })
-                        setNewDailyRate(emp.daily_rate)
-                        setNewHourlyRate(hourly)
-                        setNewScheduleType(isMonFri ? 'mon_fri' : 'mon_sat')
-                        setRateModalOpen(true)
-                      }}
-                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white border border-transparent hover:border-slate-200 transition-colors"
-                      title="Edit Rate"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Pay Components Matrix */}
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Days Worked</p>
-                      <p className="font-black text-slate-800 text-sm mt-0.5">{emp.days_worked} days</p>
-                      <p className="text-[10px] text-slate-400">{emp.total_regular_hours.toFixed(1)} hrs</p>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
-                      <p className="text-[10px] uppercase font-bold text-slate-400">Regular Pay</p>
-                      <p className="font-black text-slate-800 text-sm mt-0.5">{formatCurrency(emp.total_regular_pay)}</p>
-                      <p className="text-[10px] text-slate-400">100% Base</p>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-100">
-                      <p className="text-[10px] uppercase font-bold text-amber-700">Holiday Pay</p>
-                      <p className="font-black text-amber-800 text-sm mt-0.5">
-                        {emp.total_holiday_pay > 0 ? `+${formatCurrency(emp.total_holiday_pay)}` : '₱0.00'}
-                      </p>
-                      <p className="text-[10px] text-amber-600">DOLE Holiday Premium</p>
-                    </div>
-
-                    <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-100">
-                      <p className="text-[10px] uppercase font-bold text-purple-700">Overtime Pay</p>
-                      <p className="font-black text-purple-800 text-sm mt-0.5">
-                        {emp.total_overtime_pay > 0 ? `+${formatCurrency(emp.total_overtime_pay)}` : '₱0.00'}
-                      </p>
-                      <p className="text-[10px] text-purple-600">+{emp.total_overtime_hours.toFixed(1)}h OT</p>
-                    </div>
-                  </div>
-
-                  {/* Gross Salary Banner */}
-                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] uppercase font-black tracking-wider text-emerald-800">Gross Salary</p>
-                      {emp.total_tardiness_deduction > 0 && (
-                        <p className="text-[10px] text-rose-600 font-semibold">
-                          Late Ded: -{formatCurrency(emp.total_tardiness_deduction)} ({emp.total_tardiness_minutes}m)
-                        </p>
-                      )}
-                    </div>
-                    <p className="text-lg font-black text-emerald-700">{formatCurrency(emp.gross_pay)}</p>
-                  </div>
-
-                  {/* Actions (Disbursement & Breakdown) */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
-                    <button
-                      onClick={() => openPaymentModal(emp)}
-                      className="flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-                    >
-                      {payment?.payment_status === 'paid' ? (
-                        <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Paid Full
-                        </span>
-                      ) : payment?.payment_status === 'partial' ? (
-                        <span className="text-amber-700 font-bold inline-flex items-center gap-1">
-                          <Banknote className="w-3.5 h-3.5 text-amber-600" /> Partial (₱{payment.amount_paid.toFixed(0)})
-                        </span>
-                      ) : (
-                        <span className="text-slate-500 font-bold inline-flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" /> Record Pay
-                        </span>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => setSelectedEmployee(emp)}
-                      className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors flex items-center gap-1"
-                    >
-                      Details
-                      <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
+            {/* Combined Overall Grand Total Bar in Cards Mode */}
+            <div className="p-4 bg-slate-900 text-white rounded-2xl flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                  💰 Combined Grand Total Payroll ({filteredEmployees.length} Total Employees)
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Dagupan Main ({dagupanEmployees.length}): <span className="text-white font-mono">{formatCurrency(dagupanTotals.grossPay)}</span> · Manila ({manilaEmployees.length}): <span className="text-white font-mono">{formatCurrency(manilaTotals.grossPay)}</span>
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-lg font-black text-emerald-400 font-mono">
+                  {formatCurrency(tableTotals.grossPay)}
+                </span>
+              </div>
+            </div>
           </div>
         )}
       </div>

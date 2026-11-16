@@ -52,19 +52,21 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient()
     const body = await request.json()
-    const { device_user_id, work_date, ot_reason } = body
+    const { device_user_id, work_date, ot_reason, attendance_status, notes } = body
 
     if (!device_user_id || !work_date) {
       return NextResponse.json({ error: 'device_user_id and work_date are required.' }, { status: 400 })
     }
 
-    const payload = {
+    const payload: Record<string, any> = {
       device_user_id: String(device_user_id),
       work_date,
-      ot_reason: ot_reason?.trim() || '',
       created_by_username: session.username,
       updated_at: new Date().toISOString(),
     }
+    if (ot_reason !== undefined) payload.ot_reason = ot_reason?.trim() || ''
+    if (attendance_status !== undefined) payload.attendance_status = attendance_status
+    if (notes !== undefined) payload.notes = notes?.trim() || ''
 
     const { data, error } = await supabase
       .from('shift_notes')
