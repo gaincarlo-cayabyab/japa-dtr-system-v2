@@ -118,6 +118,84 @@ export type Database = {
   }
 }
 
+export type EmployeeCompensation = {
+  id: string
+  device_user_id: string
+  daily_rate: number
+  monthly_rate: number | null
+  employment_type: 'regular' | 'probationary' | 'contractual'
+  overtime_eligible: boolean
+  night_diff_eligible: boolean
+  effectivity_date: string
+  created_at: string
+  updated_at: string
+}
+
+export type PayrollSettings = {
+  id: string
+  fiscal_year: number
+  work_hours_per_day: number
+  grace_period_minutes: number
+  night_diff_start: string
+  night_diff_end: string
+  regular_holiday_dates: string[]
+  special_holiday_dates: string[]
+  created_at: string
+  updated_at: string
+}
+
+export type DayType =
+  | 'regular'
+  | 'rest_day'
+  | 'special_holiday'
+  | 'special_holiday_rest'
+  | 'regular_holiday'
+  | 'regular_holiday_rest'
+
+export interface DailyPayrollRecord {
+  work_date: string
+  day_type: DayType
+  day_type_label: string
+  first_check_in: string | null
+  last_check_out: string | null
+  total_punches: number
+  hours_worked: number
+  regular_hours: number
+  overtime_hours: number
+  night_diff_hours: number
+  shift_status: 'Completed' | 'On Duty' | 'Incomplete'
+  daily_rate: number
+  hourly_rate: number
+  regular_pay: number
+  overtime_pay: number
+  night_diff_pay: number
+  holiday_premium_pay: number
+  tardiness_minutes: number
+  tardiness_deduction: number
+  total_day_pay: number
+}
+
+export interface EmployeePayrollSummary {
+  device_user_id: string
+  employee_name: string
+  branch: string
+  position: string | null
+  daily_rate: number
+  hourly_rate: number
+  days_worked: number
+  total_regular_hours: number
+  total_overtime_hours: number
+  total_night_diff_hours: number
+  total_regular_pay: number
+  total_overtime_pay: number
+  total_night_diff_pay: number
+  total_holiday_pay: number
+  total_tardiness_minutes: number
+  total_tardiness_deduction: number
+  gross_pay: number
+  records: DailyPayrollRecord[]
+}
+
 // Convenience types
 export type Employee = Database['public']['Tables']['employees']['Row']
 export type AttendanceLog = Database['public']['Tables']['attendance_logs']['Row']

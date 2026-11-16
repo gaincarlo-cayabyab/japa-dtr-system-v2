@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import type { DailyDtr } from '@/types/database'
 import { format } from 'date-fns'
-import { Clock, Download, Filter, Calendar, Users, Moon, Briefcase } from 'lucide-react'
+import { Clock, Download, Filter, Calendar, Users, Moon, Briefcase, FileSpreadsheet } from 'lucide-react'
 
 interface ReportsClientProps {
   initialData: DailyDtr[]
@@ -52,6 +52,17 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   const totalOvertimeHours = filtered.reduce((acc, r) => acc + Number(r.overtime_hours || 0), 0)
   const completedShifts = filtered.filter((r) => r.shift_status === 'Completed').length
   const onDutyShifts = filtered.filter((r) => r.shift_status === 'On Duty').length
+
+  function exportExcel() {
+    const startDate = viewMode === 'monthly' ? `${monthFilter}-01` : dateFilter
+    const endDate = viewMode === 'monthly' ? `${monthFilter}-31` : dateFilter
+    const params = new URLSearchParams({
+      start_date: startDate,
+      end_date: endDate,
+    })
+    if (branchFilter) params.append('branch', branchFilter)
+    window.open(`/api/reports/excel?${params.toString()}`, '_blank')
+  }
 
   function exportCSV() {
     const label = viewMode === 'monthly' ? monthFilter : dateFilter
@@ -144,21 +155,19 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
           <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50">
             <button
               onClick={() => setViewMode('monthly')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                viewMode === 'monthly'
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${viewMode === 'monthly'
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
-              }`}
+                }`}
             >
               Monthly
             </button>
             <button
               onClick={() => setViewMode('daily')}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
-                viewMode === 'daily'
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${viewMode === 'daily'
                   ? 'bg-white text-blue-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
-              }`}
+                }`}
             >
               Daily
             </button>
@@ -215,13 +224,23 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
           </select>
         </div>
 
-        <button
-          onClick={exportCSV}
-          className="ml-auto inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-xs transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Export DTR (.csv)
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={exportExcel}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold shadow-xs transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            Export Excel (.xlsx)
+          </button>
+
+          <button
+            onClick={exportCSV}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-sm font-semibold shadow-xs transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Export CSV
+          </button>
+        </div>
       </div>
 
       {/* DTR Table */}
@@ -287,13 +306,12 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                            row.shift_status === 'Completed'
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${row.shift_status === 'Completed'
                               ? 'bg-emerald-100 text-emerald-800'
                               : row.shift_status === 'On Duty'
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
+                                ? 'bg-blue-100 text-blue-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
                         >
                           {row.shift_status === 'On Duty' && (
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping mr-1.5" />

@@ -279,11 +279,10 @@ export function DashboardClient({
             Refresh
           </button>
           <span
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${
-              isLive
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${isLive
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                 : 'bg-amber-50 border-amber-200 text-amber-700'
-            }`}
+              }`}
           >
             <Radio className={`w-3 h-3 ${isLive ? 'animate-pulse' : ''}`} />
             {isLive ? 'Live — Real-Time Synced' : 'Connecting to Live Feed…'}

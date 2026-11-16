@@ -6,8 +6,10 @@ import { createClient } from '@/lib/supabase/client'
 import type { Employee } from '@/types/database'
 import { Badge } from '@/components/ui/Badge'
 
+export type EmployeeWithRate = Employee & { daily_rate?: number }
+
 interface EmployeeManagerProps {
-  initialEmployees: Employee[]
+  initialEmployees: EmployeeWithRate[]
 }
 
 type FormData = {
@@ -16,6 +18,7 @@ type FormData = {
   branch: string
   position: string
   department: string
+  daily_rate: number
 }
 
 const DEFAULT_FORM: FormData = {
@@ -24,6 +27,7 @@ const DEFAULT_FORM: FormData = {
   branch: 'Dagupan Main',
   position: '',
   department: '',
+  daily_rate: 610,
 }
 
 type Toast = { message: string; type: 'success' | 'error' }
@@ -40,9 +44,9 @@ function formatDate(ts: string) {
 
 export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
   const router = useRouter()
-  const [employees, setEmployees] = useState<Employee[]>(initialEmployees)
+  const [employees, setEmployees] = useState<EmployeeWithRate[]>(initialEmployees)
   const [modalOpen, setModalOpen] = useState(false)
-  const [editTarget, setEditTarget] = useState<Employee | null>(null)
+  const [editTarget, setEditTarget] = useState<EmployeeWithRate | null>(null)
   const [form, setForm] = useState<FormData>(DEFAULT_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
@@ -106,7 +110,7 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
     setModalOpen(true)
   }
 
-  function openEdit(emp: Employee) {
+  function openEdit(emp: EmployeeWithRate) {
     setEditTarget(emp)
     setForm({
       device_user_id: emp.device_user_id,
@@ -114,6 +118,7 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
       branch: emp.branch,
       position: emp.position ?? '',
       department: emp.department ?? '',
+      daily_rate: emp.daily_rate ?? 610,
     })
     setModalOpen(true)
   }
@@ -158,8 +163,18 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
           .update(payload)
           .eq('id', editTarget.id)
         if (error) throw error
+
+        // Also upsert compensation
+        if (form.daily_rate) {
+          await supabase.from('employee_compensation').upsert({
+            device_user_id: form.device_user_id,
+            daily_rate: Number(form.daily_rate),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'device_user_id' })
+        }
+
         setEmployees((prev) =>
-          prev.map((e) => (e.id === editTarget.id ? { ...e, ...payload } : e))
+          prev.map((e) => (e.id === editTarget.id ? { ...e, ...payload, daily_rate: Number(form.daily_rate) } : e))
         )
         setToast({ message: 'Employee updated successfully.', type: 'success' })
       } else {
@@ -169,7 +184,17 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
           .select()
           .single()
         if (error) throw error
-        setEmployees((prev) => [data, ...prev])
+
+        // Also upsert compensation
+        if (form.daily_rate) {
+          await supabase.from('employee_compensation').upsert({
+            device_user_id: form.device_user_id,
+            daily_rate: Number(form.daily_rate),
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'device_user_id' })
+        }
+
+        setEmployees((prev) => [{ ...data, daily_rate: Number(form.daily_rate) }, ...prev])
         setToast({ message: 'Employee added successfully.', type: 'success' })
       }
 
@@ -229,6 +254,7 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Device ID</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Branch</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Position</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">Daily Rate</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Created At</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Actions</th>
                 </tr>
@@ -249,6 +275,11 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
                     </td>
                     <td className="px-4 py-3 text-gray-700">{emp.branch}</td>
                     <td className="px-4 py-3 text-gray-500">{emp.position ?? '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        ₱{(emp.daily_rate ?? 610).toFixed(2)}
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(emp.created_at)}</td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
@@ -392,6 +423,24 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="e.g. Operations"
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Daily Rate (PHP ₱)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-sm text-gray-400 font-semibold">₱</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={form.daily_rate}
+                    onChange={(e) => setForm((f) => ({ ...f, daily_rate: Number(e.target.value) }))}
+                    className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="610.00"
+                  />
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Daily base rate used for DOLE salary computation</p>
               </div>
 
               <div className="flex gap-3 pt-2">

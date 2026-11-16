@@ -13,6 +13,7 @@ import {
   LogOut,
   Shield,
   User,
+  Calculator,
 } from 'lucide-react'
 
 const navItems = [
@@ -20,6 +21,7 @@ const navItems = [
   { label: 'Attendance Logs', href: '/attendance', icon: Clock },
   { label: 'Employees', href: '/employees', icon: Users },
   { label: 'DTR Reports', href: '/reports', icon: FileText },
+  { label: 'Payroll & Salary', href: '/payroll', icon: Calculator },
   { label: 'Sync Status', href: '/sync', icon: Activity },
 ]
 

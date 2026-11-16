@@ -11,6 +11,20 @@ export default async function EmployeesPage() {
     .select('*')
     .order('full_name')
 
+  const { data: compensation } = await supabase
+    .from('employee_compensation')
+    .select('*')
+
+  const compMap = new Map<string, number>()
+  compensation?.forEach((c) => {
+    compMap.set(c.device_user_id, Number(c.daily_rate) || 610.0)
+  })
+
+  const employeesWithRate = (employees ?? []).map((emp) => ({
+    ...emp,
+    daily_rate: compMap.get(emp.device_user_id) ?? 610.0,
+  }))
+
   const unmappedCount = (employees ?? []).filter((e) =>
     e.full_name.includes('NN-')
   ).length
@@ -42,7 +56,7 @@ export default async function EmployeesPage() {
         </div>
       )}
 
-      <EmployeeManager initialEmployees={(employees ?? []) as Employee[]} />
+      <EmployeeManager initialEmployees={employeesWithRate as (Employee & { daily_rate?: number })[]} />
     </div>
   )
 }

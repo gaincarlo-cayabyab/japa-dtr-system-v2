@@ -66,3 +66,4 @@ FROM shift_summary;
 
 -- Allow public / anon / authenticated full read access on view
 GRANT SELECT ON public.daily_dtr TO anon, authenticated, service_role;
+

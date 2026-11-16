@@ -10,3 +10,4 @@ SELECT
 FROM public.daily_dtr
 ORDER BY work_date DESC, full_name ASC
 LIMIT 15;
+
