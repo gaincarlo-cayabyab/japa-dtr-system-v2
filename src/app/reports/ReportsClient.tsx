@@ -241,17 +241,76 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   const onDutyShifts = filtered.filter((r) => r.shift_status === 'On Duty').length
   const incompleteShifts = filtered.filter((r) => r.shift_status === 'Incomplete').length
 
-  // Daily attendance chart data (group by work_date)
-  const dailyAttendanceData = useMemo(() => {
-    const counts = new Map<string, { date: string; count: number; otHours: number }>()
-    filtered.forEach((r) => {
-      const prev = counts.get(r.work_date) || { date: r.work_date, count: 0, otHours: 0 }
-      prev.count += 1
-      prev.otHours += Number(r.overtime_hours || 0)
-      counts.set(r.work_date, prev)
+  // Dates range to display in the Daily Attendance Volume graph:
+  // - Daily mode: 7 days of the active week (Monday to Sunday) containing dateFilter
+  // - Weekly mode: 7 days of the active week (Monday to Sunday)
+  // - Monthly mode: all days of the active month (1 - 30/31)
+  const chartDates = useMemo(() => {
+    if (viewMode === 'monthly') {
+      const [year, month] = monthFilter.split('-').map(Number)
+      const daysInMonth = new Date(year, month, 0).getDate()
+      return Array.from({ length: daysInMonth }, (_, i) => {
+        const dayStr = String(i + 1).padStart(2, '0')
+        return `${monthFilter}-${dayStr}`
+      })
+    }
+    // Daily or Weekly mode: 7 days of the week (Monday through Sunday)
+    const anchorDate = viewMode === 'weekly' ? weekAnchor : dateFilter
+    const weekRange = getWeekRange(anchorDate)
+    const [startY, startM, startD] = weekRange.start.split('-').map(Number)
+    const startUtc = new Date(Date.UTC(startY, startM - 1, startD, 12, 0, 0))
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(startUtc.getTime() + i * 24 * 60 * 60 * 1000)
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
     })
-    return Array.from(counts.values()).sort((a, b) => a.date.localeCompare(b.date))
-  }, [filtered])
+  }, [viewMode, monthFilter, weekAnchor, dateFilter])
+
+  // Daily attendance chart data (with accurate turnout and interactive bars)
+  const dailyAttendanceData = useMemo(() => {
+    const totalStaffCount = employees && employees.length > 0 ? employees.length : 23
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+    return chartDates.map((dateStr) => {
+      // Find all records for this date from the master dataset
+      const dateRecords = data.filter((r) => {
+        if (r.work_date !== dateStr) return false
+        if (branchFilter && r.branch !== branchFilter) return false
+        return true
+      })
+
+      // Count actual attendees: employee has time in, punches, or hours worked > 0
+      const presentRecords = dateRecords.filter(
+        (r) => Boolean(r.first_check_in || Number(r.hours_worked || 0) > 0 || Number(r.total_punches || 0) > 0)
+      )
+
+      const presentCount = presentRecords.length
+      const otHours = presentRecords.reduce((acc, r) => acc + Number(r.overtime_hours || 0), 0)
+      const completedCount = presentRecords.filter((r) => r.shift_status === 'Completed').length
+      const onDutyCount = presentRecords.filter((r) => r.shift_status === 'On Duty').length
+
+      const holiday = getHolidayForDate(dateStr)
+      const [y, m, d] = dateStr.split('-').map(Number)
+      const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+      const isSunday = dayOfWeek === 0
+
+      return {
+        date: dateStr,
+        dayOfMonth: d,
+        dayOfWeek,
+        dayName: dayNames[dayOfWeek],
+        isSunday,
+        holiday,
+        count: presentCount,
+        presentCount,
+        totalStaff: totalStaffCount,
+        absentCount: Math.max(0, totalStaffCount - presentCount),
+        otHours: Math.round(otHours * 10) / 10,
+        completedCount,
+        onDutyCount,
+        isSelected: dateStr === dateFilter,
+      }
+    })
+  }, [chartDates, data, branchFilter, employees, dateFilter])
 
   // Top Overtime Staff
   const topOvertimeEmployees = useMemo(() => {
@@ -585,7 +644,11 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
     }
   }
 
-  const maxDailyCount = Math.max(...dailyAttendanceData.map((d) => d.count), 1)
+  const maxDailyCount = Math.max(
+    employees && employees.length > 0 ? employees.length : 23,
+    ...dailyAttendanceData.map((d) => d.count),
+    1
+  )
 
   // Open Edit Shift Modal with attendance status & notes
   const openEditShift = (row: DailyDtr, existingNote?: ShiftNote) => {
@@ -1750,35 +1813,116 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
         </div>
       )}
 
-      {/* Visual Charts Strip (Monthly & Weekly only) */}
-      {viewMode !== 'daily' && dailyAttendanceData.length > 0 && (
+      {/* Visual Charts Strip (Available across Daily, Weekly, and Monthly views) */}
+      {dailyAttendanceData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-blue-600" />
-                <h3 className="text-sm font-bold text-slate-900">Daily Attendance Volume</h3>
-              </div>
-              <span className="text-xs text-slate-400">Punches per shift date</span>
-            </div>
-            <div className="h-40 flex items-end gap-1.5 pt-4">
-              {dailyAttendanceData.map((d) => {
-                const heightPct = Math.round((d.count / maxDailyCount) * 100)
-                const holiday = getHolidayForDate(d.date)
-                return (
-                  <div key={d.date} className="flex-1 flex flex-col items-center gap-1 group relative">
-                    <div
-                      className={`w-full rounded-t-md transition-all duration-300 ${
-                        holiday ? 'bg-amber-400 group-hover:bg-amber-500' : 'bg-blue-600 group-hover:bg-blue-700'
-                      }`}
-                      style={{ height: `${Math.max(heightPct, 6)}%` }}
-                    />
-                    <span className="text-[10px] text-slate-400 group-hover:text-slate-700 font-mono">
-                      {d.date.slice(8)}
-                    </span>
+          <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    <BarChart3 className="w-4 h-4" />
                   </div>
-                )
-              })}
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      Daily Attendance Volume
+                      <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                        {viewMode === 'monthly'
+                          ? `Month of ${monthFilter}`
+                          : `Week: ${dailyAttendanceData[0]?.date} → ${dailyAttendanceData[dailyAttendanceData.length - 1]?.date}`}
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Actual attendee turnout vs total {employees?.length || 23} staff • Click any bar to inspect that day
+                    </p>
+                  </div>
+                </div>
+
+                {/* Quick Legend */}
+                <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" /> Present
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" /> Holiday
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-sm bg-purple-400 inline-block" /> Sunday
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2.5 h-2.5 rounded-sm border-2 border-indigo-600 inline-block" /> Selected
+                  </span>
+                </div>
+              </div>
+
+              {/* Chart Grid */}
+              <div className="h-44 flex items-end gap-1 sm:gap-2 pt-6 pb-2 px-1 border-b border-slate-100">
+                {dailyAttendanceData.map((d) => {
+                  const heightPct = Math.round((d.presentCount / maxDailyCount) * 100)
+                  const barColor = d.holiday
+                    ? 'bg-amber-400 hover:bg-amber-500'
+                    : d.isSunday
+                    ? 'bg-purple-300 hover:bg-purple-400'
+                    : d.presentCount > 0
+                    ? 'bg-blue-600 hover:bg-blue-700'
+                    : 'bg-slate-200 hover:bg-slate-300'
+
+                  return (
+                    <button
+                      key={d.date}
+                      type="button"
+                      onClick={() => handleDateChange(d.date)}
+                      title={`${d.date} (${d.dayName}): ${d.presentCount}/${d.totalStaff} present${d.holiday ? ` • ${d.holiday.name}` : ''}${d.isSunday ? ' • Sunday Rest Day' : ''}`}
+                      className="flex-1 h-full flex flex-col justify-end items-center gap-1 group relative focus:outline-none"
+                    >
+                      {/* Floating Tooltip */}
+                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md shadow-lg whitespace-nowrap">
+                        <p className="font-bold">{d.date} ({d.dayName})</p>
+                        <p className="text-emerald-300">{d.presentCount} / {d.totalStaff} Present ({heightPct}%)</p>
+                        {d.holiday && <p className="text-amber-300">⭐ {d.holiday.name}</p>}
+                        {d.isSunday && <p className="text-purple-300">Rest Day (Flexible)</p>}
+                        {d.otHours > 0 && <p className="text-purple-200">+{d.otHours}h OT</p>}
+                      </div>
+
+                      {/* Number count on top of bar if weekly / daily */}
+                      {dailyAttendanceData.length <= 14 && (
+                        <span className={`text-[10px] font-bold ${d.isSelected ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`}>
+                          {d.presentCount > 0 ? d.presentCount : '0'}
+                        </span>
+                      )}
+
+                      {/* Bar Fill */}
+                      <div className="w-full flex-1 flex items-end">
+                        <div
+                          className={`w-full rounded-t-md transition-all duration-300 ${barColor} ${
+                            d.isSelected ? 'ring-2 ring-indigo-600 ring-offset-1 shadow-sm' : ''
+                          }`}
+                          style={{ height: `${Math.max(heightPct, 8)}%` }}
+                        />
+                      </div>
+
+                      {/* Label underneath */}
+                      <div className="flex flex-col items-center">
+                        <span className={`text-[10px] font-bold font-mono ${
+                          d.isSelected ? 'text-indigo-600 font-black' : 'text-slate-500 group-hover:text-slate-900'
+                        }`}>
+                          {dailyAttendanceData.length <= 14 ? `${d.dayName} ${d.dayOfMonth}` : d.dayOfMonth}
+                        </span>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Quick summary below chart */}
+            <div className="flex items-center justify-between text-xs text-slate-500 pt-3">
+              <span>
+                Active Date: <strong className="text-slate-900">{dateFilter}</strong>
+              </span>
+              <span className="text-[11px] text-slate-400">
+                Tip: Click any bar to jump to that shift
+              </span>
             </div>
           </div>
 

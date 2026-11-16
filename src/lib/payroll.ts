@@ -162,9 +162,25 @@ export function calculateTardiness(
 }
 
 /**
+ * Computes late deduction strictly based on the employee's hourly rate:
+ * - If late reaches 1 full hour (60 minutes): 1 * hourlyRate
+ * - If late does not reach an hour (< 60 minutes): (lateMinutes / 60) * hourlyRate
+ * - If late exceeds 1 hour (e.g. 107 minutes): (107 / 60) * hourlyRate = 1h * hourlyRate + (47/60) * hourlyRate
+ * Rounding: exact 2 decimal places to standard cents.
+ */
+export function computeLateDeduction(
+  lateMinutes: number,
+  hourlyRate: number
+): number {
+  if (lateMinutes <= 0 || hourlyRate <= 0) return 0
+  return Math.round(((lateMinutes / 60) * hourlyRate) * 100) / 100
+}
+
+/**
  * Compute single day payroll record with automated rules:
  * - Sunday / Rest Day: +30% pay rate, ZERO late deduction (flexible hours)
  * - Overtime Pay: straight hourly rate (hourly_rate * overtime_hours)
+ * - Late Deduction: strictly based on hourly rate pro-rata ((minutes / 60) * hourly_rate)
  */
 export function computeDailyPayroll(
   dtr: DailyDtr,
@@ -173,7 +189,6 @@ export function computeDailyPayroll(
 ): DailyPayrollRecord {
   const dailyRate = Number(comp.daily_rate) || 0
   const hourlyRate = comp.hourly_rate ? Number(comp.hourly_rate) : dailyRate / (settings.work_hours_per_day || 8)
-  const minuteRate = hourlyRate / 60
 
   const { dayType, label } = classifyDay(dtr.work_date, settings, comp.schedule_type || 'mon_sat')
   const rates = DOLE_RATES[dayType]
@@ -195,11 +210,11 @@ export function computeDailyPayroll(
   if (!isRestDay) {
     tardinessMinutes = calculateTardiness(
       dtr.first_check_in,
-      0, // Exact per-minute deduction on standard workdays
+      settings.grace_period_minutes ?? 0,
       9,
       0
     )
-    tardinessDeduction = tardinessMinutes * minuteRate
+    tardinessDeduction = computeLateDeduction(tardinessMinutes, hourlyRate)
   }
 
   // Base Pay & Holiday / Rest Day Extra Pay calculation

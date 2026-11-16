@@ -1387,9 +1387,9 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <th className="px-4 py-3">Time Out</th>
                       <th className="px-4 py-3 text-right">Hours</th>
                       <th className="px-4 py-3 text-right text-amber-700">Holiday Pay</th>
-                      <th className="px-4 py-3 text-right">OT (+25%)</th>
+                      <th className="px-4 py-3 text-right text-purple-700">OT Pay</th>
                       <th className="px-4 py-3 text-right">Night Diff</th>
-                      <th className="px-4 py-3 text-right">Late Ded.</th>
+                      <th className="px-4 py-3 text-right text-rose-700">Late Ded.</th>
                       <th className="px-4 py-3 text-right font-black text-slate-900">Day Total</th>
                     </tr>
                   </thead>
@@ -1422,13 +1422,23 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right text-purple-700 font-bold">
-                          {rec.overtime_hours > 0 ? `+${rec.overtime_hours.toFixed(1)}h` : '—'}
+                          {rec.overtime_pay > 0 ? (
+                            <div>
+                              <span>+{formatCurrency(rec.overtime_pay)}</span>
+                              <span className="text-[10px] text-purple-500 block">+{rec.overtime_hours.toFixed(1)}h</span>
+                            </div>
+                          ) : '—'}
                         </td>
                         <td className="px-4 py-3 text-right text-indigo-700 font-bold">
                           {rec.night_diff_hours > 0 ? `${rec.night_diff_hours.toFixed(1)}h` : '—'}
                         </td>
                         <td className="px-4 py-3 text-right text-rose-600 font-bold">
-                          {rec.tardiness_minutes > 0 ? `${rec.tardiness_minutes}m` : '—'}
+                          {rec.tardiness_deduction > 0 ? (
+                            <div>
+                              <span>-{formatCurrency(rec.tardiness_deduction)}</span>
+                              <span className="text-[10px] text-rose-500 block">{rec.tardiness_minutes}m</span>
+                            </div>
+                          ) : '—'}
                         </td>
                         <td className="px-4 py-3 text-right font-black text-emerald-700 text-sm">
                           {formatCurrency(rec.total_day_pay)}
