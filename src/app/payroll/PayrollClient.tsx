@@ -531,17 +531,15 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
             <button
               onClick={() => setDisplayMode('table')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
             >
               <Table2 className="w-3.5 h-3.5" /> Table
             </button>
             <button
               onClick={() => setDisplayMode('cards')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
-                displayMode === 'cards' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'cards' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
             >
               <LayoutList className="w-3.5 h-3.5" /> Cards
             </button>
@@ -778,11 +776,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       </div>
                     </div>
                     <span
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${
-                        isMonFri
-                          ? 'bg-purple-50 text-purple-700 border-purple-200'
-                          : 'bg-blue-50 text-blue-700 border-blue-200'
-                      }`}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${isMonFri
+                        ? 'bg-purple-50 text-purple-700 border-purple-200'
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}
                     >
                       {isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
                     </span>
@@ -1197,11 +1194,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <tr key={rec.work_date} className="hover:bg-slate-50/70 transition-colors">
                         <td className="px-4 py-3 font-bold text-slate-900">{rec.work_date}</td>
                         <td className="px-4 py-3">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                            rec.day_type.includes('holiday')
-                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                              : 'bg-slate-100 text-slate-700'
-                          }`}>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${rec.day_type.includes('holiday')
+                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                            : 'bg-slate-100 text-slate-700'
+                            }`}>
                             {rec.day_type_label}
                           </span>
                         </td>

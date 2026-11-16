@@ -24,7 +24,7 @@ const PH_HOLIDAYS: PhHoliday[] = [
   { date: '2026-08-31', name: 'National Heroes Day',                type: 'regular',              rateMultiplier: 2.0, rateDescription: 'Double Pay (200%)' },
   { date: '2026-11-01', name: "All Saints' Day",                    type: 'special_non_working',  rateMultiplier: 1.3, rateDescription: '+30% Premium if Worked' },
   { date: '2026-11-02', name: "All Souls' Day",                     type: 'special_non_working',  rateMultiplier: 1.3, rateDescription: '+30% Premium if Worked' },
-  { date: '2026-11-13', name: 'Speaker Eugenio Perez Day',          type: 'special_non_working',  rateMultiplier: 1.3, rateDescription: 'Special Non-Working (+30%)' },
+  { date: '2026-11-13', name: 'Pangasinan / Eugenio Perez Day',      type: 'regular',              rateMultiplier: 2.0, rateDescription: 'Double Pay (200%)' },
   { date: '2026-11-30', name: 'Bonifacio Day',                      type: 'regular',              rateMultiplier: 2.0, rateDescription: 'Double Pay (200%)' },
   { date: '2026-12-08', name: 'Feast of the Immaculate Conception', type: 'special_non_working',  rateMultiplier: 1.3, rateDescription: '+30% Premium if Worked' },
   { date: '2026-12-24', name: 'Christmas Eve',                      type: 'special_non_working',  rateMultiplier: 1.3, rateDescription: '+30% Premium if Worked' },

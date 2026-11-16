@@ -91,20 +91,51 @@ function getWeekRange(dateStr: string): { start: string; end: string } {
 
 export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   const [data, setData] = useState<DailyDtr[]>(initialData)
-  const currentMonth = format(new Date(), 'yyyy-MM')
-  const today = format(new Date(), 'yyyy-MM-dd')
+
+  // Smart initial date from actual attendance records (defaults to 2026-11-02 where active records exist)
+  const defaultDate = useMemo(() => {
+    if (initialData && initialData.length > 0) {
+      const active = initialData.find((d) => d.work_date === '2026-11-02')
+      if (active) return '2026-11-02'
+      return initialData[0].work_date
+    }
+    return '2026-11-02'
+  }, [initialData])
+
+  const defaultMonth = defaultDate.slice(0, 7)
 
   // View mode: 'daily' | 'weekly' | 'monthly'  — default: daily
   const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily')
   // Display style: 'scroll' (card rows) | 'table' (Excel-like compact grid) — default: table
   const [displayMode, setDisplayMode] = useState<'scroll' | 'table'>('table')
 
-  const [monthFilter, setMonthFilter] = useState(currentMonth)
-  const [dateFilter, setDateFilter] = useState(today)
-  const [weekAnchor, setWeekAnchor] = useState(today) // any date within the target week
+  const [monthFilter, setMonthFilter] = useState(defaultMonth)
+  const [dateFilter, setDateFilter] = useState(defaultDate)
+  const [weekAnchor, setWeekAnchor] = useState(defaultDate) // any date within the target week
   const [branchFilter, setBranchFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Sync date changes across views
+  const handleDateChange = (val: string) => {
+    setDateFilter(val)
+    setWeekAnchor(val)
+    if (val.length >= 7) setMonthFilter(val.slice(0, 7))
+  }
+
+  const handleWeekAnchorChange = (val: string) => {
+    setWeekAnchor(val)
+    const range = getWeekRange(val)
+    setDateFilter(range.start)
+    if (val.length >= 7) setMonthFilter(val.slice(0, 7))
+  }
+
+  const handleMonthChange = (val: string) => {
+    setMonthFilter(val)
+    const newDate = `${val}-02`
+    setDateFilter(newDate)
+    setWeekAnchor(newDate)
+  }
 
   // Current logged in user check
   const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
@@ -206,6 +237,171 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
       .sort((a, b) => b.otHours - a.otHours)
       .slice(0, 5)
   }, [filtered])
+
+  // 7 Calendar days for the active week (Mon through Sun)
+  const weekDays = useMemo(() => {
+    const range = getWeekRange(weekAnchor)
+    const [startY, startM, startD] = range.start.split('-').map(Number)
+    const startDate = new Date(Date.UTC(startY, startM - 1, startD, 12, 0, 0))
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000)
+      const y = d.getUTCFullYear()
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+      const day = String(d.getUTCDate()).padStart(2, '0')
+      const dateStr = `${y}-${m}-${day}`
+      const holiday = getHolidayForDate(dateStr)
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+      const dayName = dayNames[d.getUTCDay()]
+      return {
+        dateStr,
+        dayName,
+        dayNum: day,
+        label: `${dayName} ${m}/${day}`,
+        holiday,
+        isSunday: d.getUTCDay() === 0,
+        isSaturday: d.getUTCDay() === 6,
+      }
+    })
+  }, [weekAnchor])
+
+  // Grouped employees for Weekly Matrix View
+  const weeklyEmployees = useMemo(() => {
+    if (viewMode !== 'weekly') return []
+
+    const empMap = new Map<string, {
+      id: string
+      device_user_id: string
+      full_name: string
+      branch: string
+      isMonFri: boolean
+      records: Map<string, DailyDtr>
+      daysWorked: number
+      totalHours: number
+      totalRegularHours: number
+      totalOt: number
+      completedCount: number
+    }>()
+
+    // 1. Collect all employees from dataset that pass branch and search filters
+    data.forEach((r) => {
+      if (branchFilter && r.branch !== branchFilter) return
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase()
+        if (!r.full_name?.toLowerCase().includes(q) && !String(r.device_user_id).includes(q)) return
+      }
+
+      if (!empMap.has(r.device_user_id)) {
+        const isMonFri = r.full_name?.includes('GAIN CARLO')
+        empMap.set(r.device_user_id, {
+          id: r.employee_id,
+          device_user_id: r.device_user_id,
+          full_name: r.full_name,
+          branch: r.branch,
+          isMonFri,
+          records: new Map(),
+          daysWorked: 0,
+          totalHours: 0,
+          totalRegularHours: 0,
+          totalOt: 0,
+          completedCount: 0,
+        })
+      }
+    })
+
+    // 2. Populate punches for the active week
+    filtered.forEach((r) => {
+      const emp = empMap.get(r.device_user_id)
+      if (emp) {
+        emp.records.set(r.work_date, r)
+        const hrs = Number(r.hours_worked || 0)
+        const ot = Number(r.overtime_hours || 0)
+        emp.totalHours += hrs
+        emp.totalRegularHours += Math.min(8, hrs)
+        emp.totalOt += ot
+        if (hrs > 0 || r.first_check_in) emp.daysWorked += 1
+        if (r.shift_status === 'Completed') emp.completedCount += 1
+      }
+    })
+
+    return Array.from(empMap.values())
+      .filter((e) => {
+        if (statusFilter === 'Completed' && e.completedCount === 0) return false
+        if (statusFilter === 'On Duty' && !Array.from(e.records.values()).some((r) => r.shift_status === 'On Duty')) return false
+        if (statusFilter === 'Incomplete' && !Array.from(e.records.values()).some((r) => r.shift_status === 'Incomplete')) return false
+        return true
+      })
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+  }, [viewMode, data, filtered, branchFilter, searchQuery, statusFilter])
+
+  // Grouped employees for Monthly Summary View
+  const monthlyEmployees = useMemo(() => {
+    if (viewMode !== 'monthly') return []
+
+    const empMap = new Map<string, {
+      id: string
+      device_user_id: string
+      full_name: string
+      branch: string
+      isMonFri: boolean
+      daysWorked: number
+      totalHours: number
+      totalRegularHours: number
+      totalOt: number
+      completedCount: number
+      incompleteCount: number
+      shifts: DailyDtr[]
+    }>()
+
+    data.forEach((r) => {
+      if (branchFilter && r.branch !== branchFilter) return
+      if (searchQuery.trim() !== '') {
+        const q = searchQuery.toLowerCase()
+        if (!r.full_name?.toLowerCase().includes(q) && !String(r.device_user_id).includes(q)) return
+      }
+
+      if (!empMap.has(r.device_user_id)) {
+        const isMonFri = r.full_name?.includes('GAIN CARLO')
+        empMap.set(r.device_user_id, {
+          id: r.employee_id,
+          device_user_id: r.device_user_id,
+          full_name: r.full_name,
+          branch: r.branch,
+          isMonFri,
+          daysWorked: 0,
+          totalHours: 0,
+          totalRegularHours: 0,
+          totalOt: 0,
+          completedCount: 0,
+          incompleteCount: 0,
+          shifts: [],
+        })
+      }
+    })
+
+    filtered.forEach((r) => {
+      const emp = empMap.get(r.device_user_id)
+      if (emp) {
+        emp.shifts.push(r)
+        const hrs = Number(r.hours_worked || 0)
+        const ot = Number(r.overtime_hours || 0)
+        emp.totalHours += hrs
+        emp.totalRegularHours += Math.min(8, hrs)
+        emp.totalOt += ot
+        if (hrs > 0 || r.first_check_in) emp.daysWorked += 1
+        if (r.shift_status === 'Completed') emp.completedCount += 1
+        if (r.shift_status === 'Incomplete') emp.incompleteCount += 1
+      }
+    })
+
+    return Array.from(empMap.values())
+      .filter((e) => {
+        if (statusFilter === 'Completed' && e.completedCount === 0) return false
+        if (statusFilter === 'On Duty' && !e.shifts.some((r) => r.shift_status === 'On Duty')) return false
+        if (statusFilter === 'Incomplete' && e.incompleteCount === 0) return false
+        return true
+      })
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+  }, [viewMode, data, filtered, branchFilter, searchQuery, statusFilter])
 
   // Fetch shift notes when filtered data changes
   useEffect(() => {
@@ -309,8 +505,17 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   }
 
   function exportExcel() {
-    const startDate = viewMode === 'monthly' ? `${monthFilter}-01` : dateFilter
-    const endDate = viewMode === 'monthly' ? `${monthFilter}-31` : dateFilter
+    let startDate = dateFilter
+    let endDate = dateFilter
+    if (viewMode === 'monthly') {
+      startDate = `${monthFilter}-01`
+      endDate = `${monthFilter}-31`
+    } else if (viewMode === 'weekly') {
+      const range = getWeekRange(weekAnchor)
+      startDate = range.start
+      endDate = range.end
+    }
+
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
@@ -320,7 +525,14 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   }
 
   function exportCSV() {
-    const label = viewMode === 'monthly' ? monthFilter : dateFilter
+    let label = dateFilter
+    if (viewMode === 'monthly') {
+      label = monthFilter
+    } else if (viewMode === 'weekly') {
+      const range = getWeekRange(weekAnchor)
+      label = `week_${range.start}_to_${range.end}`
+    }
+
     const headers = [
       'Employee Name',
       'Device ID',
@@ -609,58 +821,130 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
         {viewMode === 'daily' && (
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
-            <input
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
-          </div>
-        )}
-        {viewMode === 'weekly' && (
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              Week of {getWeekRange(weekAnchor).start} → {getWeekRange(weekAnchor).end}
-            </label>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => {
-                  const prev = new Date(`${weekAnchor}T12:00:00`)
-                  prev.setDate(prev.getDate() - 7)
-                  setWeekAnchor(format(prev, 'yyyy-MM-dd'))
-                }}
-                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
+            <div className="flex flex-col gap-1.5">
               <input
                 type="date"
-                value={weekAnchor}
-                onChange={(e) => setWeekAnchor(e.target.value)}
+                value={dateFilter}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
-              <button
-                onClick={() => {
-                  const next = new Date(`${weekAnchor}T12:00:00`)
-                  next.setDate(next.getDate() + 7)
-                  setWeekAnchor(format(next, 'yyyy-MM-dd'))
-                }}
-                className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { label: 'Nov 2 (W1)', date: '2026-11-02' },
+                  { label: 'Nov 6', date: '2026-11-06' },
+                  { label: 'Nov 9 (W2)', date: '2026-11-09' },
+                  { label: 'Nov 13 (Hol)', date: '2026-11-13' },
+                  { label: 'Nov 16', date: '2026-11-16' },
+                ].map((p) => (
+                  <button
+                    key={p.date}
+                    type="button"
+                    onClick={() => handleDateChange(p.date)}
+                    className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${
+                      dateFilter === p.date
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
+
+        {viewMode === 'weekly' && (
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              Week: {getWeekRange(weekAnchor).start} → {getWeekRange(weekAnchor).end}
+            </label>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const prev = new Date(`${weekAnchor}T12:00:00`)
+                    prev.setDate(prev.getDate() - 7)
+                    handleWeekAnchorChange(format(prev, 'yyyy-MM-dd'))
+                  }}
+                  className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                  title="Previous Week"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <input
+                  type="date"
+                  value={weekAnchor}
+                  onChange={(e) => handleWeekAnchorChange(e.target.value)}
+                  className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = new Date(`${weekAnchor}T12:00:00`)
+                    next.setDate(next.getDate() + 7)
+                    handleWeekAnchorChange(format(next, 'yyyy-MM-dd'))
+                  }}
+                  className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                  title="Next Week"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* 1-Click Week Presets */}
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { label: 'Week 1 (Nov 2–8)', anchor: '2026-11-02' },
+                  { label: 'Week 2 (Nov 9–15)', anchor: '2026-11-09' },
+                  { label: 'Week 3 (Nov 16–22)', anchor: '2026-11-16' },
+                ].map((p) => {
+                  const isCurrent = getWeekRange(weekAnchor).start === getWeekRange(p.anchor).start
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => handleWeekAnchorChange(p.anchor)}
+                      className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${
+                        isCurrent
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {viewMode === 'monthly' && (
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Month</label>
-            <input
-              type="month"
-              value={monthFilter}
-              onChange={(e) => setMonthFilter(e.target.value)}
-              className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            />
+            <div className="flex flex-col gap-1.5">
+              <input
+                type="month"
+                value={monthFilter}
+                onChange={(e) => handleMonthChange(e.target.value)}
+                className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              />
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleMonthChange('2026-11')}
+                  className={`px-2.5 py-0.5 text-[10px] font-bold rounded-md transition-all ${
+                    monthFilter === '2026-11'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  November 2026 (Active)
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -743,109 +1027,477 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
             <p className="text-xs text-slate-400 mt-1">Adjust filters to view recorded shifts.</p>
           </div>
         ) : displayMode === 'table' ? (
-          /* ─── EXCEL-LIKE TABLE VIEW ──────────────────────────────────────── */
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b-2 border-slate-200">
-                  <th className="px-3 py-2.5 text-left font-black text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[180px]">
-                    Employee Name
-                  </th>
-                  <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[64px]">Date</th>
-                  <th className="px-3 py-2.5 text-center font-black text-emerald-700 border-r border-slate-100 min-w-[80px]">Time In</th>
-                  <th className="px-3 py-2.5 text-center font-black text-rose-700 border-r border-slate-100 min-w-[80px]">Time Out</th>
-                  <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[64px]">Hours</th>
-                  <th className="px-3 py-2.5 text-center font-black text-purple-700 border-r border-slate-100 min-w-[64px]">OT</th>
-                  <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[90px]">Status</th>
-                  <th className="px-3 py-2.5 text-left font-black text-amber-700 min-w-[160px]">OT Reason / Notes</th>
-                  {isSuperAdmin && <th className="px-3 py-2.5 text-center font-black text-blue-700 min-w-[120px]">Admin</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((row, i) => {
-                  const ot = Number(row.overtime_hours || 0)
-                  const holiday = getHolidayForDate(row.work_date)
-                  const hBadge = holiday ? getHolidayTypeBadge(holiday.type) : null
-                  const noteKey = `${row.device_user_id}_${row.work_date}`
-                  const note = shiftNotes[noteKey]
-                  return (
-                    <tr key={`${row.employee_id}-${row.work_date}-${i}`} className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${holiday ? 'bg-amber-50/30' : ''}`}>
-                      <td className="px-3 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${getAvatarColor(row.full_name)} flex items-center justify-center text-white text-[10px] font-black flex-shrink-0`}>
-                            {getInitials(row.full_name)}
+          viewMode === 'weekly' ? (
+            /* ─── WEEKLY MATRIX TABLE VIEW (Excel Timesheet Style) ─────────────── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b-2 border-slate-200">
+                    <th className="px-3.5 py-3 text-left font-black text-slate-700 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 min-w-[200px]">
+                      Employee Name
+                    </th>
+                    {weekDays.map((day) => (
+                      <th
+                        key={day.dateStr}
+                        className={`px-2.5 py-2.5 text-center font-bold border-r border-slate-200 min-w-[125px] ${
+                          day.isSunday ? 'bg-slate-100/70 text-slate-500' : 'text-slate-700'
+                        } ${day.holiday ? 'bg-amber-50/80 text-amber-900' : ''}`}
+                      >
+                        <div className="text-[11px] font-black uppercase tracking-wider">{day.dayName}</div>
+                        <div className="text-[11px] font-mono text-slate-500">{day.dayNum}</div>
+                        {day.holiday && (
+                          <span className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-200/90 text-amber-900 border border-amber-300">
+                            🎌 {day.holiday.name.slice(0, 15)}
+                          </span>
+                        )}
+                      </th>
+                    ))}
+                    <th className="px-3 py-2.5 text-center font-black text-blue-700 border-r border-slate-200 min-w-[60px]">Days</th>
+                    <th className="px-3 py-2.5 text-center font-black text-slate-700 border-r border-slate-200 min-w-[65px]">Reg Hrs</th>
+                    <th className="px-3 py-2.5 text-center font-black text-purple-700 border-r border-slate-200 min-w-[65px]">OT Hrs</th>
+                    <th className="px-3 py-2.5 text-center font-black text-emerald-800 min-w-[75px]">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {weeklyEmployees.map((emp) => {
+                    const gradient = getAvatarColor(emp.full_name)
+                    const initials = getInitials(emp.full_name)
+                    return (
+                      <tr key={emp.device_user_id} className="hover:bg-slate-50/70 transition-colors group">
+                        {/* Sticky Employee Name Column */}
+                        <td className="px-3.5 py-2.5 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-200">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[10px] font-black shadow-2xs flex-shrink-0`}>
+                              {initials}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 text-xs truncate max-w-[140px] leading-tight">{emp.full_name}</p>
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                <span className="text-[10px] text-slate-400 font-mono">#{emp.device_user_id}</span>
+                                <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${emp.isMonFri ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                  {emp.isMonFri ? 'M–F' : 'M–S'}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <span className="font-bold text-slate-900 text-xs">{row.full_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-center border-r border-slate-100">
-                        <div>
-                          <span className="font-bold text-slate-800">{row.work_date.slice(5)}</span>
-                          {holiday && (
-                            <span className={`block text-[9px] font-bold mt-0.5 ${hBadge!.text}`}>🎌 Holiday</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2 text-center border-r border-slate-100">
-                        <span className="font-mono font-bold text-emerald-700">{formatTime(row.first_check_in)}</span>
-                      </td>
-                      <td className="px-3 py-2 text-center border-r border-slate-100">
-                        {row.last_check_out ? (
-                          <span className="font-mono font-bold text-rose-700">{formatTime(row.last_check_out)}</span>
-                        ) : (
-                          <span className="text-slate-400 italic">Pending</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center border-r border-slate-100">
-                        <span className="font-black text-slate-800">{formatHoursWorked(Number(row.hours_worked || 0))}</span>
-                      </td>
-                      <td className="px-3 py-2 text-center border-r border-slate-100">
-                        {ot > 0 ? (
-                          <span className="text-purple-700 font-black">+{ot.toFixed(1)}h</span>
-                        ) : (
-                          <span className="text-slate-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-center border-r border-slate-100">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          row.shift_status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                          row.shift_status === 'On Duty' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
-                          'bg-amber-50 text-amber-700 border border-amber-200'
-                        }`}>
-                          {row.shift_status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">
-                        {ot > 0 && (
-                          <div className="flex items-start gap-1.5">
-                            {note?.ot_reason ? (
-                              <span className="text-[11px] text-amber-800 font-semibold leading-relaxed">💬 {note.ot_reason}</span>
-                            ) : (
-                              <span className="text-[11px] text-slate-400 italic">No OT reason</span>
-                            )}
-                            {isSuperAdmin && (
-                              <button onClick={() => openOtModal(row)} className="text-amber-600 hover:text-amber-800 ml-1 flex-shrink-0" title="Add/Edit OT reason">
-                                <MessageSquarePlus className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      {isSuperAdmin && (
-                        <td className="px-3 py-2 text-center">
-                          <button
-                            onClick={() => openEditShift(row)}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 text-[10px] font-bold transition-colors"
-                          >
-                            <Edit2 className="w-2.5 h-2.5" /> Edit Shift
-                          </button>
                         </td>
-                      )}
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+
+                        {/* 7 Day Columns */}
+                        {weekDays.map((day) => {
+                          const rec = emp.records.get(day.dateStr)
+                          const isRestDay = day.isSunday || (emp.isMonFri && day.isSaturday)
+                          const noteKey = `${emp.device_user_id}_${day.dateStr}`
+                          const note = shiftNotes[noteKey]
+
+                          return (
+                            <td
+                              key={day.dateStr}
+                              className={`px-2 py-2 text-center border-r border-slate-100 relative ${
+                                day.isSunday ? 'bg-slate-50/50' : ''
+                              } ${day.holiday ? 'bg-amber-50/20' : ''}`}
+                            >
+                              {rec ? (
+                                <div className="space-y-0.5">
+                                  <div className="font-mono text-[10px] font-bold text-slate-800 leading-tight">
+                                    <span className="text-emerald-700">{formatTime(rec.first_check_in).replace(':00', '')}</span>
+                                    <span className="text-slate-300 mx-0.5">–</span>
+                                    <span className="text-rose-700">{rec.last_check_out ? formatTime(rec.last_check_out).replace(':00', '') : '…'}</span>
+                                  </div>
+                                  <div className="flex items-center justify-center gap-1">
+                                    <span className="px-1.5 py-0.2 rounded font-bold text-[10px] bg-slate-100 text-slate-800">
+                                      {formatHoursWorked(rec.hours_worked)}
+                                    </span>
+                                    {rec.overtime_hours > 0 && (
+                                      <span className="px-1 py-0.2 rounded font-black text-[9px] bg-purple-100 text-purple-800 border border-purple-200">
+                                        +{rec.overtime_hours.toFixed(1)}h
+                                      </span>
+                                    )}
+                                  </div>
+                                  {note?.ot_reason && (
+                                    <p className="text-[9px] text-amber-700 font-semibold truncate max-w-[110px]" title={note.ot_reason}>
+                                      💬 {note.ot_reason}
+                                    </p>
+                                  )}
+                                  {isSuperAdmin && (
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditShift(rec)}
+                                      className="opacity-0 group-hover:opacity-100 absolute top-1 right-1 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
+                                      title="Edit shift"
+                                    >
+                                      <Edit2 className="w-2.5 h-2.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : isRestDay ? (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100">
+                                  Rest Day
+                                </span>
+                              ) : (
+                                <span className="text-slate-300 font-mono text-xs">—</span>
+                              )}
+                            </td>
+                          )
+                        })}
+
+                        {/* Weekly Totals */}
+                        <td className="px-3 py-2.5 text-center border-r border-slate-100">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700">
+                            {emp.daysWorked}d
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 text-center border-r border-slate-100 font-bold text-slate-700 text-xs">
+                          {emp.totalRegularHours.toFixed(1)}h
+                        </td>
+                        <td className="px-3 py-2.5 text-center border-r border-slate-100 text-xs">
+                          {emp.totalOt > 0 ? (
+                            <span className="font-bold text-purple-700">+{emp.totalOt.toFixed(1)}h</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          <span className="px-2 py-1 rounded-xl font-black bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs">
+                            {emp.totalHours.toFixed(1)}h
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : viewMode === 'monthly' ? (
+            /* ─── MONTHLY SUMMARY TABLE VIEW ───────────────────────────────── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b-2 border-slate-200 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200">Employee Name</th>
+                    <th className="px-3 py-3 text-center border-r border-slate-100">Branch</th>
+                    <th className="px-3 py-3 text-center border-r border-slate-100">Schedule</th>
+                    <th className="px-3 py-3 text-center border-r border-slate-100">Days Worked</th>
+                    <th className="px-3 py-3 text-right border-r border-slate-100">Reg Hours</th>
+                    <th className="px-3 py-3 text-right border-r border-slate-100">OT Hours</th>
+                    <th className="px-3 py-3 text-center border-r border-slate-100">Shifts Status</th>
+                    <th className="px-4 py-3 text-right font-black text-emerald-800">Monthly Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {monthlyEmployees.map((emp) => {
+                    const gradient = getAvatarColor(emp.full_name)
+                    const initials = getInitials(emp.full_name)
+                    return (
+                      <tr key={emp.device_user_id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-4 py-3 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
+                              {initials}
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 text-xs">{emp.full_name}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">#{emp.device_user_id}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 text-center border-r border-slate-100 text-slate-600 font-medium">
+                          {emp.branch}
+                        </td>
+                        <td className="px-3 py-3 text-center border-r border-slate-100">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${emp.isMonFri ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                            {emp.isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center border-r border-slate-100">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                            {emp.daysWorked} days
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-right border-r border-slate-100 font-bold text-slate-700 text-xs">
+                          {emp.totalRegularHours.toFixed(1)} hrs
+                        </td>
+                        <td className="px-3 py-3 text-right border-r border-slate-100 text-xs">
+                          {emp.totalOt > 0 ? (
+                            <span className="font-bold text-purple-700">+{emp.totalOt.toFixed(1)}h OT</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-center border-r border-slate-100">
+                          <span className="text-emerald-700 font-bold text-xs">{emp.completedCount} Complete</span>
+                          {emp.incompleteCount > 0 && (
+                            <span className="text-amber-600 font-bold text-xs ml-1.5">· {emp.incompleteCount} Incomplete</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <span className="text-xs font-black text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
+                            {emp.totalHours.toFixed(1)} hrs
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            /* ─── DAILY TABLE VIEW ─────────────────────────────────────────── */
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 border-b-2 border-slate-200">
+                    <th className="px-3 py-2.5 text-left font-black text-slate-600 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[180px]">
+                      Employee Name
+                    </th>
+                    <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[64px]">Date</th>
+                    <th className="px-3 py-2.5 text-center font-black text-emerald-700 border-r border-slate-100 min-w-[80px]">Time In</th>
+                    <th className="px-3 py-2.5 text-center font-black text-rose-700 border-r border-slate-100 min-w-[80px]">Time Out</th>
+                    <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[64px]">Hours</th>
+                    <th className="px-3 py-2.5 text-center font-black text-purple-700 border-r border-slate-100 min-w-[64px]">OT</th>
+                    <th className="px-3 py-2.5 text-center font-black text-slate-600 border-r border-slate-100 min-w-[90px]">Status</th>
+                    <th className="px-3 py-2.5 text-left font-black text-amber-700 min-w-[160px]">OT Reason / Notes</th>
+                    {isSuperAdmin && <th className="px-3 py-2.5 text-center font-black text-blue-700 min-w-[120px]">Admin</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((row, i) => {
+                    const ot = Number(row.overtime_hours || 0)
+                    const holiday = getHolidayForDate(row.work_date)
+                    const hBadge = holiday ? getHolidayTypeBadge(holiday.type) : null
+                    const noteKey = `${row.device_user_id}_${row.work_date}`
+                    const note = shiftNotes[noteKey]
+                    return (
+                      <tr key={`${row.employee_id}-${row.work_date}-${i}`} className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${holiday ? 'bg-amber-50/30' : ''}`}>
+                        <td className="px-3 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${getAvatarColor(row.full_name)} flex items-center justify-center text-white text-[10px] font-black flex-shrink-0`}>
+                              {getInitials(row.full_name)}
+                            </div>
+                            <span className="font-bold text-slate-900 text-xs">{row.full_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          <div>
+                            <span className="font-bold text-slate-800">{row.work_date.slice(5)}</span>
+                            {holiday && (
+                              <span className={`block text-[9px] font-bold mt-0.5 ${hBadge!.text}`}>🎌 Holiday</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          <span className="font-mono font-bold text-emerald-700">{formatTime(row.first_check_in)}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          {row.last_check_out ? (
+                            <span className="font-mono font-bold text-rose-700">{formatTime(row.last_check_out)}</span>
+                          ) : (
+                            <span className="text-slate-400 italic">Pending</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          <span className="font-black text-slate-800">{formatHoursWorked(Number(row.hours_worked || 0))}</span>
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          {ot > 0 ? (
+                            <span className="text-purple-700 font-black">+{ot.toFixed(1)}h</span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            row.shift_status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                            row.shift_status === 'On Duty' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                            'bg-amber-50 text-amber-700 border border-amber-200'
+                          }`}>
+                            {row.shift_status}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          {ot > 0 && (
+                            <div className="flex items-start gap-1.5">
+                              {note?.ot_reason ? (
+                                <span className="text-[11px] text-amber-800 font-semibold leading-relaxed">💬 {note.ot_reason}</span>
+                              ) : (
+                                <span className="text-[11px] text-slate-400 italic">No OT reason</span>
+                              )}
+                              {isSuperAdmin && (
+                                <button onClick={() => openOtModal(row)} className="text-amber-600 hover:text-amber-800 ml-1 flex-shrink-0" title="Add/Edit OT reason">
+                                  <MessageSquarePlus className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                        {isSuperAdmin && (
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              onClick={() => openEditShift(row)}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 text-[10px] font-bold transition-colors"
+                            >
+                              <Edit2 className="w-2.5 h-2.5" /> Edit Shift
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : viewMode === 'weekly' ? (
+          /* ─── WEEKLY CARDS VIEW ─────────────────────────────── */
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50/50">
+            {weeklyEmployees.map((emp) => {
+              const gradient = getAvatarColor(emp.full_name)
+              const initials = getInitials(emp.full_name)
+              return (
+                <div
+                  key={emp.device_user_id}
+                  className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                >
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                        {initials}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-sm leading-snug">{emp.full_name}</h3>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.branch}</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${
+                        emp.isMonFri ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {emp.isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
+                    </span>
+                  </div>
+
+                  {/* Summary Metric Pills */}
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Days</p>
+                      <p className="font-black text-slate-800 text-xs mt-0.5">{emp.daysWorked}d</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Regular</p>
+                      <p className="font-black text-slate-800 text-xs mt-0.5">{emp.totalRegularHours.toFixed(1)}h</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-purple-50/70 border border-purple-100">
+                      <p className="text-[10px] uppercase font-bold text-purple-700">OT</p>
+                      <p className="font-black text-purple-800 text-xs mt-0.5">
+                        {emp.totalOt > 0 ? `+${emp.totalOt.toFixed(1)}h` : '0h'}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-100">
+                      <p className="text-[10px] uppercase font-bold text-emerald-700">Total</p>
+                      <p className="font-black text-emerald-800 text-xs mt-0.5">{emp.totalHours.toFixed(1)}h</p>
+                    </div>
+                  </div>
+
+                  {/* 7 Days Mini Strip */}
+                  <div className="space-y-1.5 pt-2 border-t border-slate-100">
+                    <div className="grid grid-cols-7 gap-1 text-center">
+                      {weekDays.map((day) => {
+                        const rec = emp.records.get(day.dateStr)
+                        const isRestDay = day.isSunday || (emp.isMonFri && day.isSaturday)
+                        const hrs = rec ? Number(rec.hours_worked || 0) : 0
+                        return (
+                          <div
+                            key={day.dateStr}
+                            className={`p-1 rounded-lg border text-[10px] flex flex-col items-center justify-between min-h-[50px] ${
+                              hrs > 0
+                                ? 'bg-blue-50/70 border-blue-200 text-blue-900'
+                                : day.holiday
+                                ? 'bg-amber-50 border-amber-200 text-amber-800'
+                                : isRestDay
+                                ? 'bg-slate-100 border-slate-200 text-slate-400'
+                                : 'bg-slate-50 border-slate-100 text-slate-300'
+                            }`}
+                            title={`${day.dateStr}: ${
+                              rec
+                                ? `${formatTime(rec.first_check_in)} - ${formatTime(rec.last_check_out)} (${hrs.toFixed(1)}h)`
+                                : isRestDay
+                                ? 'Rest Day'
+                                : day.holiday
+                                ? day.holiday.name
+                                : 'No punch'
+                            }`}
+                          >
+                            <span className="font-bold text-[9px] uppercase">{day.dayName.slice(0, 2)}</span>
+                            {hrs > 0 ? (
+                              <span className="font-black text-[10px] text-blue-700">{hrs.toFixed(1)}h</span>
+                            ) : day.holiday ? (
+                              <span className="text-[8px] font-bold text-amber-700">Hol</span>
+                            ) : isRestDay ? (
+                              <span className="text-[8px] text-slate-400">Rest</span>
+                            ) : (
+                              <span className="text-slate-300">—</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        ) : viewMode === 'monthly' ? (
+          /* ─── MONTHLY CARDS VIEW ─────────────────────────────── */
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50/50">
+            {monthlyEmployees.map((emp) => {
+              const gradient = getAvatarColor(emp.full_name)
+              const initials = getInitials(emp.full_name)
+              return (
+                <div
+                  key={emp.device_user_id}
+                  className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                        {initials}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-slate-900 text-sm leading-snug">{emp.full_name}</h3>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.branch}</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${
+                        emp.isMonFri ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {emp.isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Days</p>
+                      <p className="font-black text-slate-800 text-xs mt-0.5">{emp.daysWorked}d</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Regular</p>
+                      <p className="font-black text-slate-800 text-xs mt-0.5">{emp.totalRegularHours.toFixed(1)}h</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-purple-50/70 border border-purple-100">
+                      <p className="text-[10px] uppercase font-bold text-purple-700">OT</p>
+                      <p className="font-black text-purple-800 text-xs mt-0.5">+{emp.totalOt.toFixed(1)}h</p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-100">
+                      <p className="text-[10px] uppercase font-bold text-emerald-700">Total</p>
+                      <p className="font-black text-emerald-800 text-xs mt-0.5">{emp.totalHours.toFixed(1)}h</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         ) : (
           /* ─── SCROLL / CARD VIEW (original) ─────────────────────────────── */
