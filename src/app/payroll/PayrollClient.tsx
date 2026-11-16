@@ -998,7 +998,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         {loading ? (
           <div className="py-24 flex flex-col items-center justify-center text-slate-400">
             <div className="w-9 h-9 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
-            <p className="text-sm font-bold text-slate-600">Computing DOLE Labor Standard Payroll...</p>
+            <p className="text-sm font-bold text-slate-600">Computing Automated Payroll...</p>
           </div>
         ) : filteredEmployees.length === 0 ? (
           <div className="py-24 flex flex-col items-center justify-center text-slate-400">

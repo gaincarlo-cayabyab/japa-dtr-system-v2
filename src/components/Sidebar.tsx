@@ -15,6 +15,7 @@ import {
   User,
   Calculator,
   BookOpen,
+  CalendarDays,
 } from 'lucide-react'
 
 const navItems = [
@@ -23,6 +24,7 @@ const navItems = [
   { label: 'Employees', href: '/employees', icon: Users },
   { label: 'DTR Reports', href: '/reports', icon: FileText },
   { label: 'Payroll & Salary', href: '/payroll', icon: Calculator },
+  { label: 'Calendar', href: '/calendar', icon: CalendarDays },
   { label: 'Sync Status', href: '/sync', icon: Activity },
   { label: 'Help & Formulas', href: '/help', icon: BookOpen },
 ]

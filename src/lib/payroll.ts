@@ -7,6 +7,7 @@ import type {
   DailyPayrollRecord,
   EmployeePayrollSummary,
 } from '@/types/database'
+import { getHolidayForDate } from '@/lib/holidays'
 
 export interface DOLEMultipliers {
   base: number
@@ -17,48 +18,46 @@ export interface DOLEMultipliers {
 export const DOLE_RATES: Record<DayType, DOLEMultipliers> = {
   regular: {
     base: 1.0,
-    ot: 1.25,
+    ot: 1.0,
     label: 'Regular Workday',
   },
   rest_day: {
     base: 1.3,
-    ot: 1.69,
-    label: 'Rest Day',
+    ot: 1.0,
+    label: 'Rest Day (+30% Premium, No Late)',
   },
   special_holiday: {
     base: 1.3,
-    ot: 1.69,
-    label: 'Special Non-Working Holiday',
+    ot: 1.0,
+    label: 'Special Non-Working Holiday (+30%)',
   },
   special_holiday_rest: {
     base: 1.5,
-    ot: 1.95,
-    label: 'Special Holiday (Rest Day)',
+    ot: 1.0,
+    label: 'Special Holiday (Rest Day +50%)',
   },
   regular_holiday: {
     base: 2.0,
-    ot: 2.6,
-    label: 'Regular Holiday',
+    ot: 1.0,
+    label: 'Regular Holiday (Double Pay 200%)',
   },
   regular_holiday_rest: {
     base: 2.6,
-    ot: 3.38,
-    label: 'Regular Holiday (Rest Day)',
+    ot: 1.0,
+    label: 'Regular Holiday (Rest Day 260%)',
   },
 }
 
 /**
  * Determine the day classification (regular, holiday, rest day)
- * Supports 'mon_sat' (Sunday rest) and 'mon_fri' (Saturday & Sunday rest)
+ * Uses official Philippine & Pangasinan calendar holidays.
+ * Supports 'mon_sat' (Sunday rest) and 'mon_fri' (Saturday & Sunday rest).
  */
 export function classifyDay(
   dateStr: string,
   settings: PayrollSettings,
   scheduleType: 'mon_sat' | 'mon_fri' = 'mon_sat'
 ): { dayType: DayType; label: string } {
-  const isRegHoliday = settings.regular_holiday_dates?.includes(dateStr)
-  const isSpecHoliday = settings.special_holiday_dates?.includes(dateStr)
-
   // Use UTC year, month, date to guarantee exact calendar day-of-week without timezone shift
   const [y, m, d] = dateStr.split('-').map(Number)
   const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
@@ -66,6 +65,30 @@ export function classifyDay(
   const restDay = scheduleType === 'mon_fri' 
     ? (dayOfWeek === 0 || dayOfWeek === 6)
     : (dayOfWeek === 0)
+
+  const holiday = getHolidayForDate(dateStr)
+
+  if (holiday) {
+    if (holiday.type === 'regular') {
+      return restDay
+        ? { dayType: 'regular_holiday_rest', label: DOLE_RATES.regular_holiday_rest.label }
+        : { dayType: 'regular_holiday', label: DOLE_RATES.regular_holiday.label }
+    }
+    if (holiday.type === 'special_non_working') {
+      return restDay
+        ? { dayType: 'special_holiday_rest', label: DOLE_RATES.special_holiday_rest.label }
+        : { dayType: 'special_holiday', label: DOLE_RATES.special_holiday.label }
+    }
+    // special_working (e.g. EDSA, Agew na Pangasinan)
+    if (restDay) {
+      return { dayType: 'rest_day', label: DOLE_RATES.rest_day.label }
+    }
+    return { dayType: 'regular', label: DOLE_RATES.regular.label }
+  }
+
+  // Also check database settings holiday arrays if present
+  const isRegHoliday = settings.regular_holiday_dates?.includes(dateStr)
+  const isSpecHoliday = settings.special_holiday_dates?.includes(dateStr)
 
   if (isRegHoliday && restDay) {
     return { dayType: 'regular_holiday_rest', label: DOLE_RATES.regular_holiday_rest.label }
@@ -98,14 +121,11 @@ export function calculateNightDiffHours(
   if (isNaN(start) || isNaN(end) || end <= start) return 0
 
   let nightMinutes = 0
-  // Step through in 5-minute increments
   const stepMs = 5 * 60 * 1000
   for (let t = start; t < end; t += stepMs) {
-    // Check hour in Manila time (UTC+8)
     const d = new Date(t)
     const utcHours = d.getUTCHours()
     const manilaHour = (utcHours + 8) % 24
-    // Night differential is 10:00 PM (22:00) to 6:00 AM (06:00)
     if (manilaHour >= 22 || manilaHour < 6) {
       nightMinutes += 5
     }
@@ -134,16 +154,17 @@ export function calculateTardiness(
   const checkInTotalMin = manilaHour * 60 + manilaMinute
   const expectedTotalMin = expectedStartHour * 60 + expectedStartMinute
 
-  // If arrived before or at 9:00 AM, diff is <= 0 -> 0 tardiness
   const diff = checkInTotalMin - expectedTotalMin
   if (diff > gracePeriodMinutes) {
-    return diff // total minutes late past 9:00 AM
+    return diff
   }
   return 0
 }
 
 /**
- * Compute single day DOLE payroll record
+ * Compute single day payroll record with automated rules:
+ * - Sunday / Rest Day: +30% pay rate, ZERO late deduction (flexible hours)
+ * - Overtime Pay: straight hourly rate (hourly_rate * overtime_hours)
  */
 export function computeDailyPayroll(
   dtr: DailyDtr,
@@ -164,18 +185,26 @@ export function computeDailyPayroll(
     ? calculateNightDiffHours(dtr.first_check_in, dtr.last_check_out)
     : 0
 
-  // 9:00 AM Office Start
-  const tardinessMinutes = calculateTardiness(
-    dtr.first_check_in,
-    0, // Exact per-hour / per-minute deduction as requested
-    9,
-    0
-  )
-  const tardinessDeduction = tardinessMinutes * minuteRate
+  // Rest Day / Sunday Rule:
+  // "when someone work on sunday it should be 30 percent as well also there should be no late on sunday since it's rest day the staff can go to work on what ever time they want and ofcourse there hours on sunday should be the one to be computed only no late on sunday"
+  const isRestDay = dayType === 'rest_day' || dayType === 'special_holiday_rest' || dayType === 'regular_holiday_rest'
 
-  // Base Pay & Holiday Extra Pay calculation
+  let tardinessMinutes = 0
+  let tardinessDeduction = 0
+
+  if (!isRestDay) {
+    tardinessMinutes = calculateTardiness(
+      dtr.first_check_in,
+      0, // Exact per-minute deduction on standard workdays
+      9,
+      0
+    )
+    tardinessDeduction = tardinessMinutes * minuteRate
+  }
+
+  // Base Pay & Holiday / Rest Day Extra Pay calculation
   // Base Pay = 1.0x for regular hours worked
-  // Holiday Pay = Extra premium (e.g. +100% for regular holiday, +30% for special holiday / rest day)
+  // Holiday / Rest Day Pay = Extra premium (+30% for Sunday / Rest Day / Special Holiday, +100% for Regular Holiday)
   let regularPay = 0
   let holidayPremiumPay = 0
 
@@ -186,10 +215,11 @@ export function computeDailyPayroll(
     }
   }
 
-  // Overtime Pay
+  // Overtime Pay: Straight hourly rate for each hour of overtime
+  // "if what is the hour rate of that staff if that staff reach an hour in his/her overtime then that is the rate that he/she will get as well"
   let overtimePay = 0
   if (comp.overtime_eligible && overtimeHours > 0) {
-    overtimePay = overtimeHours * hourlyRate * rates.ot
+    overtimePay = overtimeHours * hourlyRate
   }
 
   // Night Differential Pay: 10% premium over hourly rate

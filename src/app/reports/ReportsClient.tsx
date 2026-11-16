@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import type { DailyDtr } from '@/types/database'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
 import {
@@ -18,6 +19,7 @@ import {
   AlertCircle,
   PieChart,
   Edit2,
+  Trash2,
   X,
   ShieldCheck,
   MessageSquarePlus,
@@ -27,6 +29,7 @@ import {
   Star,
   ChevronLeft,
   ChevronRight,
+  Info,
 } from 'lucide-react'
 import { getHolidayForDate, getHolidayTypeBadge } from '@/lib/holidays'
 
@@ -104,17 +107,9 @@ function getWeekRange(dateStr: string): { start: string; end: string } {
 export function ReportsClient({ initialData, branches, employees = [] }: ReportsClientProps) {
   const [data, setData] = useState<DailyDtr[]>(initialData)
 
-  // Smart initial date from actual attendance records (defaults to 2026-11-02 where active records exist)
-  const defaultDate = useMemo(() => {
-    if (initialData && initialData.length > 0) {
-      const active = initialData.find((d) => d.work_date === '2026-11-02')
-      if (active) return '2026-11-02'
-      return initialData[0].work_date
-    }
-    return '2026-11-02'
-  }, [initialData])
-
-  const defaultMonth = defaultDate.slice(0, 7)
+  // Default to today's current date (not hardcoded Nov 2)
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const defaultMonth = todayStr.slice(0, 7)
 
   // View mode: 'daily' | 'weekly' | 'monthly'  — default: daily
   const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily')
@@ -122,17 +117,34 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   const [displayMode, setDisplayMode] = useState<'scroll' | 'table'>('table')
 
   const [monthFilter, setMonthFilter] = useState(defaultMonth)
-  const [dateFilter, setDateFilter] = useState(defaultDate)
-  const [weekAnchor, setWeekAnchor] = useState(defaultDate)
+  const [dateFilter, setDateFilter] = useState(todayStr)
+  const [weekAnchor, setWeekAnchor] = useState(todayStr)
   const [branchFilter, setBranchFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
-  // Sync date changes across views
+  // Restore saved date from localStorage on mount so page refreshes/edits stay on user's chosen date
+  useEffect(() => {
+    try {
+      const savedDate = localStorage.getItem('japa_dtr_selected_date')
+      if (savedDate && /^\d{4}-\d{2}-\d{2}$/.test(savedDate)) {
+        setDateFilter(savedDate)
+        setWeekAnchor(savedDate)
+        setMonthFilter(savedDate.slice(0, 7))
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
+  // Sync date changes across views and persist to localStorage
   const handleDateChange = (val: string) => {
     setDateFilter(val)
     setWeekAnchor(val)
     if (val.length >= 7) setMonthFilter(val.slice(0, 7))
+    try {
+      localStorage.setItem('japa_dtr_selected_date', val)
+    } catch {}
   }
 
   const handleWeekAnchorChange = (val: string) => {
@@ -140,13 +152,19 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
     const range = getWeekRange(val)
     setDateFilter(range.start)
     if (val.length >= 7) setMonthFilter(val.slice(0, 7))
+    try {
+      localStorage.setItem('japa_dtr_selected_date', range.start)
+    } catch {}
   }
 
   const handleMonthChange = (val: string) => {
     setMonthFilter(val)
-    const newDate = `${val}-02`
+    const newDate = `${val}-01`
     setDateFilter(newDate)
     setWeekAnchor(newDate)
+    try {
+      localStorage.setItem('japa_dtr_selected_date', newDate)
+    } catch {}
   }
 
   // Current logged in user check
@@ -195,6 +213,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   const [hasInTime, setHasInTime] = useState(true)
   const [hasOutTime, setHasOutTime] = useState(true)
   const [savingShift, setSavingShift] = useState(false)
+  const [deletingShift, setDeletingShift] = useState(false)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
   const filtered = useMemo(() => {
@@ -270,6 +289,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   }, [employees, data])
 
   // Daily Roster: All employees for dateFilter with Attendance / Absent / Leave status
+  // When an employee has no punch / no data, status is 'None' (renders as '—')
   const dailyEmployees = useMemo(() => {
     const list = allEmployeesList.filter((emp) => {
       if (branchFilter && emp.branch !== branchFilter) return false
@@ -292,7 +312,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
       )
       const note = shiftNotes[`${emp.device_user_id}_${dateFilter}`]
 
-      let computedStatus: 'Completed' | 'On Duty' | 'Incomplete' | 'Absent' | 'Leave' | 'Sick Leave' | 'Rest Day' | 'Holiday' = 'Absent'
+      let computedStatus: 'Completed' | 'On Duty' | 'Incomplete' | 'Absent' | 'Leave' | 'Sick Leave' | 'Rest Day' | 'None' = 'None'
 
       if (note?.attendance_status === 'leave') {
         computedStatus = 'Leave'
@@ -304,10 +324,9 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
         computedStatus = rec.shift_status as any
       } else if (isRestDay) {
         computedStatus = 'Rest Day'
-      } else if (holiday) {
-        computedStatus = 'Holiday'
       } else {
-        computedStatus = 'Absent'
+        // No attendance data recorded yet -> display as '—'
+        computedStatus = 'None'
       }
 
       return {
@@ -381,7 +400,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
       completedCount: number
     }>()
 
-    // 1. Seed from allEmployeesList so all employees are present in A-Z order
     allEmployeesList.forEach((emp) => {
       if (branchFilter && emp.branch !== branchFilter) return
       if (searchQuery.trim() !== '') {
@@ -405,7 +423,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
       })
     })
 
-    // 2. Populate punches for the active week
     filtered.forEach((r) => {
       const emp = empMap.get(r.device_user_id)
       if (emp) {
@@ -625,7 +642,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
     openEditShift(row, note)
   }
 
-  // Handle Save Shift
+  // Handle Save Shift (No Page Reload, Instant State Update)
   const handleSaveShift = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editRow) return
@@ -639,6 +656,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
           work_date: editRow.work_date,
           first_check_in: editAttendanceStatus === 'present' && hasInTime ? editInTime : null,
           last_check_out: editAttendanceStatus === 'present' && hasOutTime ? editOutTime : null,
+          has_in_time: hasInTime,
+          has_out_time: hasOutTime,
           attendance_status: editAttendanceStatus,
           notes: editNotes,
         }),
@@ -647,16 +666,99 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
 
-      setToast({ message: `Updated DTR for ${editRow.full_name} on ${editRow.work_date}!`, type: 'success' })
-      setEditModalOpen(false)
+      // Update shift notes map locally
+      const noteKey = `${editRow.device_user_id}_${editRow.work_date}`
+      setShiftNotes((prev) => ({
+        ...prev,
+        [noteKey]: {
+          device_user_id: editRow.device_user_id,
+          work_date: editRow.work_date,
+          ot_reason: editNotes,
+          attendance_status: editAttendanceStatus,
+          notes: editNotes,
+          created_by_username: currentUser?.username || 'admin',
+          updated_at: new Date().toISOString(),
+        },
+      }))
 
-      // Refresh page data
-      window.location.reload()
+      // Update data rows locally without needing page reload
+      setData((prev) => {
+        const idx = prev.findIndex(
+          (r) => String(r.device_user_id) === String(editRow.device_user_id) && r.work_date === editRow.work_date
+        )
+        if (json.updatedDtr) {
+          if (idx >= 0) {
+            const next = [...prev]
+            next[idx] = json.updatedDtr
+            return next
+          }
+          return [...prev, json.updatedDtr]
+        } else if (editAttendanceStatus !== 'present') {
+          // If marked absent/leave, clear punches
+          if (idx >= 0) {
+            const next = [...prev]
+            next.splice(idx, 1)
+            return next
+          }
+        }
+        return prev
+      })
+
+      // Persist active date so the view remains on this exact date
+      try {
+        localStorage.setItem('japa_dtr_selected_date', editRow.work_date)
+      } catch {}
+
+      setToast({ message: `Updated shift for ${editRow.full_name} on ${editRow.work_date}!`, type: 'success' })
+      setEditModalOpen(false)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error updating shift'
       setToast({ message: msg, type: 'error' })
     } finally {
       setSavingShift(false)
+    }
+  }
+
+  // Handle Delete Shift / Reset Punches
+  const handleDeleteShift = async () => {
+    if (!editRow) return
+    if (!window.confirm(`Are you sure you want to delete all punches and records for ${editRow.full_name} on ${editRow.work_date}?`)) {
+      return
+    }
+    setDeletingShift(true)
+    try {
+      const res = await fetch('/api/reports/shift', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_user_id: editRow.device_user_id,
+          work_date: editRow.work_date,
+          action: 'delete_all',
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+
+      // Remove from data and shiftNotes
+      setData((prev) =>
+        prev.filter(
+          (r) => !(String(r.device_user_id) === String(editRow.device_user_id) && r.work_date === editRow.work_date)
+        )
+      )
+      const noteKey = `${editRow.device_user_id}_${editRow.work_date}`
+      setShiftNotes((prev) => {
+        const next = { ...prev }
+        delete next[noteKey]
+        return next
+      })
+
+      setToast({ message: `Punches and records deleted for ${editRow.full_name} on ${editRow.work_date}!`, type: 'success' })
+      setEditModalOpen(false)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error deleting shift'
+      setToast({ message: msg, type: 'error' })
+    } finally {
+      setDeletingShift(false)
     }
   }
 
@@ -769,14 +871,13 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                 const initials = getInitials(item.emp.full_name)
                 const ot = Number(item.rec?.overtime_hours || 0)
                 const holiday = item.holiday
-                const hBadge = holiday ? getHolidayTypeBadge(holiday.type) : null
                 const note = item.note
 
                 return (
                   <tr
                     key={`${item.emp.device_user_id}-${dateFilter}-${idx}`}
                     className={`hover:bg-slate-50/70 transition-colors ${
-                      holiday ? 'bg-amber-50/20' : item.isRestDay ? 'bg-slate-50/40' : ''
+                      holiday ? 'bg-amber-50/15' : item.isRestDay ? 'bg-slate-50/40' : ''
                     }`}
                   >
                     {/* Name */}
@@ -801,14 +902,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
 
                     {/* Date */}
                     <td className="px-3 py-2 text-center border-r border-slate-100">
-                      <div>
-                        <span className="font-bold text-slate-800 text-xs">{dateFilter.slice(5)}</span>
-                        {holiday && (
-                          <span className={`block text-[9px] font-bold mt-0.5 ${hBadge?.text || 'text-amber-800'}`}>
-                            🎌 Holiday
-                          </span>
-                        )}
-                      </div>
+                      <span className="font-bold text-slate-800 text-xs">{dateFilter.slice(5)}</span>
                     </td>
 
                     {/* Time In */}
@@ -855,7 +949,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       )}
                     </td>
 
-                    {/* Status Badge */}
+                    {/* Status Badge — Display '—' when no data recorded */}
                     <td className="px-3 py-2 text-center border-r border-slate-100">
                       {item.computedStatus === 'Completed' && (
                         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -893,10 +987,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                           Rest Day
                         </span>
                       )}
-                      {item.computedStatus === 'Holiday' && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                          🎌 Holiday
-                        </span>
+                      {item.computedStatus === 'None' && (
+                        <span className="text-slate-300 font-mono text-xs">—</span>
                       )}
                     </td>
 
@@ -953,7 +1045,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
           {items.map((item, idx) => {
             const gradient = getAvatarColor(item.emp.full_name)
             const initials = getInitials(item.emp.full_name)
-            const ot = Number(item.rec?.overtime_hours || 0)
             const note = item.note
 
             return (
@@ -971,7 +1062,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       <p className="text-[10px] text-slate-400 font-mono">#{item.emp.device_user_id} · {item.emp.branch}</p>
                     </div>
                   </div>
-                  {/* Status Badge */}
                   <div>
                     {item.computedStatus === 'Completed' && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -1008,15 +1098,12 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                         Rest Day
                       </span>
                     )}
-                    {item.computedStatus === 'Holiday' && (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                        🎌 Holiday
-                      </span>
+                    {item.computedStatus === 'None' && (
+                      <span className="text-slate-300 font-mono text-xs">—</span>
                     )}
                   </div>
                 </div>
 
-                {/* Details */}
                 <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1 border-t border-slate-100">
                   <div className="p-1.5 rounded-lg bg-slate-50">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Time In</p>
@@ -1038,7 +1125,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                   </div>
                 </div>
 
-                {/* Remarks & Edit button */}
                 <div className="flex items-center justify-between text-xs pt-1">
                   <span className="text-[10px] text-amber-800 font-semibold truncate max-w-[170px]" title={note?.notes || note?.ot_reason}>
                     {note?.notes || note?.ot_reason ? `💬 ${note.notes || note.ot_reason}` : ''}
@@ -1230,22 +1316,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                             <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100">
                               Rest Day
                             </span>
-                          ) : day.holiday ? (
-                            <div className="relative">
-                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200" title={day.holiday.name}>
-                                🎌 Hol
-                              </span>
-                              {isSuperAdmin && (
-                                <button
-                                  type="button"
-                                  onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-0 group-hover:opacity-100 absolute top-0 right-0 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
-                                  title="Edit status"
-                                >
-                                  <Edit2 className="w-2.5 h-2.5" />
-                                </button>
-                              )}
-                            </div>
                           ) : (
                             <div className="relative">
                               <span className="text-slate-300 font-mono text-xs">—</span>
@@ -1385,21 +1455,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                               : isRestDay
                               ? 'bg-slate-100 border-slate-200 text-slate-400'
                               : 'bg-slate-50 border-slate-100 text-slate-300'
-                          }`}
-                          title={`${day.dateStr}: ${
-                            rec
-                              ? `${formatTime(rec.first_check_in)} - ${formatTime(rec.last_check_out)} (${hrs.toFixed(1)}h)`
-                              : note?.attendance_status === 'leave'
-                              ? 'Vacation Leave'
-                              : note?.attendance_status === 'sick_leave'
-                              ? 'Sick Leave'
-                              : note?.attendance_status === 'absent'
-                              ? 'Absent'
-                              : isRestDay
-                              ? 'Rest Day'
-                              : day.holiday
-                              ? day.holiday.name
-                              : 'No punch'
                           }`}
                         >
                           <span className="font-bold text-[9px] uppercase">{day.dayName.slice(0, 2)}</span>
@@ -1596,24 +1651,30 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   const hasAnyWeekly = weeklyEmployees.dagupanWeekly.length > 0 || weeklyEmployees.manilaWeekly.length > 0
   const hasAnyMonthly = monthlyEmployees.dagupanMonthly.length > 0 || monthlyEmployees.manilaMonthly.length > 0
 
+  const activeDayHoliday = getHolidayForDate(dateFilter)
+  const activeHolidayBadge = activeDayHoliday ? getHolidayTypeBadge(activeDayHoliday.type) : null
+
   return (
     <div className="space-y-6">
-      {/* Toast Alert */}
+      {/* Toast Alert — Middle Top */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
+          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 duration-300 ${
             toast.type === 'success'
-              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-              : 'bg-rose-50 text-rose-800 border-rose-200'
+              ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-900/20'
+              : 'bg-rose-600 text-white border-rose-500 shadow-rose-900/20'
           }`}
         >
           {toast.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-emerald-100 flex-shrink-0" />
           ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-rose-100 flex-shrink-0" />
           )}
           <span>{toast.message}</span>
-          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold">
+          <button
+            onClick={() => setToast(null)}
+            className="ml-3 text-white/80 hover:text-white font-black text-base leading-none"
+          >
             ×
           </button>
         </div>
@@ -1665,6 +1726,29 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
           </div>
         </div>
       </div>
+
+      {/* Holiday Banner Alert (if selected day is a holiday) */}
+      {viewMode === 'daily' && activeDayHoliday && (
+        <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+          activeDayHoliday.scope === 'pangasinan'
+            ? 'bg-purple-50 border-purple-200 text-purple-900'
+            : 'bg-amber-50 border-amber-200 text-amber-900'
+        }`}>
+          <div className="flex items-center gap-3">
+            <span className="text-xl">{activeDayHoliday.scope === 'pangasinan' ? '📍' : '🎌'}</span>
+            <div>
+              <p className="font-black text-sm">{activeDayHoliday.name}</p>
+              <p className="text-xs opacity-80 mt-0.5">{activeDayHoliday.rateDescription}</p>
+            </div>
+          </div>
+          <Link
+            href="/calendar"
+            className="text-xs font-bold underline hover:no-underline flex items-center gap-1"
+          >
+            Open Calendar Details →
+          </Link>
+        </div>
+      )}
 
       {/* Visual Charts Strip (Monthly & Weekly only) */}
       {viewMode !== 'daily' && dailyAttendanceData.length > 0 && (
@@ -1792,7 +1876,16 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
         {/* Date / Week / Month Picker */}
         {viewMode === 'daily' && (
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Date</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date</label>
+              <button
+                type="button"
+                onClick={() => handleDateChange(todayStr)}
+                className="text-[10px] font-bold text-blue-600 hover:text-blue-800"
+              >
+                Today ({todayStr.slice(5)})
+              </button>
+            </div>
             <div className="flex flex-col gap-1.5">
               <input
                 type="date"
@@ -1805,7 +1898,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                   { label: 'Nov 2 (W1)', date: '2026-11-02' },
                   { label: 'Nov 6', date: '2026-11-06' },
                   { label: 'Nov 9 (W2)', date: '2026-11-09' },
-                  { label: 'Nov 13 (Hol)', date: '2026-11-13' },
+                  { label: 'Nov 13 (Perez Day)', date: '2026-11-13' },
                   { label: 'Nov 16', date: '2026-11-16' },
                 ].map((p) => (
                   <button
@@ -1814,7 +1907,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                     onClick={() => handleDateChange(p.date)}
                     className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all ${
                       dateFilter === p.date
-                        ? 'bg-blue-600 text-white'
+                        ? 'bg-blue-600 text-white shadow-xs'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
                   >
@@ -1912,7 +2005,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
-                  November 2026 (Active)
+                  November 2026
                 </button>
               </div>
             </div>
@@ -2026,7 +2119,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
             </div>
           ) : (
             <div className="p-5 space-y-8 bg-slate-50/40">
-              {/* Dagupan Daily Cards */}
               {renderDailyCards(
                 dailyEmployees.dagupanDaily,
                 '🏢 Dagupan Main Branch',
@@ -2035,7 +2127,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                 'border-blue-200'
               )}
 
-              {/* Manila Daily Cards */}
               {dailyEmployees.manilaDaily.length > 0 && (
                 <div className="pt-8 border-t-4 border-slate-300">
                   {renderDailyCards(
@@ -2057,7 +2148,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
             </div>
           ) : displayMode === 'table' ? (
             <div className="space-y-0">
-              {/* 1. Dagupan Main Weekly Table (A to Z) */}
               {renderWeeklyTable(
                 weeklyEmployees.dagupanWeekly,
                 '🏢 Dagupan Main Branch',
@@ -2066,7 +2156,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                 'border-blue-200'
               )}
 
-              {/* 2. Manila Branch Weekly Table with Prominent Space */}
               {weeklyEmployees.manilaWeekly.length > 0 && (
                 <div className="mt-8 pt-6 border-t-4 border-slate-300 bg-slate-50/30">
                   {renderWeeklyTable(
@@ -2103,7 +2192,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
             </div>
           )
         ) : (
-          /* Monthly Summary View */
           !hasAnyMonthly ? (
             <div className="flex flex-col items-center justify-center py-24 text-slate-400">
               <FileSpreadsheet className="w-12 h-12 text-slate-300 mb-3" />
@@ -2195,9 +2283,6 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                   placeholder="e.g. Finishing IPSJ project deliverable for client, rush order deadline…"
                   className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed"
                 />
-                <p className="text-[11px] text-slate-400 mt-1">
-                  This reason will be visible to JAPA Dee, JAPA Manager, and JAPA Pearly on the DTR Reports page.
-                </p>
               </div>
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                 <button
@@ -2293,7 +2378,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
 
               {/* Present Mode: Punch Times */}
               {editAttendanceStatus === 'present' ? (
-                <div className="space-y-3 p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80">
+                <div className="space-y-3.5 p-3.5 rounded-2xl bg-slate-50/70 border border-slate-200/80">
+                  {/* Time In */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -2311,16 +2397,43 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       </label>
                     </div>
                     {hasInTime && (
-                      <input
-                        type="time"
-                        required
-                        value={editInTime}
-                        onChange={(e) => setEditInTime(e.target.value)}
-                        className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div>
+                        <input
+                          type="time"
+                          required
+                          value={editInTime}
+                          onChange={(e) => setEditInTime(e.target.value)}
+                          className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Presets:</span>
+                          {[
+                            { label: '8:00 AM', val: '08:00' },
+                            { label: '8:30 AM', val: '08:30' },
+                            { label: '9:00 AM', val: '09:00' },
+                          ].map((preset) => (
+                            <button
+                              key={preset.val}
+                              type="button"
+                              onClick={() => {
+                                setHasInTime(true)
+                                setEditInTime(preset.val)
+                              }}
+                              className={`px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all ${
+                                editInTime === preset.val && hasInTime
+                                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
 
+                  {/* Time Out */}
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
@@ -2346,8 +2459,37 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                           onChange={(e) => setEditOutTime(e.target.value)}
                           className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          Times past midnight (12:00 AM – 03:59 AM) are credited to this shift automatically.
+                        {/* 1-Click Time Out Presets */}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Presets:</span>
+                          {[
+                            { label: '5:00 PM', val: '17:00' },
+                            { label: '6:00 PM', val: '18:00' },
+                            { label: '7:00 PM', val: '19:00' },
+                            { label: '10:00 PM', val: '22:00' },
+                            { label: '12:00 AM (Midnight)', val: '00:00' },
+                            { label: '1:00 AM', val: '01:00' },
+                          ].map((preset) => (
+                            <button
+                              key={preset.val}
+                              type="button"
+                              onClick={() => {
+                                setHasOutTime(true)
+                                setEditOutTime(preset.val)
+                              }}
+                              className={`px-2 py-0.5 text-[10px] font-bold rounded-md border transition-all ${
+                                editOutTime === preset.val && hasOutTime
+                                  ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                  : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
+                          <Info className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                          <span>Note: 00:00 = 12:00 AM (Midnight into next day). Punches past midnight are credited to this shift automatically.</span>
                         </p>
                       </div>
                     )}
@@ -2375,7 +2517,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
               {/* Remarks / Reason input */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                  Remarks / Reason / Diagnosis
+                  Remarks / Reason / Notes
                 </label>
                 <textarea
                   rows={3}
@@ -2394,21 +2536,35 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              {/* Modal Action Buttons: Delete / Cancel / Save */}
+              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setEditModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                  onClick={handleDeleteShift}
+                  disabled={deletingShift || savingShift}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors disabled:opacity-50"
+                  title="Delete all punches and records for this employee on this date"
                 >
-                  Cancel
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {deletingShift ? 'Deleting…' : 'Delete Shift'}
                 </button>
-                <button
-                  type="submit"
-                  disabled={savingShift}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-95"
-                >
-                  {savingShift ? 'Saving Changes…' : 'Save Attendance'}
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditModalOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingShift || deletingShift}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-95"
+                  >
+                    {savingShift ? 'Saving Changes…' : 'Save Changes'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
