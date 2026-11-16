@@ -96,8 +96,8 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
 
   // View mode: 'daily' | 'weekly' | 'monthly'  — default: daily
   const [viewMode, setViewMode] = useState<'daily' | 'weekly' | 'monthly'>('daily')
-  // Display style: 'scroll' (card rows) | 'table' (Excel-like compact grid)
-  const [displayMode, setDisplayMode] = useState<'scroll' | 'table'>('scroll')
+  // Display style: 'scroll' (card rows) | 'table' (Excel-like compact grid) — default: table
+  const [displayMode, setDisplayMode] = useState<'scroll' | 'table'>('table')
 
   const [monthFilter, setMonthFilter] = useState(currentMonth)
   const [dateFilter, setDateFilter] = useState(today)
