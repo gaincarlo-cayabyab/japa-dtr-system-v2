@@ -19,9 +19,11 @@ interface SystemUser {
 }
 
 const ROLE_CONFIG: Record<string, { label: string; gradient: string }> = {
+  ceo: { label: 'Chief Executive Officer (CEO)', gradient: 'from-amber-500 to-yellow-600' },
+  manager: { label: 'General Manager', gradient: 'from-blue-500 to-indigo-600' },
+  super_admin: { label: 'IT Administrator (Super Admin)', gradient: 'from-emerald-500 to-teal-600' },
+  staff: { label: 'Office Staff', gradient: 'from-purple-500 to-indigo-600' },
   admin: { label: 'Administrator', gradient: 'from-violet-500 to-purple-600' },
-  manager: { label: 'Manager', gradient: 'from-blue-500 to-indigo-600' },
-  super_admin: { label: 'IT Administrator', gradient: 'from-emerald-500 to-teal-600' },
   viewer: { label: 'Viewer', gradient: 'from-orange-400 to-amber-500' },
 }
 

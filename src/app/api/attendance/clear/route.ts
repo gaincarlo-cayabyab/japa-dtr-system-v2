@@ -1,8 +1,22 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { verifySessionToken } from '@/lib/auth'
 
 export async function DELETE() {
   try {
+    // Security check: Only IT Administrator (super_admin) can clear logs
+    const cookieStore = cookies()
+    const token = cookieStore.get('japa_session')?.value
+    const session = token ? verifySessionToken(token) : null
+
+    if (!session || session.role !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'Forbidden: Only IT Administrator (Super Admin) has authorization to clear attendance logs.' },
+        { status: 403 }
+      )
+    }
+
     const supabase = await createClient()
 
     // 1. Delete all attendance logs from Supabase

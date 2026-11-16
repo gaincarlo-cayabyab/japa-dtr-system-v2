@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { verifySessionToken } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -103,9 +105,21 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// Administrator: Delete single attendance punch
+// Administrator: Delete single attendance punch (Super Admin only)
 export async function DELETE(request: NextRequest) {
   try {
+    // Security check: Only IT Administrator (super_admin) can delete punches
+    const cookieStore = cookies()
+    const token = cookieStore.get('japa_session')?.value
+    const session = token ? verifySessionToken(token) : null
+
+    if (!session || session.role !== 'super_admin') {
+      return NextResponse.json(
+        { error: 'Forbidden: Only IT Administrator (Super Admin) has authorization to delete attendance punches.' },
+        { status: 403 }
+      )
+    }
+
     const supabase = await createClient()
     const { searchParams } = request.nextUrl
     let id = searchParams.get('id')

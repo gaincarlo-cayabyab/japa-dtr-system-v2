@@ -7,7 +7,7 @@ export interface UserSession {
   id: string
   username: string
   displayName: string
-  role: 'super_admin' | 'admin' | 'manager' | 'kiosk'
+  role: 'super_admin' | 'admin' | 'manager' | 'ceo' | 'staff' | 'kiosk'
   loginAt: number
 }
 

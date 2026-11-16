@@ -70,6 +70,18 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
   const [employeesList, setEmployeesList] = useState<Employee[]>(employees)
   const [isLive, setIsLive] = useState(false)
 
+  // Current User & Super Admin check
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.authenticated && d.user) setCurrentUser(d.user)
+      })
+      .catch(() => {})
+  }, [])
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+
   // Clear modal state
   const [showClearModal, setShowClearModal] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
@@ -357,13 +369,15 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={openAddModal}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95"
-          >
-            <Plus className="w-4 h-4" />
-            Add Punch
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={openAddModal}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Add Punch
+            </button>
+          )}
 
           <span
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
@@ -374,14 +388,16 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             {isLive ? 'Live Sync' : 'Connecting…'}
           </span>
 
-          <button
-            onClick={() => setShowClearModal(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
-            title="Clear all logs"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Clear
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setShowClearModal(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
+              title="Clear all logs (Super Admin Only)"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
@@ -514,7 +530,9 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                   <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Punch Time</th>
                   <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Smart Type</th>
                   <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Raw Status</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Admin Actions</th>
+                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
+                    {isSuperAdmin ? 'Admin Actions' : ''}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -558,22 +576,26 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <div className="inline-flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => openEditModal(log)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title="Edit this punch"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(log)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                            title="Delete this punch"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                        {isSuperAdmin ? (
+                          <div className="inline-flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => openEditModal(log)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Edit this punch"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(log)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete this punch"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
                       </td>
                     </tr>
                   )

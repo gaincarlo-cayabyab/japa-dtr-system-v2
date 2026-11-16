@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import type { DailyDtr } from '@/types/database'
 import { format } from 'date-fns'
 import {
@@ -18,6 +18,9 @@ import {
   CheckCircle2,
   AlertCircle,
   PieChart,
+  Edit2,
+  X,
+  ShieldCheck,
 } from 'lucide-react'
 
 interface ReportsClientProps {
@@ -61,6 +64,7 @@ function formatHoursWorked(hours: number): string {
 }
 
 export function ReportsClient({ initialData, branches }: ReportsClientProps) {
+  const [data, setData] = useState<DailyDtr[]>(initialData)
   const currentMonth = format(new Date(), 'yyyy-MM')
   const [viewMode, setViewMode] = useState<'monthly' | 'daily'>('monthly')
   const [monthFilter, setMonthFilter] = useState(currentMonth)
@@ -69,8 +73,30 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Current logged in user check
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.authenticated && d.user) setCurrentUser(d.user)
+      })
+      .catch(() => {})
+  }, [])
+  const isSuperAdmin = currentUser?.role === 'super_admin'
+
+  // Edit Shift Modal State
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [editRow, setEditRow] = useState<DailyDtr | null>(null)
+  const [editInTime, setEditInTime] = useState<string>('09:00')
+  const [editOutTime, setEditOutTime] = useState<string>('18:00')
+  const [hasInTime, setHasInTime] = useState(true)
+  const [hasOutTime, setHasOutTime] = useState(true)
+  const [savingShift, setSavingShift] = useState(false)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
   const filtered = useMemo(() => {
-    return initialData.filter((row) => {
+    return data.filter((row) => {
       if (branchFilter && row.branch !== branchFilter) return false
       if (statusFilter !== 'all' && row.shift_status !== statusFilter) return false
       if (searchQuery.trim() !== '') {
@@ -85,7 +111,7 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
         return row.work_date === dateFilter
       }
     })
-  }, [initialData, viewMode, monthFilter, dateFilter, branchFilter, statusFilter, searchQuery])
+  }, [data, viewMode, monthFilter, dateFilter, branchFilter, statusFilter, searchQuery])
 
   // Summary statistics
   const uniqueEmployees = new Set(filtered.map((r) => r.employee_id)).size
@@ -124,6 +150,61 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
   }, [filtered])
 
   const maxDailyCount = Math.max(...dailyAttendanceData.map((d) => d.count), 1)
+
+  // Open Edit Shift Modal
+  const openEditShift = (row: DailyDtr) => {
+    setEditRow(row)
+    if (row.first_check_in) {
+      setHasInTime(true)
+      setEditInTime(format(new Date(row.first_check_in), 'HH:mm'))
+    } else {
+      setHasInTime(false)
+      setEditInTime('09:00')
+    }
+
+    if (row.last_check_out) {
+      setHasOutTime(true)
+      setEditOutTime(format(new Date(row.last_check_out), 'HH:mm'))
+    } else {
+      setHasOutTime(false)
+      setEditOutTime('18:00')
+    }
+
+    setEditModalOpen(true)
+  }
+
+  // Handle Save Shift
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editRow) return
+    setSavingShift(true)
+    try {
+      const res = await fetch('/api/reports/shift', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          device_user_id: editRow.device_user_id,
+          work_date: editRow.work_date,
+          first_check_in: hasInTime ? editInTime : null,
+          last_check_out: hasOutTime ? editOutTime : null,
+        }),
+      })
+
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
+
+      setToast({ message: `Updated DTR shift for ${editRow.full_name} on ${editRow.work_date}!`, type: 'success' })
+      setEditModalOpen(false)
+
+      // Refresh page data
+      window.location.reload()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error updating shift'
+      setToast({ message: msg, type: 'error' })
+    } finally {
+      setSavingShift(false)
+    }
+  }
 
   function exportExcel() {
     const startDate = viewMode === 'monthly' ? `${monthFilter}-01` : dateFilter
@@ -174,6 +255,27 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
 
   return (
     <div className="space-y-6">
+      {/* Toast Alert */}
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
+            toast.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
+          }`}
+        >
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+          )}
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold">
+            ×
+          </button>
+        </div>
+      )}
+
       {/* 4 Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
@@ -503,6 +605,9 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
                   <th className="px-4 py-3.5 text-right">Hours Worked</th>
                   <th className="px-4 py-3.5 text-right">Overtime</th>
                   <th className="px-4 py-3.5 text-center">Status</th>
+                  {isSuperAdmin && (
+                    <th className="px-4 py-3.5 text-center">Admin Edit</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -571,6 +676,18 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
                           {row.shift_status}
                         </span>
                       </td>
+                      {isSuperAdmin && (
+                        <td className="px-4 py-3.5 text-center">
+                          <button
+                            onClick={() => openEditShift(row)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 text-xs font-bold transition-colors"
+                            title="Edit this employee's shift punches"
+                          >
+                            <Edit2 className="w-3 h-3 text-slate-500" />
+                            Edit
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
@@ -579,6 +696,109 @@ export function ReportsClient({ initialData, branches }: ReportsClientProps) {
           </div>
         )}
       </div>
+
+      {/* Super Admin Edit Shift Modal */}
+      {editModalOpen && editRow && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-7 space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Edit Employee Shift</h3>
+                  <p className="text-xs text-slate-400">Super Admin DTR Reconciliation</p>
+                </div>
+              </div>
+              <button onClick={() => setEditModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100">
+              <p className="text-sm font-bold text-slate-900">{editRow.full_name}</p>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">
+                Device ID: #{editRow.device_user_id} · Work Date: {editRow.work_date}
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveShift} className="space-y-4">
+              {/* Check In */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">First Time In</label>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasInTime}
+                      onChange={(e) => setHasInTime(e.target.checked)}
+                      className="rounded border-slate-300 text-blue-600"
+                    />
+                    Include
+                  </label>
+                </div>
+                {hasInTime && (
+                  <input
+                    type="time"
+                    required
+                    value={editInTime}
+                    onChange={(e) => setEditInTime(e.target.value)}
+                    className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                )}
+              </div>
+
+              {/* Check Out */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Last Time Out</label>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={hasOutTime}
+                      onChange={(e) => setHasOutTime(e.target.checked)}
+                      className="rounded border-slate-300 text-blue-600"
+                    />
+                    Include
+                  </label>
+                </div>
+                {hasOutTime && (
+                  <div>
+                    <input
+                      type="time"
+                      required
+                      value={editOutTime}
+                      onChange={(e) => setEditOutTime(e.target.value)}
+                      className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Times between 12:00 AM and 03:59 AM will be credited to this shift automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingShift}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 disabled:opacity-50"
+                >
+                  {savingShift ? 'Saving…' : 'Save Shift'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
