@@ -49,18 +49,21 @@ export const DOLE_RATES: Record<DayType, DOLEMultipliers> = {
 
 /**
  * Determine the day classification (regular, holiday, rest day)
+ * Supports 'mon_sat' (Sunday rest) and 'mon_fri' (Saturday & Sunday rest)
  */
 export function classifyDay(
   dateStr: string,
   settings: PayrollSettings,
-  isRestDay: boolean = false
+  scheduleType: 'mon_sat' | 'mon_fri' = 'mon_sat'
 ): { dayType: DayType; label: string } {
   const isRegHoliday = settings.regular_holiday_dates?.includes(dateStr)
   const isSpecHoliday = settings.special_holiday_dates?.includes(dateStr)
 
-  // Sunday is rest day by default unless specified
   const dayOfWeek = new Date(dateStr + 'T00:00:00+08:00').getDay()
-  const restDay = isRestDay || dayOfWeek === 0 // 0 = Sunday
+  // 0 = Sunday, 6 = Saturday
+  const restDay = scheduleType === 'mon_fri' 
+    ? (dayOfWeek === 0 || dayOfWeek === 6)
+    : (dayOfWeek === 0)
 
   if (isRegHoliday && restDay) {
     return { dayType: 'regular_holiday_rest', label: DOLE_RATES.regular_holiday_rest.label }
@@ -110,12 +113,13 @@ export function calculateNightDiffHours(
 }
 
 /**
- * Compute tardiness minutes based on standard 8:00 AM start and grace period
+ * Compute tardiness minutes based on standard 9:00 AM start.
+ * Early arrivals (coming before 9:00 AM) are NOT penalized.
  */
 export function calculateTardiness(
   checkIn: string | null,
-  gracePeriodMinutes: number = 5,
-  expectedStartHour: number = 8,
+  gracePeriodMinutes: number = 0,
+  expectedStartHour: number = 9,
   expectedStartMinute: number = 0
 ): number {
   if (!checkIn) return 0
@@ -128,9 +132,10 @@ export function calculateTardiness(
   const checkInTotalMin = manilaHour * 60 + manilaMinute
   const expectedTotalMin = expectedStartHour * 60 + expectedStartMinute
 
+  // If arrived before or at 9:00 AM, diff is <= 0 -> 0 tardiness
   const diff = checkInTotalMin - expectedTotalMin
   if (diff > gracePeriodMinutes) {
-    return diff // total minutes late from scheduled start
+    return diff // total minutes late past 9:00 AM
   }
   return 0
 }
@@ -144,10 +149,10 @@ export function computeDailyPayroll(
   settings: PayrollSettings
 ): DailyPayrollRecord {
   const dailyRate = Number(comp.daily_rate) || 0
-  const hourlyRate = dailyRate / (settings.work_hours_per_day || 8)
+  const hourlyRate = comp.hourly_rate ? Number(comp.hourly_rate) : dailyRate / (settings.work_hours_per_day || 8)
   const minuteRate = hourlyRate / 60
 
-  const { dayType, label } = classifyDay(dtr.work_date, settings)
+  const { dayType, label } = classifyDay(dtr.work_date, settings, comp.schedule_type || 'mon_sat')
   const rates = DOLE_RATES[dayType]
 
   const rawHours = Number(dtr.hours_worked || 0)
@@ -157,14 +162,14 @@ export function computeDailyPayroll(
     ? calculateNightDiffHours(dtr.first_check_in, dtr.last_check_out)
     : 0
 
+  // 9:00 AM Office Start
   const tardinessMinutes = calculateTardiness(
     dtr.first_check_in,
-    settings.grace_period_minutes,
-    8,
+    0, // Exact per-hour / per-minute deduction as requested
+    9,
     0
   )
-  // Per company policy: no late cash deduction, only track late duration/time
-  const tardinessDeduction = 0
+  const tardinessDeduction = tardinessMinutes * minuteRate
 
   // Base Pay calculation
   // For regular days: (regularHours / 8) * dailyRate
@@ -196,7 +201,7 @@ export function computeDailyPayroll(
 
   const totalDayPay = Math.max(
     0,
-    regularPay + overtimePay + nightDiffPay
+    regularPay + overtimePay + nightDiffPay - tardinessDeduction
   )
 
   return {
@@ -233,7 +238,9 @@ export function computeEmployeePayroll(
   settings: PayrollSettings
 ): EmployeePayrollSummary {
   const dailyRate = Number(comp.daily_rate) || 0
-  const hourlyRate = dailyRate / (settings.work_hours_per_day || 8)
+  const hourlyRate = comp.hourly_rate
+    ? Number(comp.hourly_rate)
+    : dailyRate / (settings.work_hours_per_day || 8)
 
   const records = dtrList
     .filter((d) => d.device_user_id === employee.device_user_id)
@@ -250,11 +257,11 @@ export function computeEmployeePayroll(
   const totalNightDiffPay = records.reduce((acc, r) => acc + r.night_diff_pay, 0)
   const totalHolidayPay = records.reduce((acc, r) => acc + r.holiday_premium_pay, 0)
   const totalTardinessMinutes = records.reduce((acc, r) => acc + r.tardiness_minutes, 0)
-  const totalTardinessDeduction = 0 // No late cash deductions
+  const totalTardinessDeduction = records.reduce((acc, r) => acc + r.tardiness_deduction, 0)
 
   const grossPay = Math.max(
     0,
-    totalRegularPay + totalOvertimePay + totalNightDiffPay
+    totalRegularPay + totalOvertimePay + totalNightDiffPay - totalTardinessDeduction
   )
 
   return {
@@ -264,6 +271,7 @@ export function computeEmployeePayroll(
     position: employee.position,
     daily_rate: dailyRate,
     hourly_rate: Math.round(hourlyRate * 100) / 100,
+    schedule_type: comp.schedule_type || (employee.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat'),
     days_worked: daysWorked,
     total_regular_hours: Math.round(totalRegularHours * 100) / 100,
     total_overtime_hours: Math.round(totalOvertimeHours * 100) / 100,
@@ -273,20 +281,8 @@ export function computeEmployeePayroll(
     total_night_diff_pay: Math.round(totalNightDiffPay * 100) / 100,
     total_holiday_pay: Math.round(totalHolidayPay * 100) / 100,
     total_tardiness_minutes: totalTardinessMinutes,
-    total_tardiness_deduction: 0,
+    total_tardiness_deduction: Math.round(totalTardinessDeduction * 100) / 100,
     gross_pay: Math.round(grossPay * 100) / 100,
     records,
   }
-}
-
-/**
- * Format tardiness minutes into human readable text (e.g. 15m late, 1h 20m late)
- */
-export function formatLateDuration(minutes: number): string {
-  if (!minutes || minutes <= 0) return '—'
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
-  if (h > 0 && m > 0) return `${h}h ${m}m late`
-  if (h > 0) return `${h}h late`
-  return `${m}m late`
 }

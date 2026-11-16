@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Users, Clock, UserCheck, Calendar, Radio, RefreshCw } from 'lucide-react'
+import { Users, Clock, UserCheck, Calendar, Radio, RefreshCw, TrendingUp, LogIn, LogOut, Activity } from 'lucide-react'
 import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
 import { PUNCH_STATUS, PUNCH_STATUS_COLOR } from '@/types/database'
@@ -10,50 +10,31 @@ function StatCard({
   title,
   value,
   icon: Icon,
-  color,
+  gradient,
+  textColor,
+  subtext,
 }: {
   title: string
   value: number | string
   icon: React.ElementType
-  color: string
+  gradient: string
+  textColor: string
+  subtext?: string
 }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4 transition-all hover:shadow-md">
-      <div className={`flex items-center justify-center w-12 h-12 rounded-xl ${color}`}>
-        <Icon className="w-6 h-6 text-white" />
-      </div>
-      <div>
-        <p className="text-sm font-medium text-slate-500">{title}</p>
-        <p className="text-2xl font-bold text-slate-900 mt-0.5">{value}</p>
+    <div className={`relative bg-white rounded-2xl border border-slate-200/80 p-5 overflow-hidden transition-all hover:shadow-lg hover:-translate-y-0.5 duration-200`} style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+      <div className={`absolute inset-0 opacity-[0.04] bg-gradient-to-br ${gradient}`} />
+      <div className="relative z-10 flex items-start justify-between">
+        <div>
+          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{title}</p>
+          <p className={`text-3xl font-black mt-1.5 ${textColor}`}>{value}</p>
+          {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+        </div>
+        <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-md flex-shrink-0`}>
+          <Icon className="w-5 h-5 text-white" />
+        </div>
       </div>
     </div>
-  )
-}
-
-function StatusBadge({
-  status,
-  role,
-}: {
-  status: number | string
-  role?: { label: string; color: string }
-}) {
-  if (role) {
-    return (
-      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs border ${role.color}`}>
-        {role.label}
-      </span>
-    )
-  }
-  const numericStatus = Number(status)
-  const colorClass =
-    PUNCH_STATUS_COLOR[numericStatus] ?? 'bg-slate-100 text-slate-600'
-  const label = PUNCH_STATUS[numericStatus] ?? `Status ${status}`
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${colorClass}`}
-    >
-      {label}
-    </span>
   )
 }
 
@@ -93,36 +74,14 @@ export function DashboardClient({
         { data: presentToday },
       ] = await Promise.all([
         supabase.from('employees').select('*', { count: 'exact', head: true }),
-        supabase
-          .from('attendance_logs')
-          .select('*', { count: 'exact', head: true })
-          .gte('punch_time', todayISO),
-        supabase
-          .from('attendance_logs')
-          .select('*', { count: 'exact', head: true })
-          .gte('punch_time', monthISO),
-        supabase
-          .from('attendance_logs')
-          .select('id, device_user_id, punch_time, status, employees(full_name)')
-          .order('punch_time', { ascending: false })
-          .limit(10),
-        supabase
-          .from('attendance_logs')
-          .select('device_user_id')
-          .gte('punch_time', todayISO)
-          .eq('status', 0),
+        supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).gte('punch_time', todayISO),
+        supabase.from('attendance_logs').select('*', { count: 'exact', head: true }).gte('punch_time', monthISO),
+        supabase.from('attendance_logs').select('id, device_user_id, punch_time, status, employees(full_name)').order('punch_time', { ascending: false }).limit(15),
+        supabase.from('attendance_logs').select('device_user_id').gte('punch_time', todayISO).eq('status', 0),
       ])
 
-      const presentCount = new Set(
-        (presentToday ?? []).map((r) => r.device_user_id)
-      ).size
-
-      setStats({
-        totalEmployees: totalEmployees ?? 0,
-        todayPunches: todayPunches ?? 0,
-        presentCount,
-        monthRecords: monthRecords ?? 0,
-      })
+      const presentCount = new Set((presentToday ?? []).map((r) => r.device_user_id)).size
+      setStats({ totalEmployees: totalEmployees ?? 0, todayPunches: todayPunches ?? 0, presentCount, monthRecords: monthRecords ?? 0 })
       if (punches) setRecentPunches(punches)
       setLastRefreshed(new Date())
     } catch (e) {
@@ -134,58 +93,27 @@ export function DashboardClient({
 
   useEffect(() => {
     const supabase = createClient()
-
-    // Realtime channel for both logs and employees
     const channel = supabase
       .channel('dashboard-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'attendance_logs' },
-        (payload) => {
-          if (payload.eventType === 'INSERT' && payload.new) {
-            const newPunch = payload.new
-            setRecentPunches((prev) => [newPunch, ...prev.slice(0, 9)])
-            setStats((prev) => ({
-              ...prev,
-              todayPunches: prev.todayPunches + 1,
-            }))
-            fetchFreshData()
-          } else if (payload.eventType === 'DELETE') {
-            setRecentPunches([])
-            setStats((prev) => ({
-              ...prev,
-              todayPunches: 0,
-              presentCount: 0,
-            }))
-            fetchFreshData()
-          } else {
-            fetchFreshData()
-          }
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'employees' },
-        () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, (payload) => {
+        if (payload.eventType === 'INSERT' && payload.new) {
+          setStats((prev) => ({ ...prev, todayPunches: prev.todayPunches + 1 }))
+          fetchFreshData()
+        } else if (payload.eventType === 'DELETE') {
+          setStats((prev) => ({ ...prev, todayPunches: 0, presentCount: 0 }))
+          fetchFreshData()
+        } else {
           fetchFreshData()
         }
-      )
-      .subscribe((status) => {
-        setIsLive(status === 'SUBSCRIBED')
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => fetchFreshData())
+      .subscribe((status) => setIsLive(status === 'SUBSCRIBED'))
 
-    // Fallback polling every 10 seconds to guarantee fresh data
-    const interval = setInterval(() => {
-      fetchFreshData()
-    }, 10000)
-
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(interval)
-    }
+    const interval = setInterval(() => fetchFreshData(), 15000)
+    return () => { supabase.removeChannel(channel); clearInterval(interval) }
   }, [fetchFreshData])
 
-  // Smart punch detection (Time In vs Time Out with 4:00 AM cutoff)
+  // Smart punch role detection
   const smartRoles = useMemo(() => {
     const shiftMap = new Map<string, any[]>()
     const getOpDate = (ts: string) => {
@@ -193,170 +121,143 @@ export function DashboardClient({
       const shifted = new Date(d.getTime() - 4 * 60 * 60 * 1000)
       return shifted.toISOString().slice(0, 10)
     }
-
     for (const log of recentPunches || []) {
-      const opDate = getOpDate(log.punch_time)
-      const key = `${log.device_user_id}_${opDate}`
+      const key = `${log.device_user_id}_${getOpDate(log.punch_time)}`
       if (!shiftMap.has(key)) shiftMap.set(key, [])
       shiftMap.get(key)!.push(log)
     }
-
-    const roleMap = new Map<string, { label: string; color: string }>()
+    const roleMap = new Map<string, { label: string; color: string; icon: string }>()
     shiftMap.forEach((group) => {
       group.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime())
       const first = group[0]
       const last = group[group.length - 1]
       const diffMin = (new Date(last.punch_time).getTime() - new Date(first.punch_time).getTime()) / 60000
-
       group.forEach((log) => {
         if (log.id === first.id) {
-          roleMap.set(log.id, {
-            label: 'Time In',
-            color: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold',
-          })
+          roleMap.set(log.id, { label: 'Time In', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '🟢' })
         } else if (log.id === last.id && diffMin >= 3) {
-          roleMap.set(log.id, {
-            label: 'Time Out',
-            color: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold',
-          })
+          roleMap.set(log.id, { label: 'Time Out', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: '🔴' })
         } else {
-          roleMap.set(log.id, {
-            label: 'Mid-Shift',
-            color: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
-          })
+          roleMap.set(log.id, { label: 'Mid-Shift', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: '🔵' })
         }
       })
     })
-
     return roleMap
   }, [recentPunches])
 
   const statCards = [
-    {
-      title: 'Total Employees',
-      value: stats.totalEmployees,
-      icon: Users,
-      color: 'bg-blue-600',
-    },
-    {
-      title: "Today's Punches",
-      value: stats.todayPunches,
-      icon: Clock,
-      color: 'bg-indigo-500',
-    },
-    {
-      title: 'Present Today',
-      value: stats.presentCount,
-      icon: UserCheck,
-      color: 'bg-emerald-500',
-    },
-    {
-      title: "This Month's Records",
-      value: stats.monthRecords,
-      icon: Calendar,
-      color: 'bg-violet-500',
-    },
+    { title: 'Total Employees', value: stats.totalEmployees, icon: Users, gradient: 'from-blue-500 to-indigo-600', textColor: 'text-blue-700', subtext: 'Registered in system' },
+    { title: "Today's Punches", value: stats.todayPunches, icon: Clock, gradient: 'from-violet-500 to-purple-600', textColor: 'text-violet-700', subtext: format(new Date(), 'MMM d, yyyy') },
+    { title: 'Present Today', value: stats.presentCount, icon: UserCheck, gradient: 'from-emerald-500 to-teal-600', textColor: 'text-emerald-700', subtext: 'Clocked in today' },
+    { title: "This Month's Records", value: stats.monthRecords, icon: Calendar, gradient: 'from-orange-400 to-pink-500', textColor: 'text-orange-600', subtext: format(new Date(), 'MMMM yyyy') },
   ]
 
   return (
-    <div className="p-8">
+    <div className="p-6 md:p-8 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-slate-500 text-sm mt-1">
-            {format(new Date(), 'EEEE, MMMM d, yyyy')}
-          </p>
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <Activity className="w-4 h-4 text-white" />
+            </div>
+            <h1 className="text-2xl font-black text-slate-900">Dashboard</h1>
+          </div>
+          <p className="text-slate-500 text-sm">{format(new Date(), "EEEE, MMMM d, yyyy '·' hh:mm a")}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           <button
             onClick={() => fetchFreshData()}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-medium shadow-sm transition-all disabled:opacity-50"
-            title="Force refresh data"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <span
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border ${isLive
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                : 'bg-amber-50 border-amber-200 text-amber-700'
-              }`}
-          >
-            <Radio className={`w-3 h-3 ${isLive ? 'animate-pulse' : ''}`} />
-            {isLive ? 'Live — Real-Time Synced' : 'Connecting to Live Feed…'}
+          <span className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border ${
+            isLive ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-amber-50 border-amber-200 text-amber-700'
+          }`}>
+            <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse' : ''}`} />
+            {isLive ? 'Live — Real-Time' : 'Connecting…'}
           </span>
         </div>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-        {statCards.map((s) => (
-          <StatCard key={s.title} {...s} />
-        ))}
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        {statCards.map((s) => <StatCard key={s.title} {...s} />)}
       </div>
 
-      {/* Recent punches */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900">Recent Punches</h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Live attendance logs updated in real-time
-            </p>
+      {/* Recent Punches */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden" style={{ boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+        {/* Table header */}
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+              <TrendingUp className="w-3.5 h-3.5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Recent Punches</h2>
+              <p className="text-xs text-slate-400">Live attendance — auto-updates every 15s</p>
+            </div>
           </div>
-          <span className="text-xs text-slate-400">
-            Last synced: {format(lastRefreshed, 'hh:mm:ss a')}
+          <span className="text-xs text-slate-400 font-medium">
+            Updated {format(lastRefreshed, 'h:mm:ss a')}
           </span>
         </div>
 
         {!recentPunches || recentPunches.length === 0 ? (
-          <div className="px-6 py-16 text-center">
-            <Clock className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No attendance records yet</p>
-            <p className="text-slate-400 text-sm mt-1">
-              Records will appear here once the TA500 bridge syncs.
-            </p>
+          <div className="px-6 py-20 flex flex-col items-center justify-center text-slate-400">
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+              <Clock className="w-8 h-8 text-slate-300" />
+            </div>
+            <p className="font-semibold text-slate-500">No attendance records yet</p>
+            <p className="text-sm text-slate-400 mt-1 text-center max-w-xs">Records will appear here once the TA500 bridge syncs.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-left">
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Employee
-                  </th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Device User ID
-                  </th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Punch Time
-                  </th>
-                  <th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Status
-                  </th>
+                <tr className="bg-slate-50/80 border-b border-slate-100">
+                  <th className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Employee</th>
+                  <th className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">ID</th>
+                  <th className="px-5 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Punch Time</th>
+                  <th className="px-5 py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {recentPunches.map((log) => {
-                  const employee = Array.isArray(log.employees)
-                    ? log.employees[0]
-                    : log.employees
-                  const name = employee?.full_name ?? `ID #${log.device_user_id}`
+              <tbody className="divide-y divide-slate-50">
+                {recentPunches.map((log, idx) => {
+                  const employee = Array.isArray(log.employees) ? log.employees[0] : log.employees
+                  const name = employee?.full_name ?? `Employee #${log.device_user_id}`
+                  const role = smartRoles.get(log.id)
+                  const initials = name.split(' ').slice(0, 2).map((n: string) => n[0]).join('').toUpperCase()
+                  const colors = ['from-blue-400 to-indigo-500', 'from-emerald-400 to-teal-500', 'from-violet-400 to-purple-500', 'from-orange-400 to-pink-500', 'from-rose-400 to-pink-500', 'from-teal-400 to-cyan-500']
+                  const colorIdx = log.device_user_id % colors.length
                   return (
-                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900">
-                        {name}
+                    <tr key={log.id} className="hover:bg-slate-50/60 transition-colors group">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${colors[colorIdx]} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                            {initials}
+                          </div>
+                          <span className="font-semibold text-slate-900 text-sm">{name}</span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-slate-500 font-mono text-xs">
-                        {log.device_user_id}
+                      <td className="px-5 py-3.5">
+                        <span className="font-mono text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg">#{log.device_user_id}</span>
                       </td>
-                      <td className="px-6 py-4 text-slate-600">
-                        {format(new Date(log.punch_time), 'MMM d, yyyy h:mm a')}
+                      <td className="px-5 py-3.5 text-slate-600 font-medium text-sm">
+                        {format(new Date(log.punch_time), 'MMM d, yyyy · h:mm a')}
                       </td>
-                      <td className="px-6 py-4">
-                        <StatusBadge status={log.status} role={smartRoles.get(log.id)} />
+                      <td className="px-5 py-3.5 text-center">
+                        {role ? (
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${role.color}`}>
+                            <span>{role.icon}</span>
+                            {role.label}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
                       </td>
                     </tr>
                   )
@@ -369,4 +270,3 @@ export function DashboardClient({
     </div>
   )
 }
-

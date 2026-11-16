@@ -46,11 +46,11 @@ export async function GET(request: NextRequest) {
     }
     const settings: PayrollSettings = settingsData || defaultSettings
 
-    // 2. Fetch employees
+    // 2. Fetch employees ordered A to Z
     let empQuery = supabase
       .from('employees')
       .select('*')
-      .order('device_user_id', { ascending: true })
+      .order('full_name', { ascending: true })
 
     if (branch) {
       empQuery = empQuery.eq('branch', branch)
@@ -87,7 +87,9 @@ export async function GET(request: NextRequest) {
       const comp = compMap.get(emp.device_user_id) || {
         id: 'temp',
         device_user_id: emp.device_user_id,
-        daily_rate: 610.0,
+        daily_rate: 550.0,
+        hourly_rate: 68.75,
+        schedule_type: emp.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat',
         monthly_rate: null,
         employment_type: 'regular',
         overtime_eligible: true,
@@ -114,8 +116,7 @@ export async function GET(request: NextRequest) {
       total_overtime_pay: summaries.reduce((acc, s) => acc + s.total_overtime_pay, 0),
       total_night_diff_pay: summaries.reduce((acc, s) => acc + s.total_night_diff_pay, 0),
       total_holiday_pay: summaries.reduce((acc, s) => acc + s.total_holiday_pay, 0),
-      total_tardiness_minutes: summaries.reduce((acc, s) => acc + s.total_tardiness_minutes, 0),
-      total_tardiness_deduction: 0,
+      total_tardiness_deduction: summaries.reduce((acc, s) => acc + s.total_tardiness_deduction, 0),
       total_regular_hours: summaries.reduce((acc, s) => acc + s.total_regular_hours, 0),
       total_overtime_hours: summaries.reduce((acc, s) => acc + s.total_overtime_hours, 0),
       total_night_diff_hours: summaries.reduce((acc, s) => acc + s.total_night_diff_hours, 0),

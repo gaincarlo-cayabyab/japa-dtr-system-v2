@@ -1,12 +1,30 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Employee } from '@/types/database'
-import { Badge } from '@/components/ui/Badge'
+import {
+  Users,
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Calendar,
+  Clock,
+  Briefcase,
+  DollarSign,
+  X,
+  Sparkles,
+} from 'lucide-react'
 
-export type EmployeeWithRate = Employee & { daily_rate?: number }
+export type EmployeeWithRate = Employee & {
+  daily_rate?: number
+  hourly_rate?: number
+  schedule_type?: 'mon_sat' | 'mon_fri'
+}
 
 interface EmployeeManagerProps {
   initialEmployees: EmployeeWithRate[]
@@ -19,27 +37,37 @@ type FormData = {
   position: string
   department: string
   daily_rate: number
+  hourly_rate: number
+  schedule_type: 'mon_sat' | 'mon_fri'
 }
 
 const DEFAULT_FORM: FormData = {
   device_user_id: '',
   full_name: '',
   branch: 'Dagupan Main',
-  position: '',
-  department: '',
-  daily_rate: 610,
+  position: 'Staff',
+  department: 'Operations',
+  daily_rate: 550,
+  hourly_rate: 68.75,
+  schedule_type: 'mon_sat',
 }
 
 type Toast = { message: string; type: 'success' | 'error' }
 
-function formatDate(ts: string) {
-  try {
-    return new Date(ts).toLocaleDateString('en-PH', {
-      year: 'numeric', month: 'short', day: 'numeric',
-    })
-  } catch {
-    return ts
-  }
+// Vibrant avatar background colors
+const AVATAR_GRADIENTS = [
+  'from-blue-500 to-indigo-600',
+  'from-emerald-500 to-teal-600',
+  'from-purple-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+  'from-rose-500 to-red-600',
+  'from-cyan-500 to-blue-600',
+]
+
+function getAvatarGradient(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i)
+  return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length]
 }
 
 export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
@@ -51,58 +79,33 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-  const [syncingDevice, setSyncingDevice] = useState(false)
+  const [search, setSearch] = useState('')
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'mon_sat' | 'mon_fri'>('all')
 
-  // Auto-dismiss toast
   useEffect(() => {
     if (!toast) return
     const t = setTimeout(() => setToast(null), 3500)
     return () => clearTimeout(t)
   }, [toast])
 
-  // Real-time synchronization for new/updated employees
-  useEffect(() => {
-    const supabase = createClient()
-    const refreshList = async () => {
-      const { data } = await supabase
-        .from('employees')
-        .select('*')
-        .order('created_at', { ascending: false })
-      if (data) setEmployees(data)
-    }
-
-    const channel = supabase
-      .channel('employees-realtime-manager')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'employees' },
-        () => {
-          refreshList()
+  // Sorted alphabetically from A to Z
+  const sortedAndFiltered = useMemo(() => {
+    return employees
+      .slice()
+      .sort((a, b) => a.full_name.localeCompare(b.full_name))
+      .filter((emp) => {
+        if (scheduleFilter !== 'all' && (emp.schedule_type || 'mon_sat') !== scheduleFilter) {
+          return false
         }
-      )
-      .subscribe()
-
-    const interval = setInterval(refreshList, 10000)
-
-    return () => {
-      supabase.removeChannel(channel)
-      clearInterval(interval)
-    }
-  }, [])
-
-  async function handleSyncFromDevice() {
-    setSyncingDevice(true)
-    try {
-      const res = await fetch('/api/employees/sync', { method: 'POST' })
-      if (!res.ok) throw new Error('Failed to request device sync')
-      setToast({ message: 'Request sent to TA500! Syncing employees in ~5s...', type: 'success' })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error syncing'
-      setToast({ message: msg, type: 'error' })
-    } finally {
-      setTimeout(() => setSyncingDevice(false), 4000)
-    }
-  }
+        if (search.trim() === '') return true
+        const q = search.toLowerCase()
+        return (
+          emp.full_name.toLowerCase().includes(q) ||
+          emp.device_user_id.toLowerCase().includes(q) ||
+          (emp.position && emp.position.toLowerCase().includes(q))
+        )
+      })
+  }, [employees, search, scheduleFilter])
 
   function openAdd() {
     setEditTarget(null)
@@ -112,13 +115,17 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
 
   function openEdit(emp: EmployeeWithRate) {
     setEditTarget(emp)
+    const daily = emp.daily_rate ?? 550
+    const hourly = emp.hourly_rate ?? Math.round((daily / 8) * 100) / 100
     setForm({
       device_user_id: emp.device_user_id,
       full_name: emp.full_name,
       branch: emp.branch,
-      position: emp.position ?? '',
-      department: emp.department ?? '',
-      daily_rate: emp.daily_rate ?? 610,
+      position: emp.position ?? 'Staff',
+      department: emp.department ?? 'Operations',
+      daily_rate: daily,
+      hourly_rate: hourly,
+      schedule_type: emp.schedule_type ?? (emp.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat'),
     })
     setModalOpen(true)
   }
@@ -129,13 +136,18 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
     setForm(DEFAULT_FORM)
   }
 
+  const handleDailyRateChange = (val: number) => {
+    const daily = Number(val) || 0
+    const hourly = Math.round((daily / 8) * 100) / 100
+    setForm((f) => ({ ...f, daily_rate: daily, hourly_rate: hourly }))
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setSubmitting(true)
     const supabase = createClient()
 
     try {
-      // Check Device User ID uniqueness
       if (!editTarget || editTarget.device_user_id !== form.device_user_id) {
         const { data: existing } = await supabase
           .from('employees')
@@ -149,7 +161,7 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
         }
       }
 
-      const payload = {
+      const empPayload = {
         device_user_id: form.device_user_id,
         full_name: form.full_name,
         branch: form.branch,
@@ -160,42 +172,58 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
       if (editTarget) {
         const { error } = await supabase
           .from('employees')
-          .update(payload)
+          .update(empPayload)
           .eq('id', editTarget.id)
         if (error) throw error
 
-        // Also upsert compensation
-        if (form.daily_rate) {
-          await supabase.from('employee_compensation').upsert({
-            device_user_id: form.device_user_id,
-            daily_rate: Number(form.daily_rate),
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'device_user_id' })
-        }
+        await supabase.from('employee_compensation').upsert({
+          device_user_id: form.device_user_id,
+          daily_rate: form.daily_rate,
+          hourly_rate: form.hourly_rate,
+          schedule_type: form.schedule_type,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'device_user_id' })
 
         setEmployees((prev) =>
-          prev.map((e) => (e.id === editTarget.id ? { ...e, ...payload, daily_rate: Number(form.daily_rate) } : e))
+          prev.map((e) =>
+            e.id === editTarget.id
+              ? {
+                  ...e,
+                  ...empPayload,
+                  daily_rate: form.daily_rate,
+                  hourly_rate: form.hourly_rate,
+                  schedule_type: form.schedule_type,
+                }
+              : e
+          )
         )
-        setToast({ message: 'Employee updated successfully.', type: 'success' })
+        setToast({ message: `Updated ${form.full_name} successfully!`, type: 'success' })
       } else {
         const { data, error } = await supabase
           .from('employees')
-          .insert(payload)
+          .insert(empPayload)
           .select()
           .single()
         if (error) throw error
 
-        // Also upsert compensation
-        if (form.daily_rate) {
-          await supabase.from('employee_compensation').upsert({
-            device_user_id: form.device_user_id,
-            daily_rate: Number(form.daily_rate),
-            updated_at: new Date().toISOString(),
-          }, { onConflict: 'device_user_id' })
-        }
+        await supabase.from('employee_compensation').upsert({
+          device_user_id: form.device_user_id,
+          daily_rate: form.daily_rate,
+          hourly_rate: form.hourly_rate,
+          schedule_type: form.schedule_type,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'device_user_id' })
 
-        setEmployees((prev) => [{ ...data, daily_rate: Number(form.daily_rate) }, ...prev])
-        setToast({ message: 'Employee added successfully.', type: 'success' })
+        setEmployees((prev) => [
+          ...prev,
+          {
+            ...data,
+            daily_rate: form.daily_rate,
+            hourly_rate: form.hourly_rate,
+            schedule_type: form.schedule_type,
+          },
+        ])
+        setToast({ message: `Added ${form.full_name} to employee directory!`, type: 'success' })
       }
 
       closeModal()
@@ -214,249 +242,390 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
       const { error } = await supabase.from('employees').delete().eq('id', id)
       if (error) throw error
       setEmployees((prev) => prev.filter((e) => e.id !== id))
-      setToast({ message: 'Employee deleted.', type: 'success' })
+      setToast({ message: 'Employee removed.', type: 'success' })
+      setDeleteConfirm(null)
       router.refresh()
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Delete failed.'
       setToast({ message, type: 'error' })
-    } finally {
-      setDeleteConfirm(null)
     }
   }
 
   return (
-    <div>
-      {/* Toast */}
+    <div className="space-y-6">
+      {/* Toast Notification */}
       {toast && (
         <div
-          className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium transition-all ${
+          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${
             toast.type === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+              : 'bg-rose-50 text-rose-800 border-rose-200'
           }`}
         >
-          {toast.type === 'success' ? '✓' : '✕'} {toast.message}
+          {toast.type === 'success' ? (
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+          ) : (
+            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+          )}
+          <span>{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600">
+            ×
+          </button>
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {employees.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-            <p className="text-sm">No employees found. Add one to get started.</p>
+      {/* Control Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Search */}
+        <div className="flex-1 relative">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search by employee name, ID, or position..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        {/* Filter & Actions */}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+            <button
+              onClick={() => setScheduleFilter('all')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                scheduleFilter === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              All ({employees.length})
+            </button>
+            <button
+              onClick={() => setScheduleFilter('mon_sat')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                scheduleFilter === 'mon_sat' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Mon–Sat
+            </button>
+            <button
+              onClick={() => setScheduleFilter('mon_fri')}
+              className={`px-3 py-1.5 rounded-lg transition-colors ${
+                scheduleFilter === 'mon_fri' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Mon–Fri
+            </button>
+          </div>
+
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Employee
+          </button>
+        </div>
+      </div>
+
+      {/* Employee Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <h2 className="text-base font-bold text-slate-900">Official Staff Roster (A to Z)</h2>
+            <span className="px-2.5 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold">
+              {sortedAndFiltered.length} Active Staff
+            </span>
+          </div>
+          <span className="text-xs text-slate-400 font-medium">Sorted alphabetically by name</span>
+        </div>
+
+        {sortedAndFiltered.length === 0 ? (
+          <div className="py-20 flex flex-col items-center justify-center text-slate-400">
+            <Users className="w-10 h-10 text-slate-300 mb-2" />
+            <p className="text-sm font-medium">No matching employees found.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Full Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Device ID</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Branch</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Position</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Daily Rate</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Created At</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Actions</th>
+                <tr className="bg-slate-50/80 border-b border-slate-200 text-left text-xs font-semibold text-slate-600">
+                  <th className="px-5 py-3.5">Employee Name</th>
+                  <th className="px-4 py-3.5 text-center">ID / S#</th>
+                  <th className="px-4 py-3.5">Branch</th>
+                  <th className="px-4 py-3.5 text-right">Daily Rate</th>
+                  <th className="px-4 py-3.5 text-right">Hourly Rate</th>
+                  <th className="px-4 py-3.5 text-center">Work Schedule</th>
+                  <th className="px-5 py-3.5 text-center">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
-                {employees.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-gray-900">
-                      <div className="flex items-center gap-2">
-                        {emp.full_name}
-                        {emp.full_name.includes('NN-') && (
-                          <Badge variant="warning">Unmapped</Badge>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                      {emp.device_user_id}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{emp.branch}</td>
-                    <td className="px-4 py-3 text-gray-500">{emp.position ?? '—'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        ₱{(emp.daily_rate ?? 610).toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{formatDate(emp.created_at)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => openEdit(emp)}
-                          className="text-xs px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium"
-                        >
-                          Edit
-                        </button>
-                        {deleteConfirm === emp.id ? (
-                          <div className="flex gap-1">
-                            <button
-                              onClick={() => handleDelete(emp.id)}
-                              className="text-xs px-2.5 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 font-medium"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => setDeleteConfirm(null)}
-                              className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setDeleteConfirm(emp.id)}
-                            className="text-xs px-2.5 py-1 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 font-medium"
+              <tbody className="divide-y divide-slate-100">
+                {sortedAndFiltered.map((emp) => {
+                  const initials = emp.full_name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .join('')
+                  const isSpecial = emp.schedule_type === 'mon_fri'
+
+                  return (
+                    <tr key={emp.id} className="hover:bg-slate-50/70 transition-colors">
+                      {/* Name with Colorful Avatar */}
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${getAvatarGradient(
+                              emp.full_name
+                            )} text-white flex items-center justify-center text-xs font-bold shadow-xs flex-shrink-0`}
                           >
-                            Delete
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-900 leading-tight truncate">{emp.full_name}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{emp.position || 'Staff'}</p>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* ID / S# */}
+                      <td className="px-4 py-3.5 text-center font-mono text-xs font-bold text-slate-500">
+                        #{emp.device_user_id}
+                      </td>
+
+                      {/* Branch */}
+                      <td className="px-4 py-3.5 text-slate-600 font-medium text-xs">
+                        {emp.branch}
+                      </td>
+
+                      {/* Daily Rate */}
+                      <td className="px-4 py-3.5 text-right">
+                        <span className="font-bold text-slate-900">
+                          ₱{(emp.daily_rate ?? 550).toFixed(2)}
+                        </span>
+                      </td>
+
+                      {/* Hourly Rate */}
+                      <td className="px-4 py-3.5 text-right">
+                        <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100 text-xs">
+                          ₱{(emp.hourly_rate ?? (emp.daily_rate ? emp.daily_rate / 8 : 68.75)).toFixed(2)}/hr
+                        </span>
+                      </td>
+
+                      {/* Work Schedule */}
+                      <td className="px-4 py-3.5 text-center">
+                        <span
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-semibold ${
+                            isSpecial
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                          }`}
+                        >
+                          <Calendar className="w-3 h-3" />
+                          {isSpecial ? 'Mon–Fri (5 Days)' : 'Mon–Sat (6 Days)'}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-5 py-3.5 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => openEdit(emp)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                            title="Edit Employee"
+                          >
+                            <Edit2 className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          {deleteConfirm === emp.id ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => handleDelete(emp.id)}
+                                className="px-2 py-1 text-xs bg-rose-600 text-white rounded-lg font-bold"
+                              >
+                                Delete
+                              </button>
+                              <button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded-lg"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setDeleteConfirm(emp.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                              title="Delete Employee"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* Action buttons (bottom of table) */}
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <button
-          onClick={handleSyncFromDevice}
-          disabled={syncingDevice}
-          className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 shadow-sm disabled:opacity-50 transition-colors"
-          title="Pull all newly registered employees directly from the TA500 biometric machine"
-        >
-          <svg className={`w-4 h-4 text-blue-600 ${syncingDevice ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          {syncingDevice ? 'Syncing Device…' : '🔄 Sync from TA500 Device'}
-        </button>
-        <button
-          onClick={openAdd}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 shadow-sm"
-        >
-          + Add Employee
-        </button>
-      </div>
-
-      {/* Modal */}
+      {/* Add / Edit Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {editTarget ? 'Edit Employee' : 'Add Employee'}
-              </h2>
-              <button
-                onClick={closeModal}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-              >
-                ×
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 space-y-5 border border-slate-100">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <h3 className="text-base font-bold text-slate-900">
+                  {editTarget ? 'Edit Employee Details' : 'Register New Employee'}
+                </h3>
+              </div>
+              <button onClick={closeModal} className="text-slate-400 hover:text-slate-600 p-1">
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Device User ID <span className="text-red-500">*</span>
-                </label>
-                <input
-                  required
-                  type="text"
-                  value={form.device_user_id}
-                  onChange={(e) => setForm((f) => ({ ...f, device_user_id: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g. 1234"
-                />
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Device ID / S# <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={form.device_user_id}
+                    onChange={(e) => setForm((f) => ({ ...f, device_user_id: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. 25"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Branch</label>
+                  <select
+                    value={form.branch}
+                    onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option>Dagupan Main</option>
+                    <option>Urdaneta</option>
+                    <option>Alaminos</option>
+                    <option>San Carlos</option>
+                  </select>
+                </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name <span className="text-red-500">*</span>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Full Name (SURNAME, FIRSTNAME M.) <span className="text-rose-500">*</span>
                 </label>
                 <input
                   required
                   type="text"
                   value={form.full_name}
                   onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Juan dela Cruz"
+                  className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="e.g. DELA CRUZ, JUAN P."
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
-                <select
-                  value={form.branch}
-                  onChange={(e) => setForm((f) => ({ ...f, branch: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>Dagupan Main</option>
-                  <option>Urdaneta</option>
-                  <option>Alaminos</option>
-                  <option>San Carlos</option>
-                  <option>Lingayen</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
-                <input
-                  type="text"
-                  value={form.position}
-                  onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g. Cashier"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                <input
-                  type="text"
-                  value={form.department}
-                  onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="e.g. Operations"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Daily Rate (PHP ₱)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-sm text-gray-400 font-semibold">₱</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Position</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={form.daily_rate}
-                    onChange={(e) => setForm((f) => ({ ...f, daily_rate: Number(e.target.value) }))}
-                    className="w-full border border-gray-300 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="610.00"
+                    type="text"
+                    value={form.position}
+                    onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Staff"
                   />
                 </div>
-                <p className="text-[11px] text-gray-400 mt-1">Daily base rate used for DOLE salary computation</p>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Department</label>
+                  <input
+                    type="text"
+                    value={form.department}
+                    onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Operations"
+                  />
+                </div>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              {/* Salary & Hourly Rate Auto Calculation */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Daily Salary Rate (PHP ₱)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₱</span>
+                      <input
+                        required
+                        type="number"
+                        step="0.01"
+                        value={form.daily_rate}
+                        onChange={(e) => handleDailyRateChange(Number(e.target.value))}
+                        className="w-full border border-slate-200 rounded-xl pl-7 pr-3 py-2 bg-white font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold text-slate-700 mb-1">
+                      Hourly Rate (Auto = Rate / 8)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-xs font-bold text-slate-400">₱</span>
+                      <input
+                        readOnly
+                        type="number"
+                        step="0.01"
+                        value={form.hourly_rate}
+                        className="w-full border border-slate-200 rounded-xl pl-7 pr-3 py-2 bg-slate-100 font-bold text-blue-700 cursor-not-allowed"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Weekly Work Schedule
+                  </label>
+                  <select
+                    value={form.schedule_type}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        schedule_type: e.target.value as 'mon_sat' | 'mon_fri',
+                      }))
+                    }
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-white text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="mon_sat">Monday to Saturday (Sunday Rest Day) — Standard Staff</option>
+                    <option value="mon_fri">Monday to Friday (Sat &amp; Sun Rest Days) — IT / Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-semibold hover:bg-slate-50 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-60"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-xs disabled:opacity-50 transition-colors"
                 >
-                  {submitting ? 'Saving…' : editTarget ? 'Save Changes' : 'Add Employee'}
+                  {submitting ? 'Saving...' : editTarget ? 'Save Changes' : 'Add Employee'}
                 </button>
               </div>
             </form>

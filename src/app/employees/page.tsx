@@ -15,15 +15,26 @@ export default async function EmployeesPage() {
     .from('employee_compensation')
     .select('*')
 
-  const compMap = new Map<string, number>()
+  const compMap = new Map<string, { daily_rate: number; hourly_rate: number; schedule_type: string }>()
   compensation?.forEach((c) => {
-    compMap.set(c.device_user_id, Number(c.daily_rate) || 610.0)
+    const daily = Number(c.daily_rate) || 550.0
+    const hourly = c.hourly_rate ? Number(c.hourly_rate) : Math.round((daily / 8) * 100) / 100
+    compMap.set(c.device_user_id, {
+      daily_rate: daily,
+      hourly_rate: hourly,
+      schedule_type: c.schedule_type || 'mon_sat',
+    })
   })
 
-  const employeesWithRate = (employees ?? []).map((emp) => ({
-    ...emp,
-    daily_rate: compMap.get(emp.device_user_id) ?? 610.0,
-  }))
+  const employeesWithRate = (employees ?? []).map((emp) => {
+    const comp = compMap.get(emp.device_user_id)
+    return {
+      ...emp,
+      daily_rate: comp?.daily_rate ?? 550.0,
+      hourly_rate: comp?.hourly_rate ?? 68.75,
+      schedule_type: comp?.schedule_type ?? (emp.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat'),
+    }
+  })
 
   const unmappedCount = (employees ?? []).filter((e) =>
     e.full_name.includes('NN-')

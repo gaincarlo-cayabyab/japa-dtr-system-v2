@@ -5,11 +5,11 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
-    // Join employees with compensation
+    // Join employees with compensation, ordered A to Z
     const { data: employees, error: empErr } = await supabase
       .from('employees')
       .select('device_user_id, full_name, branch, position, department')
-      .order('device_user_id', { ascending: true })
+      .order('full_name', { ascending: true })
 
     if (empErr) throw empErr
 
@@ -24,13 +24,17 @@ export async function GET() {
 
     const result = employees.map((emp) => {
       const comp = compMap.get(emp.device_user_id)
+      const daily = comp ? Number(comp.daily_rate) : 550.0
+      const hourly = comp?.hourly_rate ? Number(comp.hourly_rate) : Math.round((daily / 8) * 100) / 100
       return {
         device_user_id: emp.device_user_id,
         full_name: emp.full_name,
         branch: emp.branch,
         position: emp.position,
         department: emp.department,
-        daily_rate: comp ? Number(comp.daily_rate) : 610.0,
+        daily_rate: daily,
+        hourly_rate: hourly,
+        schedule_type: comp?.schedule_type || (emp.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat'),
         monthly_rate: comp?.monthly_rate ? Number(comp.monthly_rate) : null,
         employment_type: comp?.employment_type || 'regular',
         overtime_eligible: comp?.overtime_eligible ?? true,
@@ -53,6 +57,8 @@ export async function PUT(request: NextRequest) {
     const {
       device_user_id,
       daily_rate,
+      hourly_rate,
+      schedule_type,
       monthly_rate,
       employment_type,
       overtime_eligible,
@@ -66,9 +72,14 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    const daily = Number(daily_rate) || 0
+    const hourly = hourly_rate ? Number(hourly_rate) : Math.round((daily / 8) * 100) / 100
+
     const payload = {
       device_user_id,
-      daily_rate: Number(daily_rate) || 0,
+      daily_rate: daily,
+      hourly_rate: hourly,
+      schedule_type: schedule_type || 'mon_sat',
       monthly_rate: monthly_rate ? Number(monthly_rate) : null,
       employment_type: employment_type || 'regular',
       overtime_eligible: overtime_eligible ?? true,

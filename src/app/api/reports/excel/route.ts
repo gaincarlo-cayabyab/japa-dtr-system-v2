@@ -56,11 +56,11 @@ export async function GET(request: NextRequest) {
     }
     const settings: PayrollSettings = settingsData || defaultSettings
 
-    // 2. Fetch employees
+    // 2. Fetch employees ordered A to Z
     let empQuery = supabase
       .from('employees')
       .select('*')
-      .order('device_user_id', { ascending: true })
+      .order('full_name', { ascending: true })
 
     if (branch) {
       empQuery = empQuery.eq('branch', branch)
@@ -95,7 +95,9 @@ export async function GET(request: NextRequest) {
       const comp = compMap.get(emp.device_user_id) || {
         id: 'temp',
         device_user_id: emp.device_user_id,
-        daily_rate: 610.0,
+        daily_rate: 550.0,
+        hourly_rate: 68.75,
+        schedule_type: emp.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat',
         monthly_rate: null,
         employment_type: 'regular',
         overtime_eligible: true,
@@ -139,7 +141,7 @@ export async function GET(request: NextRequest) {
     })
 
     // Title Block
-    payrollSheet.mergeCells('A1:P1')
+    payrollSheet.mergeCells('A1:Q1')
     const titleCell = payrollSheet.getCell('A1')
     titleCell.value = 'JAPA ENTERPRISE — PAYROLL & SALARY SUMMARY'
     titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFF' } }
@@ -147,7 +149,7 @@ export async function GET(request: NextRequest) {
     titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
     payrollSheet.getRow(1).height = 32
 
-    payrollSheet.mergeCells('A2:P2')
+    payrollSheet.mergeCells('A2:Q2')
     const subTitleCell = payrollSheet.getCell('A2')
     subTitleCell.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Generated: ${format(new Date(), 'PPpp')}`
     subTitleCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } }
@@ -172,7 +174,8 @@ export async function GET(request: NextRequest) {
       'Night Diff Hrs',
       'Night Diff Pay',
       'Holiday Pay',
-      'Time Late (Mins)',
+      'Tardiness (m)',
+      'Tardiness Ded.',
       'Gross Salary',
     ]
 
@@ -204,6 +207,7 @@ export async function GET(request: NextRequest) {
         emp.total_night_diff_pay,
         emp.total_holiday_pay,
         emp.total_tardiness_minutes,
+        emp.total_tardiness_deduction,
         emp.gross_pay,
       ])
       row.height = 22
@@ -233,7 +237,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Highlight Gross Salary
-        if (colNumber === 16) {
+        if (colNumber === 17) {
           cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '047857' } }
         }
       })
@@ -259,6 +263,7 @@ export async function GET(request: NextRequest) {
       { formula: `SUM(N${startDataRow}:N${endDataRow})` },
       { formula: `SUM(O${startDataRow}:O${endDataRow})` },
       { formula: `SUM(P${startDataRow}:P${endDataRow})` },
+      { formula: `SUM(Q${startDataRow}:Q${endDataRow})` },
     ])
     totalRow.height = 26
     totalRow.eachCell((cell, colNumber) => {
@@ -298,7 +303,8 @@ export async function GET(request: NextRequest) {
       { width: 14 }, // Night Diff Hrs
       { width: 15 }, // Night Diff Pay
       { width: 14 }, // Holiday Pay
-      { width: 16 }, // Time Late (Mins)
+      { width: 14 }, // Tardiness Mins
+      { width: 15 }, // Tardiness Ded
       { width: 18 }, // Gross Salary
     ]
 

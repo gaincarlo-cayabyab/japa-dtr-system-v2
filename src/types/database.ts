@@ -122,7 +122,9 @@ export type EmployeeCompensation = {
   id: string
   device_user_id: string
   daily_rate: number
+  hourly_rate?: number
   monthly_rate: number | null
+  schedule_type?: 'mon_sat' | 'mon_fri'
   employment_type: 'regular' | 'probationary' | 'contractual'
   overtime_eligible: boolean
   night_diff_eligible: boolean
@@ -182,6 +184,7 @@ export interface EmployeePayrollSummary {
   position: string | null
   daily_rate: number
   hourly_rate: number
+  schedule_type?: 'mon_sat' | 'mon_fri'
   days_worked: number
   total_regular_hours: number
   total_overtime_hours: number
