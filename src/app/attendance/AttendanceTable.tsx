@@ -204,7 +204,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           })
         } else {
           roleMap.set(log.id, {
-            label: 'Mid-Shift / Break',
+            label: 'Mid-Shift',
             color: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
           })
         }
@@ -319,8 +319,6 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
               <option value="all">All</option>
               <option value="0">Check In</option>
               <option value="1">Check Out</option>
-              <option value="2">Break Out</option>
-              <option value="3">Break In</option>
               <option value="4">OT In</option>
               <option value="5">OT Out</option>
             </select>

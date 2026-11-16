@@ -221,7 +221,7 @@ export function DashboardClient({
           })
         } else {
           roleMap.set(log.id, {
-            label: 'Mid-Shift / Break',
+            label: 'Mid-Shift',
             color: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
           })
         }
