@@ -171,19 +171,16 @@ export function computeDailyPayroll(
   )
   const tardinessDeduction = tardinessMinutes * minuteRate
 
-  // Base Pay calculation
-  // For regular days: (regularHours / 8) * dailyRate
-  // For special holidays / rest days: rate multiplier applies
+  // Base Pay & Holiday Extra Pay calculation
+  // Base Pay = 1.0x for regular hours worked
+  // Holiday Pay = Extra premium (e.g. +100% for regular holiday, +30% for special holiday / rest day)
   let regularPay = 0
   let holidayPremiumPay = 0
 
   if (rawHours > 0) {
-    if (dayType === 'regular') {
-      regularPay = (regularHours / (settings.work_hours_per_day || 8)) * dailyRate
-    } else {
-      // Holiday or Rest Day
-      regularPay = (regularHours / (settings.work_hours_per_day || 8)) * dailyRate * rates.base
-      holidayPremiumPay = regularPay - (regularHours / (settings.work_hours_per_day || 8)) * dailyRate
+    regularPay = (regularHours / (settings.work_hours_per_day || 8)) * dailyRate
+    if (rates.base > 1.0) {
+      holidayPremiumPay = regularPay * (rates.base - 1.0)
     }
   }
 
@@ -201,7 +198,7 @@ export function computeDailyPayroll(
 
   const totalDayPay = Math.max(
     0,
-    regularPay + overtimePay + nightDiffPay - tardinessDeduction
+    regularPay + holidayPremiumPay + overtimePay + nightDiffPay - tardinessDeduction
   )
 
   return {
@@ -261,7 +258,7 @@ export function computeEmployeePayroll(
 
   const grossPay = Math.max(
     0,
-    totalRegularPay + totalOvertimePay + totalNightDiffPay - totalTardinessDeduction
+    totalRegularPay + totalHolidayPay + totalOvertimePay + totalNightDiffPay - totalTardinessDeduction
   )
 
   return {

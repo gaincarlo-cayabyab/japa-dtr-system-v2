@@ -29,6 +29,9 @@ import {
   CreditCard,
   Banknote,
   Receipt,
+  Table2,
+  LayoutList,
+  Star,
 } from 'lucide-react'
 
 interface PayrollClientProps {
@@ -88,6 +91,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const [endDate, setEndDate] = useState(`${year}-${month}-15`)
   const [branchFilter, setBranchFilter] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  // Display style: 'table' (default compact grid) | 'cards'
+  const [displayMode, setDisplayMode] = useState<'table' | 'cards'>('table')
 
   // State
   const [loading, setLoading] = useState(false)
@@ -366,8 +371,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         </div>
       </div>
 
-      {/* 4 Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <DollarSign className="w-6 h-6" />
@@ -422,6 +427,21 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             </p>
             <p className="text-xs text-purple-500 font-semibold mt-0.5">
               {payrollData?.totals?.total_overtime_hours?.toFixed(1) || 0} OT hours
+            </p>
+          </div>
+        </div>
+
+        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+            <Star className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Holiday Pay (Extra)</p>
+            <p className="text-2xl font-black text-rose-700 mt-0.5">
+              {formatCurrency(payrollData?.totals?.total_holiday_pay || 0)}
+            </p>
+            <p className="text-xs text-rose-500 font-semibold mt-0.5">
+              DOLE Holiday Premiums
             </p>
           </div>
         </div>
@@ -506,6 +526,26 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               ))}
             </select>
           )}
+
+          {/* Display Mode Toggle (Table default vs Cards) */}
+          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+            <button
+              onClick={() => setDisplayMode('table')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Table2 className="w-3.5 h-3.5" /> Table
+            </button>
+            <button
+              onClick={() => setDisplayMode('cards')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${
+                displayMode === 'cards' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutList className="w-3.5 h-3.5" /> Cards
+            </button>
+          </div>
         </div>
       </div>
 
@@ -534,7 +574,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             <p className="text-sm font-bold text-slate-600">No payroll records found for this period.</p>
             <p className="text-xs text-slate-400 mt-1">Adjust dates above or ensure attendance punches are synced.</p>
           </div>
-        ) : (
+        ) : displayMode === 'table' ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -544,6 +584,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                   <th className="px-4 py-3.5 text-right">Daily Rate</th>
                   <th className="px-4 py-3.5 text-center">Days</th>
                   <th className="px-4 py-3.5 text-right">Regular Pay</th>
+                  <th className="px-4 py-3.5 text-right font-bold text-amber-700">Holiday Pay</th>
                   <th className="px-4 py-3.5 text-right">OT Pay</th>
                   <th className="px-4 py-3.5 text-right">Late Ded.</th>
                   <th className="px-4 py-3.5 text-right font-black text-slate-900">Gross Salary</th>
@@ -582,11 +623,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       {/* Work Schedule Badge */}
                       <td className="px-4 py-3.5 text-center">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${
-                            isMonFri
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
-                          }`}
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${isMonFri
+                            ? 'bg-purple-50 text-purple-700 border-purple-200'
+                            : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}
                         >
                           {isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
                         </span>
@@ -626,6 +666,17 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       {/* Regular Pay */}
                       <td className="px-4 py-3.5 text-right text-slate-800 font-semibold text-xs">
                         {formatCurrency(emp.total_regular_pay)}
+                      </td>
+
+                      {/* Holiday Pay (DOLE Premium) */}
+                      <td className="px-4 py-3.5 text-right text-amber-700 font-semibold text-xs">
+                        {emp.total_holiday_pay > 0 ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            +{formatCurrency(emp.total_holiday_pay)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
                       </td>
 
                       {/* OT Pay */}
@@ -700,6 +751,150 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               </tbody>
             </table>
           </div>
+        ) : (
+          /* Cards Display Mode */
+          <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50/50">
+            {filteredEmployees.map((emp) => {
+              const gradient = getAvatarColor(emp.employee_name)
+              const initials = getInitials(emp.employee_name)
+              const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
+              const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
+              const payment = paymentsMap.get(emp.device_user_id)
+
+              return (
+                <div
+                  key={emp.device_user_id}
+                  className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                >
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                        {initials}
+                      </div>
+                      <div>
+                        <h3 className="font-black text-slate-900 text-sm leading-snug">{emp.employee_name}</h3>
+                        <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.position || 'Staff'}</p>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${
+                        isMonFri
+                          ? 'bg-purple-50 text-purple-700 border-purple-200'
+                          : 'bg-blue-50 text-blue-700 border-blue-200'
+                      }`}
+                    >
+                      {isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
+                    </span>
+                  </div>
+
+                  {/* Compensation Row */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                    <div>
+                      <span className="text-slate-400 font-semibold text-[11px]">Daily Rate: </span>
+                      <span className="font-bold text-slate-800">₱{emp.daily_rate.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold text-[11px]">Hourly: </span>
+                      <span className="font-bold text-slate-800">₱{hourly.toFixed(2)}/h</span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setRateTarget({
+                          id: emp.device_user_id,
+                          name: emp.employee_name,
+                          dailyRate: emp.daily_rate,
+                          hourlyRate: hourly,
+                          scheduleType: isMonFri ? 'mon_fri' : 'mon_sat',
+                        })
+                        setNewDailyRate(emp.daily_rate)
+                        setNewHourlyRate(hourly)
+                        setNewScheduleType(isMonFri ? 'mon_fri' : 'mon_sat')
+                        setRateModalOpen(true)
+                      }}
+                      className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-white border border-transparent hover:border-slate-200 transition-colors"
+                      title="Edit Rate"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Pay Components Matrix */}
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Days Worked</p>
+                      <p className="font-black text-slate-800 text-sm mt-0.5">{emp.days_worked} days</p>
+                      <p className="text-[10px] text-slate-400">{emp.total_regular_hours.toFixed(1)} hrs</p>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                      <p className="text-[10px] uppercase font-bold text-slate-400">Regular Pay</p>
+                      <p className="font-black text-slate-800 text-sm mt-0.5">{formatCurrency(emp.total_regular_pay)}</p>
+                      <p className="text-[10px] text-slate-400">100% Base</p>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-100">
+                      <p className="text-[10px] uppercase font-bold text-amber-700">Holiday Pay</p>
+                      <p className="font-black text-amber-800 text-sm mt-0.5">
+                        {emp.total_holiday_pay > 0 ? `+${formatCurrency(emp.total_holiday_pay)}` : '₱0.00'}
+                      </p>
+                      <p className="text-[10px] text-amber-600">DOLE Holiday Premium</p>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-purple-50/70 border border-purple-100">
+                      <p className="text-[10px] uppercase font-bold text-purple-700">Overtime Pay</p>
+                      <p className="font-black text-purple-800 text-sm mt-0.5">
+                        {emp.total_overtime_pay > 0 ? `+${formatCurrency(emp.total_overtime_pay)}` : '₱0.00'}
+                      </p>
+                      <p className="text-[10px] text-purple-600">+{emp.total_overtime_hours.toFixed(1)}h OT</p>
+                    </div>
+                  </div>
+
+                  {/* Gross Salary Banner */}
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] uppercase font-black tracking-wider text-emerald-800">Gross Salary</p>
+                      {emp.total_tardiness_deduction > 0 && (
+                        <p className="text-[10px] text-rose-600 font-semibold">
+                          Late Ded: -{formatCurrency(emp.total_tardiness_deduction)} ({emp.total_tardiness_minutes}m)
+                        </p>
+                      )}
+                    </div>
+                    <p className="text-lg font-black text-emerald-700">{formatCurrency(emp.gross_pay)}</p>
+                  </div>
+
+                  {/* Actions (Disbursement & Breakdown) */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+                    <button
+                      onClick={() => openPaymentModal(emp)}
+                      className="flex-1 py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                    >
+                      {payment?.payment_status === 'paid' ? (
+                        <span className="text-emerald-700 font-bold inline-flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Paid Full
+                        </span>
+                      ) : payment?.payment_status === 'partial' ? (
+                        <span className="text-amber-700 font-bold inline-flex items-center gap-1">
+                          <Banknote className="w-3.5 h-3.5 text-amber-600" /> Partial (₱{payment.amount_paid.toFixed(0)})
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 font-bold inline-flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" /> Record Pay
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setSelectedEmployee(emp)}
+                      className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors flex items-center gap-1"
+                    >
+                      Details
+                      <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 
@@ -740,11 +935,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                     setPaymentStatus('paid')
                     setPaymentAmount(paymentTarget.grossPay)
                   }}
-                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                    paymentStatus === 'paid'
-                      ? 'bg-emerald-50 border-emerald-300 text-emerald-700 shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-600'
-                  }`}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${paymentStatus === 'paid'
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600'
+                    }`}
                 >
                   ✓ Paid Full
                 </button>
@@ -754,11 +948,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                     setPaymentStatus('partial')
                     setPaymentAmount(Math.round((paymentTarget.grossPay / 2) * 100) / 100)
                   }}
-                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                    paymentStatus === 'partial'
-                      ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-600'
-                  }`}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${paymentStatus === 'partial'
+                    ? 'bg-amber-50 border-amber-300 text-amber-700 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600'
+                    }`}
                 >
                   ½ Paid Half
                 </button>
@@ -768,11 +961,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                     setPaymentStatus('unpaid')
                     setPaymentAmount(0)
                   }}
-                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${
-                    paymentStatus === 'unpaid'
-                      ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-xs'
-                      : 'bg-white border-slate-200 text-slate-600'
-                  }`}
+                  className={`py-2 rounded-xl text-xs font-bold border transition-all ${paymentStatus === 'unpaid'
+                    ? 'bg-rose-50 border-rose-300 text-rose-700 shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-600'
+                    }`}
                 >
                   ✕ Unpaid
                 </button>
@@ -993,6 +1185,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <th className="px-4 py-3">Time In</th>
                       <th className="px-4 py-3">Time Out</th>
                       <th className="px-4 py-3 text-right">Hours</th>
+                      <th className="px-4 py-3 text-right text-amber-700">Holiday Pay</th>
                       <th className="px-4 py-3 text-right">OT (+25%)</th>
                       <th className="px-4 py-3 text-right">Night Diff</th>
                       <th className="px-4 py-3 text-right">Late Ded.</th>
@@ -1004,7 +1197,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <tr key={rec.work_date} className="hover:bg-slate-50/70 transition-colors">
                         <td className="px-4 py-3 font-bold text-slate-900">{rec.work_date}</td>
                         <td className="px-4 py-3">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                            rec.day_type.includes('holiday')
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-slate-100 text-slate-700'
+                          }`}>
                             {rec.day_type_label}
                           </span>
                         </td>
@@ -1015,6 +1212,15 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                           {formatTime(rec.last_check_out)}
                         </td>
                         <td className="px-4 py-3 text-right font-bold text-slate-800">{formatHours(rec.hours_worked)}</td>
+                        <td className="px-4 py-3 text-right font-bold text-amber-700">
+                          {rec.holiday_premium_pay > 0 ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              +{formatCurrency(rec.holiday_premium_pay)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right text-purple-700 font-bold">
                           {rec.overtime_hours > 0 ? `+${rec.overtime_hours.toFixed(1)}h` : '—'}
                         </td>
