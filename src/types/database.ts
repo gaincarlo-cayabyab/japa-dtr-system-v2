@@ -99,6 +99,9 @@ export type Database = {
           last_check_out: string | null
           total_punches: number
           work_date: string
+          hours_worked: number
+          overtime_hours: number
+          shift_status: 'Completed' | 'On Duty' | 'Incomplete'
         }
         Relationships: []
       }

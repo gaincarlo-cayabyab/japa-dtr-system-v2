@@ -33,3 +33,4 @@ SET
   display_name = EXCLUDED.display_name,
   pin_hash = EXCLUDED.pin_hash,
   role = EXCLUDED.role;
+

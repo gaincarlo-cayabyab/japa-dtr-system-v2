@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Users, Clock, UserCheck, Calendar, Radio, RefreshCw } from 'lucide-react'
 import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
@@ -30,7 +30,20 @@ function StatCard({
   )
 }
 
-function StatusBadge({ status }: { status: number | string }) {
+function StatusBadge({
+  status,
+  role,
+}: {
+  status: number | string
+  role?: { label: string; color: string }
+}) {
+  if (role) {
+    return (
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs border ${role.color}`}>
+        {role.label}
+      </span>
+    )
+  }
   const numericStatus = Number(status)
   const colorClass =
     PUNCH_STATUS_COLOR[numericStatus] ?? 'bg-slate-100 text-slate-600'
@@ -172,6 +185,52 @@ export function DashboardClient({
     }
   }, [fetchFreshData])
 
+  // Smart punch detection (Time In vs Time Out with 4:00 AM cutoff)
+  const smartRoles = useMemo(() => {
+    const shiftMap = new Map<string, any[]>()
+    const getOpDate = (ts: string) => {
+      const d = new Date(ts)
+      const shifted = new Date(d.getTime() - 4 * 60 * 60 * 1000)
+      return shifted.toISOString().slice(0, 10)
+    }
+
+    for (const log of recentPunches || []) {
+      const opDate = getOpDate(log.punch_time)
+      const key = `${log.device_user_id}_${opDate}`
+      if (!shiftMap.has(key)) shiftMap.set(key, [])
+      shiftMap.get(key)!.push(log)
+    }
+
+    const roleMap = new Map<string, { label: string; color: string }>()
+    shiftMap.forEach((group) => {
+      group.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime())
+      const first = group[0]
+      const last = group[group.length - 1]
+      const diffMin = (new Date(last.punch_time).getTime() - new Date(first.punch_time).getTime()) / 60000
+
+      group.forEach((log) => {
+        if (log.id === first.id) {
+          roleMap.set(log.id, {
+            label: 'Time In',
+            color: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold',
+          })
+        } else if (log.id === last.id && diffMin >= 3) {
+          roleMap.set(log.id, {
+            label: 'Time Out',
+            color: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold',
+          })
+        } else {
+          roleMap.set(log.id, {
+            label: 'Mid-Shift / Break',
+            color: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
+          })
+        }
+      })
+    })
+
+    return roleMap
+  }, [recentPunches])
+
   const statCards = [
     {
       title: 'Total Employees',
@@ -298,7 +357,7 @@ export function DashboardClient({
                         {format(new Date(log.punch_time), 'MMM d, yyyy h:mm a')}
                       </td>
                       <td className="px-6 py-4">
-                        <StatusBadge status={log.status} />
+                        <StatusBadge status={log.status} role={smartRoles.get(log.id)} />
                       </td>
                     </tr>
                   )

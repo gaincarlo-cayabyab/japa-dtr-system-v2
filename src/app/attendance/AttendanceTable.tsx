@@ -167,6 +167,53 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
     }
   }, [])
 
+  // Pre-calculate smart punch roles (Time In vs Time Out with 4:00 AM overnight cutoff)
+  const smartRoles = useMemo(() => {
+    const shiftMap = new Map<string, AttendanceLog[]>()
+
+    const getOpDate = (ts: string) => {
+      const d = new Date(ts)
+      const shifted = new Date(d.getTime() - 4 * 60 * 60 * 1000)
+      return shifted.toISOString().slice(0, 10)
+    }
+
+    for (const log of logs) {
+      const opDate = getOpDate(log.punch_time)
+      const key = `${log.device_user_id}_${opDate}`
+      if (!shiftMap.has(key)) shiftMap.set(key, [])
+      shiftMap.get(key)!.push(log)
+    }
+
+    const roleMap = new Map<string, { label: string; color: string }>()
+    shiftMap.forEach((group) => {
+      group.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime())
+      const first = group[0]
+      const last = group[group.length - 1]
+      const diffMin = (new Date(last.punch_time).getTime() - new Date(first.punch_time).getTime()) / 60000
+
+      group.forEach((log) => {
+        if (log.id === first.id) {
+          roleMap.set(log.id, {
+            label: 'Time In',
+            color: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold',
+          })
+        } else if (log.id === last.id && diffMin >= 3) {
+          roleMap.set(log.id, {
+            label: 'Time Out',
+            color: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold',
+          })
+        } else {
+          roleMap.set(log.id, {
+            label: 'Mid-Shift / Break',
+            color: 'bg-blue-50 text-blue-700 border-blue-200 font-semibold',
+          })
+        }
+      })
+    })
+
+    return roleMap
+  }, [logs])
+
   const filtered = useMemo(() => {
     return logs.filter((log) => {
       const empName = getEmployeeName(log.device_user_id, employeesList).toLowerCase()
@@ -340,13 +387,23 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                       {formatPunchTime(log.punch_time)}
                     </td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          PUNCH_STATUS_COLOR[log.status] ?? 'bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        {PUNCH_STATUS[log.status] ?? `Status ${log.status}`}
-                      </span>
+                      {smartRoles.has(log.id) ? (
+                        <span
+                          className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs border ${
+                            smartRoles.get(log.id)!.color
+                          }`}
+                        >
+                          {smartRoles.get(log.id)!.label}
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            PUNCH_STATUS_COLOR[log.status] ?? 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {PUNCH_STATUS[log.status] ?? `Status ${log.status}`}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {formatPunchTime(log.synced_at)}

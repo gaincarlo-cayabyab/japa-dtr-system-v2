@@ -64,3 +64,4 @@ export function verifySessionToken(token: string): UserSession | null {
     return null
   }
 }
+
