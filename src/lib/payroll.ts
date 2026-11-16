@@ -59,7 +59,9 @@ export function classifyDay(
   const isRegHoliday = settings.regular_holiday_dates?.includes(dateStr)
   const isSpecHoliday = settings.special_holiday_dates?.includes(dateStr)
 
-  const dayOfWeek = new Date(dateStr + 'T00:00:00+08:00').getDay()
+  // Use UTC year, month, date to guarantee exact calendar day-of-week without timezone shift
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
   // 0 = Sunday, 6 = Saturday
   const restDay = scheduleType === 'mon_fri' 
     ? (dayOfWeek === 0 || dayOfWeek === 6)

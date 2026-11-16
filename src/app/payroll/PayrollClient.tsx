@@ -230,6 +230,33 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     })
   }, [payrollData, searchQuery])
 
+  // Table summary totals for Excel spreadsheet footer
+  const tableTotals = useMemo(() => {
+    return filteredEmployees.reduce(
+      (acc, emp) => {
+        acc.daysWorked += emp.days_worked
+        acc.regularHours += emp.total_regular_hours
+        acc.regularPay += emp.total_regular_pay
+        acc.holidayPay += emp.total_holiday_pay
+        acc.otHours += emp.total_overtime_hours
+        acc.otPay += emp.total_overtime_pay
+        acc.tardinessDed += emp.total_tardiness_deduction
+        acc.grossPay += emp.gross_pay
+        return acc
+      },
+      {
+        daysWorked: 0,
+        regularHours: 0,
+        regularPay: 0,
+        holidayPay: 0,
+        otHours: 0,
+        otPay: 0,
+        tardinessDed: 0,
+        grossPay: 0,
+      }
+    )
+  }, [filteredEmployees])
+
   // Handle daily rate input change in modal
   const handleDailyRateChange = (val: number) => {
     setNewDailyRate(val)
@@ -573,65 +600,67 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             <p className="text-xs text-slate-400 mt-1">Adjust dates above or ensure attendance punches are synced.</p>
           </div>
         ) : displayMode === 'table' ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto border-t border-slate-300">
+            <table className="w-full text-xs border-collapse border-b border-slate-300">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  <th className="px-5 py-3.5">Employee Name</th>
-                  <th className="px-4 py-3.5 text-center">Schedule</th>
-                  <th className="px-4 py-3.5 text-right">Daily Rate</th>
-                  <th className="px-4 py-3.5 text-center">Days</th>
-                  <th className="px-4 py-3.5 text-right">Regular Pay</th>
-                  <th className="px-4 py-3.5 text-right font-bold text-amber-700">Holiday Pay</th>
-                  <th className="px-4 py-3.5 text-right">OT Pay</th>
-                  <th className="px-4 py-3.5 text-right">Late Ded.</th>
-                  <th className="px-4 py-3.5 text-right font-black text-slate-900">Gross Salary</th>
-                  <th className="px-4 py-3.5 text-center">Payment Status</th>
-                  <th className="px-4 py-3.5 text-center">Breakdown</th>
+                <tr className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-tight select-none border-b-2 border-slate-300">
+                  <th className="px-2 py-1.5 text-center border-r border-slate-300 w-10">#</th>
+                  <th className="px-2.5 py-1.5 text-left border-r border-slate-300 min-w-[200px]">Employee Name</th>
+                  <th className="px-2 py-1.5 text-center border-r border-slate-300 w-16">Sched</th>
+                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Daily Rate</th>
+                  <th className="px-2 py-1.5 text-center border-r border-slate-300 w-14">Days</th>
+                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Regular Pay</th>
+                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-amber-800 bg-amber-50/50">Holiday Pay</th>
+                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-purple-800">OT Pay</th>
+                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-20 text-rose-800">Late Ded.</th>
+                  <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 font-black text-slate-900 bg-emerald-50/50">Gross Salary</th>
+                  <th className="px-2.5 py-1.5 text-center border-r border-slate-300 w-28">Payment</th>
+                  <th className="px-2 py-1.5 text-center w-16">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredEmployees.map((emp) => {
-                  const gradient = getAvatarColor(emp.employee_name)
-                  const initials = getInitials(emp.employee_name)
+              <tbody className="divide-y divide-slate-200">
+                {filteredEmployees.map((emp, idx) => {
                   const isMonFri = emp.schedule_type === 'mon_fri' || emp.employee_name.includes('GAIN CARLO')
                   const hourly = emp.hourly_rate || Math.round((emp.daily_rate / 8) * 100) / 100
                   const payment = paymentsMap.get(emp.device_user_id)
+                  const isEven = idx % 2 === 0
 
                   return (
                     <tr
                       key={emp.device_user_id}
-                      className="hover:bg-slate-50/70 transition-colors"
+                      className={`h-8 transition-colors ${
+                        isEven ? 'bg-white' : 'bg-slate-50/40'
+                      } hover:bg-blue-50/60`}
                     >
-                      {/* Employee Info */}
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
-                            {initials}
-                          </div>
-                          <div>
-                            <p className="font-bold text-slate-900 leading-tight">{emp.employee_name}</p>
-                            <p className="text-xs text-slate-400 font-mono mt-0.5">
-                              #{emp.device_user_id} • ₱{hourly.toFixed(2)}/hr
-                            </p>
-                          </div>
+                      {/* Device ID */}
+                      <td className="px-2 py-1 text-center font-mono text-[11px] font-bold text-slate-500 border-r border-slate-200">
+                        {emp.device_user_id}
+                      </td>
+
+                      {/* Employee Name */}
+                      <td className="px-2.5 py-1 border-r border-slate-200">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 text-xs truncate max-w-[210px]" title={emp.employee_name}>
+                            {emp.employee_name}
+                          </span>
                         </div>
                       </td>
 
                       {/* Work Schedule Badge */}
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="px-1.5 py-1 text-center border-r border-slate-200">
                         <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold border ${isMonFri
-                            ? 'bg-purple-50 text-purple-700 border-purple-200'
-                            : 'bg-blue-50 text-blue-700 border-blue-200'
-                            }`}
+                          className={`inline-block px-1.5 py-0.2 rounded text-[10px] font-bold border ${
+                            isMonFri
+                              ? 'bg-purple-50 text-purple-700 border-purple-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                          }`}
                         >
-                          {isMonFri ? 'Mon–Fri' : 'Mon–Sat'}
+                          {isMonFri ? 'M–F' : 'M–S'}
                         </span>
                       </td>
 
                       {/* Daily Rate with Edit Button */}
-                      <td className="px-4 py-3.5 text-right">
+                      <td className="px-2.5 py-1 text-right font-mono text-xs text-slate-800 border-r border-slate-200">
                         <button
                           onClick={() => {
                             setRateTarget({
@@ -646,30 +675,28 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                             setNewScheduleType(isMonFri ? 'mon_fri' : 'mon_sat')
                             setRateModalOpen(true)
                           }}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-blue-50 border border-slate-200 text-xs font-bold text-slate-700 hover:text-blue-700 transition-colors group"
-                          title="Click to edit compensation"
+                          className="hover:text-blue-600 hover:underline font-bold inline-flex items-center justify-end gap-1 w-full group"
+                          title="Click to edit daily rate"
                         >
                           <span>₱{emp.daily_rate.toFixed(2)}</span>
-                          <Edit2 className="w-3 h-3 text-slate-400 group-hover:text-blue-600" />
+                          <Edit2 className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-blue-500" />
                         </button>
                       </td>
 
                       {/* Days Worked */}
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-700">
-                          {emp.days_worked}d
-                        </span>
+                      <td className="px-2 py-1 text-center font-mono font-bold text-slate-700 text-xs border-r border-slate-200">
+                        {emp.days_worked}d
                       </td>
 
                       {/* Regular Pay */}
-                      <td className="px-4 py-3.5 text-right text-slate-800 font-semibold text-xs">
+                      <td className="px-2.5 py-1 text-right font-mono text-xs text-slate-800 font-semibold border-r border-slate-200">
                         {formatCurrency(emp.total_regular_pay)}
                       </td>
 
                       {/* Holiday Pay (DOLE Premium) */}
-                      <td className="px-4 py-3.5 text-right text-amber-700 font-semibold text-xs">
+                      <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
                         {emp.total_holiday_pay > 0 ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                          <span className="font-bold text-amber-700">
                             +{formatCurrency(emp.total_holiday_pay)}
                           </span>
                         ) : (
@@ -678,55 +705,58 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       </td>
 
                       {/* OT Pay */}
-                      <td className="px-4 py-3.5 text-right text-purple-700 font-semibold text-xs">
+                      <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
                         {emp.total_overtime_pay > 0 ? (
-                          <>
-                            {formatCurrency(emp.total_overtime_pay)}
-                            <p className="text-[10px] text-purple-400 font-mono">+{emp.total_overtime_hours.toFixed(1)}h</p>
-                          </>
+                          <div className="leading-tight">
+                            <span className="font-bold text-purple-700">
+                              +{formatCurrency(emp.total_overtime_pay)}
+                            </span>
+                            <span className="block text-[9px] text-purple-500">
+                              +{emp.total_overtime_hours.toFixed(1)}h
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
                       </td>
 
                       {/* Late Deduction */}
-                      <td className="px-4 py-3.5 text-right text-rose-600 font-semibold text-xs">
+                      <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
                         {emp.total_tardiness_deduction > 0 ? (
-                          <>
-                            -{formatCurrency(emp.total_tardiness_deduction)}
-                            <p className="text-[10px] text-rose-400 font-mono">{emp.total_tardiness_minutes}m</p>
-                          </>
+                          <div className="leading-tight">
+                            <span className="font-semibold text-rose-600">
+                              -{formatCurrency(emp.total_tardiness_deduction)}
+                            </span>
+                            <span className="block text-[9px] text-rose-400">
+                              {emp.total_tardiness_minutes}m
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-slate-300">—</span>
                         )}
                       </td>
 
                       {/* Gross Salary */}
-                      <td className="px-4 py-3.5 text-right">
-                        <span className="text-sm font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
-                          {formatCurrency(emp.gross_pay)}
-                        </span>
+                      <td className="px-2.5 py-1 text-right font-mono text-xs font-black text-emerald-700 bg-emerald-50/40 border-r border-slate-200">
+                        {formatCurrency(emp.gross_pay)}
                       </td>
 
                       {/* Payment Status Column */}
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="px-2 py-1 text-center border-r border-slate-200">
                         <button
                           onClick={() => openPaymentModal(emp)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl border text-xs font-bold transition-all hover:scale-105 active:scale-95"
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold transition-all hover:scale-105 active:scale-95"
                         >
                           {payment?.payment_status === 'paid' ? (
-                            <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                              Paid
+                            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded">
+                              ✓ Paid
                             </span>
                           ) : payment?.payment_status === 'partial' ? (
-                            <span className="inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg">
-                              <Banknote className="w-3.5 h-3.5 text-amber-600" />
-                              Half/Partial (₱{payment.amount_paid.toFixed(0)})
+                            <span className="text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded">
+                              Half (₱{payment.amount_paid.toFixed(0)})
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-0.5 rounded-lg">
-                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded">
                               Unpaid
                             </span>
                           )}
@@ -734,19 +764,49 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       </td>
 
                       {/* Action Breakdown */}
-                      <td className="px-4 py-3.5 text-center">
+                      <td className="px-2 py-1 text-center">
                         <button
                           onClick={() => setSelectedEmployee(emp)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-bold text-slate-700 transition-colors"
+                          className="px-2 py-0.5 rounded bg-slate-100 hover:bg-blue-100 text-[10px] font-bold text-slate-700 hover:text-blue-700 border border-slate-200 transition-colors"
                         >
                           View
-                          <ChevronRight className="w-3.5 h-3.5" />
                         </button>
                       </td>
                     </tr>
                   )
                 })}
               </tbody>
+              {/* Excel Spreadsheet Total Summary Row */}
+              <tfoot>
+                <tr className="bg-slate-100 text-slate-800 font-black text-xs border-t-2 border-slate-300">
+                  <td colSpan={2} className="px-2.5 py-1.5 text-left border-r border-slate-300 uppercase tracking-wider">
+                    Total ({filteredEmployees.length} Staff)
+                  </td>
+                  <td className="px-2 py-1.5 text-center border-r border-slate-300">—</td>
+                  <td className="px-2.5 py-1.5 text-right border-r border-slate-300">—</td>
+                  <td className="px-2 py-1.5 text-center font-mono border-r border-slate-300">
+                    {tableTotals.daysWorked}d
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right font-mono border-r border-slate-300">
+                    {formatCurrency(tableTotals.regularPay)}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right font-mono text-amber-800 bg-amber-50/60 border-r border-slate-300">
+                    {tableTotals.holidayPay > 0 ? `+${formatCurrency(tableTotals.holidayPay)}` : '₱0.00'}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300">
+                    {tableTotals.otPay > 0 ? `+${formatCurrency(tableTotals.otPay)}` : '₱0.00'}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300">
+                    {tableTotals.tardinessDed > 0 ? `-${formatCurrency(tableTotals.tardinessDed)}` : '₱0.00'}
+                  </td>
+                  <td className="px-2.5 py-1.5 text-right font-mono text-emerald-800 bg-emerald-100/70 border-r border-slate-300">
+                    {formatCurrency(tableTotals.grossPay)}
+                  </td>
+                  <td colSpan={2} className="px-2 py-1.5 text-center text-[10px] text-slate-400">
+                    DOLE STANDARDS
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         ) : (
