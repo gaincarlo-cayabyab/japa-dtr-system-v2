@@ -2451,43 +2451,46 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
 
       {/* Super Admin Edit Shift Modal */}
       {editModalOpen && editRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6 sm:p-7 space-y-5 animate-in fade-in zoom-in-95 my-8">
-            <div className="flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 border border-slate-200/80 my-auto">
+            {/* Fixed Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white flex-shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">Edit Shift / Attendance</h3>
-                  <p className="text-xs text-slate-400">Super Admin Attendance Management</p>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">Edit Shift / Attendance</h3>
+                  <p className="text-[11px] text-slate-400">Super Admin Attendance Management</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setEditModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl transition-colors"
+                className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-xl transition-colors"
+                title="Close modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Employee & Date Banner */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+            <div className="px-5 py-3 bg-blue-50/60 border-b border-blue-100/70 flex items-center justify-between flex-shrink-0">
               <div>
-                <p className="text-sm font-bold text-slate-900">{editRow.full_name}</p>
-                <p className="text-xs text-slate-400 font-mono mt-0.5">
+                <p className="text-xs sm:text-sm font-bold text-slate-900">{editRow.full_name}</p>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
                   ID: #{editRow.device_user_id} · Branch: {editRow.branch || 'JAPA Main'}
                 </p>
               </div>
               <div className="text-right">
-                <span className="text-xs font-black text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                <span className="text-xs font-black text-blue-700 bg-white px-2.5 py-1 rounded-lg border border-blue-200 shadow-2xs">
                   📅 {editRow.work_date}
                 </span>
               </div>
             </div>
 
-            <form onSubmit={handleSaveShift} className="space-y-4">
+            <form onSubmit={handleSaveShift} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
               {/* Attendance Status Selector */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-2">
@@ -2676,41 +2679,42 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       ? 'e.g. Medical certificate submitted, Severe cough and fever…'
                       : 'e.g. Manual override, biometric sensor failed, OT justification…'
                   }
-                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none leading-relaxed"
+                  className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none leading-relaxed"
                 />
               </div>
+            </div>
 
-              {/* Modal Action Buttons: Delete / Cancel / Save */}
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+            {/* Fixed Footer (Always visible at bottom) */}
+            <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between flex-shrink-0">
+              <button
+                type="button"
+                onClick={handleDeleteShift}
+                disabled={deletingShift || savingShift}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors disabled:opacity-50"
+                title="Delete all punches and records for this employee on this date"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deletingShift ? 'Deleting…' : 'Delete Shift'}
+              </button>
+
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleDeleteShift}
-                  disabled={deletingShift || savingShift}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors disabled:opacity-50"
-                  title="Delete all punches and records for this employee on this date"
+                  onClick={() => setEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-white transition-colors"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {deletingShift ? 'Deleting…' : 'Delete Shift'}
+                  Cancel
                 </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEditModalOpen(false)}
-                    className="px-4 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingShift || deletingShift}
-                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-95"
-                  >
-                    {savingShift ? 'Saving Changes…' : 'Save Changes'}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={savingShift || deletingShift}
+                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-95"
+                >
+                  {savingShift ? 'Saving Changes…' : 'Save Changes'}
+                </button>
               </div>
-            </form>
+            </div>
+          </form>
           </div>
         </div>
       )}

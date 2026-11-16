@@ -93,6 +93,31 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   // Display style: 'table' (default compact grid) | 'cards'
   const [displayMode, setDisplayMode] = useState<'table' | 'cards'>('table')
+  // Option to Turn OFF (waive) all late deductions across all staff
+  const [waiveDeductions, setWaiveDeductions] = useState<boolean>(false)
+
+  // Restore saved deductions toggle preference
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('japa_payroll_waive_deductions')
+      if (saved !== null) {
+        setWaiveDeductions(saved === 'true')
+      }
+    } catch {}
+  }, [])
+
+  const handleToggleDeductions = (waive: boolean) => {
+    setWaiveDeductions(waive)
+    try {
+      localStorage.setItem('japa_payroll_waive_deductions', String(waive))
+    } catch {}
+    setToast({
+      message: waive
+        ? '✨ Late deductions turned OFF (waived for all staff)!'
+        : 'Late deductions turned ON (standard payroll deduction applied).',
+      type: 'success',
+    })
+  }
 
   // State
   const [loading, setLoading] = useState(false)
@@ -216,10 +241,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     return { totalPaid, balanceUnpaid, fullyPaidCount, partialPaidCount }
   }, [payrollData, paymentsMap])
 
-  // Filtered employees
+  // Filtered employees (with on/off deduction toggle support)
   const filteredEmployees = useMemo(() => {
     if (!payrollData?.employees) return []
-    return payrollData.employees.filter((emp) => {
+    const rawList = payrollData.employees.filter((emp) => {
       if (searchQuery.trim() === '') return true
       const q = searchQuery.toLowerCase()
       return (
@@ -228,7 +253,23 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         (emp.position && emp.position.toLowerCase().includes(q))
       )
     })
-  }, [payrollData, searchQuery])
+
+    // If deductions are toggled OFF (waived), zero out tardiness deductions and compute gross pay in full
+    if (waiveDeductions) {
+      return rawList.map((emp) => ({
+        ...emp,
+        total_tardiness_deduction: 0,
+        gross_pay: Math.round((emp.total_regular_pay + emp.total_holiday_pay + emp.total_overtime_pay + emp.total_night_diff_pay) * 100) / 100,
+        records: emp.records.map((r) => ({
+          ...r,
+          tardiness_deduction: 0,
+          total_day_pay: Math.round((r.regular_pay + r.holiday_premium_pay + r.overtime_pay + r.night_diff_pay) * 100) / 100,
+        })),
+      }))
+    }
+
+    return rawList
+  }, [payrollData, searchQuery, waiveDeductions])
 
   // Split into Dagupan Main and Manila Branch, both sorted strictly A to Z by employee name
   const { dagupanEmployees, manilaEmployees } = useMemo(() => {
@@ -512,7 +553,18 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                     )}
                   </td>
                   <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
-                    {emp.total_tardiness_deduction > 0 ? (
+                    {waiveDeductions ? (
+                      <div className="leading-tight">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          ₱0.00 Waived
+                        </span>
+                        {emp.total_tardiness_minutes > 0 && (
+                          <span className="block text-[9px] text-slate-400">
+                            {emp.total_tardiness_minutes}m (waived)
+                          </span>
+                        )}
+                      </div>
+                    ) : emp.total_tardiness_deduction > 0 ? (
                       <div className="leading-tight">
                         <span className="font-semibold text-rose-600">
                           -{formatCurrency(emp.total_tardiness_deduction)}
@@ -705,12 +757,16 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                     <p className="text-[10px] text-purple-600">+{emp.total_overtime_hours.toFixed(1)}h OT</p>
                   </div>
 
-                  <div className="p-2.5 rounded-xl bg-rose-50/70 border border-rose-100">
-                    <p className="text-[10px] uppercase font-bold text-rose-700">Late Deduction</p>
-                    <p className="font-black text-rose-800 text-sm mt-0.5">
-                      {emp.total_tardiness_deduction > 0 ? `-${formatCurrency(emp.total_tardiness_deduction)}` : '₱0.00'}
+                  <div className={`p-2.5 rounded-xl border ${waiveDeductions ? 'bg-emerald-50/70 border-emerald-100' : 'bg-rose-50/70 border-rose-100'}`}>
+                    <p className={`text-[10px] uppercase font-bold ${waiveDeductions ? 'text-emerald-700' : 'text-rose-700'}`}>
+                      Late Deduction {waiveDeductions && '(Waived)'}
                     </p>
-                    <p className="text-[10px] text-rose-600">{emp.total_tardiness_minutes}m late</p>
+                    <p className={`font-black text-sm mt-0.5 ${waiveDeductions ? 'text-emerald-800' : 'text-rose-800'}`}>
+                      {waiveDeductions ? '₱0.00' : emp.total_tardiness_deduction > 0 ? `-${formatCurrency(emp.total_tardiness_deduction)}` : '₱0.00'}
+                    </p>
+                    <p className={`text-[10px] ${waiveDeductions ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {emp.total_tardiness_minutes}m {waiveDeductions ? 'waived' : 'late'}
+                    </p>
                   </div>
                 </div>
 
@@ -760,13 +816,14 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
-      {/* Toast Alert */}
+      {/* Toast Alert (Middle Top) */}
       {toast && (
         <div
-          className={`fixed bottom-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-semibold transition-all ${toast.type === 'success'
-            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-            : 'bg-rose-50 text-rose-800 border-rose-200'
-            }`}
+          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
+            toast.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-500/10'
+              : 'bg-rose-50 text-rose-800 border-rose-200 shadow-rose-500/10'
+          }`}
         >
           {toast.type === 'success' ? (
             <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -961,6 +1018,28 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             </select>
           )}
 
+          {/* Deductions ON/OFF Toggle */}
+          <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white shadow-2xs">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Deductions:</span>
+            <button
+              type="button"
+              onClick={() => handleToggleDeductions(!waiveDeductions)}
+              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
+                !waiveDeductions ? 'bg-rose-500' : 'bg-slate-300'
+              }`}
+              title={!waiveDeductions ? 'Click to Turn OFF all deductions (Waive late penalties)' : 'Click to Turn ON standard late deductions'}
+            >
+              <span
+                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform ${
+                  !waiveDeductions ? 'translate-x-5' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className={`text-xs font-black ${!waiveDeductions ? 'text-rose-600' : 'text-emerald-600'}`}>
+              {!waiveDeductions ? 'ON' : 'OFF (Waived)'}
+            </span>
+          </div>
+
           {/* Display Mode Toggle (Table default vs Cards) */}
           <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
             <button
@@ -994,6 +1073,25 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             Cutoff: {startDate} to {endDate}
           </span>
         </div>
+
+        {/* Waived Deductions Active Banner */}
+        {waiveDeductions && (
+          <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-b border-emerald-200 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-emerald-900">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span>
+                <strong>Late Deductions Turned OFF:</strong> All employee tardiness deductions are waived (<strong>₱0.00 deducted</strong>). Gross salaries are credited in full.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleToggleDeductions(false)}
+              className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 text-[11px] font-bold rounded-lg border border-emerald-300 transition-colors shadow-2xs"
+            >
+              Turn Deductions Back ON
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="py-24 flex flex-col items-center justify-center text-slate-400">
@@ -1047,7 +1145,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                 <span className="bg-slate-800 px-2.5 py-1 rounded-lg">Regular: <strong className="text-white">{formatCurrency(tableTotals.regularPay)}</strong></span>
                 <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-amber-300">Holiday: +{formatCurrency(tableTotals.holidayPay)}</span>
                 <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-purple-300">OT: +{formatCurrency(tableTotals.otPay)}</span>
-                <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-rose-300">Late: -{formatCurrency(tableTotals.tardinessDed)}</span>
+                {waiveDeductions ? (
+                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-emerald-300">Late: ₱0.00 (Waived)</span>
+                ) : (
+                  <span className="bg-slate-800 px-2.5 py-1 rounded-lg text-rose-300">Late: -{formatCurrency(tableTotals.tardinessDed)}</span>
+                )}
                 <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-lg text-sm font-black">
                   {formatCurrency(tableTotals.grossPay)}
                 </span>
