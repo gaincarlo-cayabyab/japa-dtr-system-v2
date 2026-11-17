@@ -65,8 +65,8 @@ def load_saved_ip() -> str:
                     return saved
         except Exception:
             pass
-    # 4. Default fallback
-    return '192.168.68.146'
+    # 4. Default fallback (New Wi-Fi TP-Link_D8AC)
+    return '192.168.0.58'
 
 def save_device_ip(ip: str) -> None:
     try:
