@@ -3,22 +3,14 @@
 import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import {
   Clock,
-  Radio,
   ShieldCheck,
-  LogOut,
   Sparkles,
-  Activity,
-  Layers,
-  HelpCircle,
   Bell,
   CheckCircle2,
-  XCircle,
-  AlertCircle,
   KeyRound,
-  ShieldAlert,
   ChevronDown,
   X,
 } from 'lucide-react'
@@ -36,7 +28,6 @@ interface ActiveGrant {
 
 export function AppHeader() {
   const pathname = usePathname()
-  const router = useRouter()
   const [currentUser, setCurrentUser] = useState<{
     displayName: string
     username: string
@@ -153,16 +144,6 @@ export function AppHeader() {
     return null
   }
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' })
-      router.push('/login')
-      router.refresh()
-    } catch {
-      router.push('/login')
-    }
-  }
-
   // Request 1-Hour Edit Access (JAPA Dee / JAPA Pearly)
   const handleRequestEditAccess = async () => {
     if (!currentUser || isSubmittingRequest) return
@@ -239,60 +220,22 @@ export function AppHeader() {
   return (
     <header className="sticky top-0 z-30 w-full bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-2.5 transition-all shadow-2xs">
       <div className="flex items-center justify-between gap-4 max-w-7xl mx-auto">
-        {/* Left: JAPA Brand & Official Logo */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="relative w-8 h-8 rounded-xl overflow-hidden border border-slate-200/80 shadow-xs flex-shrink-0 bg-white">
-              <Image
-                src="/japa-logo.jpg"
-                alt="JAPA Logo"
-                fill
-                className="object-contain p-0.5 group-hover:scale-105 transition-transform"
-                priority
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-sm font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 transition-colors">
-                  JAPA
-                </span>
-                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60 leading-none">
-                  Global Trading
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 font-medium leading-none mt-0.5">
-                DTR &amp; Biometric Management System
-              </p>
-            </div>
-          </Link>
-        </div>
-
-        {/* Center/Right: Live Clock, Edit Access Controls, Hardware Status */}
+        {/* Left Side: Live Manila Time Clock + Role-Specific Edit Controls */}
         <div className="flex items-center gap-2.5 sm:gap-3.5">
           {/* Manila Time Clock */}
           {currentTime && (
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-700">
-              <Clock className="w-3.5 h-3.5 text-indigo-600" />
-              <div className="text-right">
-                <p className="text-xs font-bold leading-none font-mono text-slate-800">{currentTime}</p>
-                <p className="text-[10px] font-medium text-slate-400 leading-none mt-0.5">{currentDate}</p>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/70 text-slate-700 shadow-2xs">
+              <Clock className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />
+              <div className="flex items-baseline gap-1.5 sm:gap-2">
+                <span className="text-xs font-bold font-mono text-slate-800 leading-none">{currentTime}</span>
+                <span className="hidden sm:inline text-slate-300 text-xs">·</span>
+                <span className="hidden sm:inline text-[11px] font-medium text-slate-500 leading-none">{currentDate}</span>
               </div>
             </div>
           )}
 
-          {/* TA500 Telemetry Pill */}
-          <Link
-            href="/sync"
-            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold hover:bg-emerald-100 transition-colors shadow-2xs"
-            title="TA500 Biometric Hardware Status"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="hidden sm:inline">TA500 Online</span>
-            <span className="font-mono text-[11px] text-emerald-700 font-semibold">(192.168.0.58)</span>
-          </Link>
-
           {/* ── 1-HOUR EDIT ACCESS CONTROLS ───────────────────────────────── */}
-          {/* 1. For IT Admin & JAPA Manager: Pending Approval Bell & Panel */}
+          {/* For IT Administrator: Pending Approval Bell & Panel */}
           {canApprove && (
             <div className="relative" ref={modalRef}>
               <button
@@ -316,7 +259,7 @@ export function AppHeader() {
 
               {/* Approval Modal Dropdown */}
               {showApprovalModal && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute left-0 mt-2 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-slate-200 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                       <KeyRound className="w-4 h-4 text-indigo-600" />
@@ -406,7 +349,7 @@ export function AppHeader() {
             </div>
           )}
 
-          {/* 2. For JAPA Dee / JAPA Pearly: Request or Active Status Pill */}
+          {/* For JAPA Dee / JAPA Pearly: Request or Active Status Pill */}
           {isDeeOrPearly && (
             <div>
               {isMyGrantActive ? (
@@ -439,27 +382,34 @@ export function AppHeader() {
               )}
             </div>
           )}
+        </div>
 
-          {/* User Session Profile & Logout */}
-          {currentUser && (
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-              <div className="hidden lg:block text-right">
-                <p className="text-xs font-bold text-slate-800 leading-tight">
-                  {currentUser.displayName}
-                </p>
-                <p className="text-[10px] font-semibold text-indigo-600 leading-none mt-0.5">
-                  {currentUser.role === 'super_admin' ? 'IT Administrator' : currentUser.role.toUpperCase()}
-                </p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                title="Log Out"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+        {/* Right Side: JAPA Brand & Official Logo */}
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <div className="relative w-8 h-8 rounded-xl overflow-hidden border border-slate-200/80 shadow-xs flex-shrink-0 bg-white">
+              <Image
+                src="/japa-logo.jpg"
+                alt="JAPA Logo"
+                fill
+                className="object-contain p-0.5 group-hover:scale-105 transition-transform"
+                priority
+              />
             </div>
-          )}
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-sm font-black text-slate-900 tracking-tight leading-none group-hover:text-blue-600 transition-colors">
+                  JAPA
+                </span>
+                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200/60 leading-none">
+                  Global Trading
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium leading-none mt-0.5">
+                DTR &amp; Biometric Management System
+              </p>
+            </div>
+          </Link>
         </div>
       </div>
 

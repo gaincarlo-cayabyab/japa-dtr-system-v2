@@ -248,7 +248,7 @@ export function DashboardClient({
             </div>
           </div>
           <p className="text-slate-500 text-xs md:text-sm">
-            Live workforce analytics · Shift performance · Biometric hardware telemetry · {format(new Date(), 'EEEE, MMMM d, yyyy')}
+            Live workforce analytics · Shift performance · Biometric hardware telemetry
           </p>
         </div>
 
