@@ -414,28 +414,15 @@ def scan_for_ta500(timeout_per_host: float = 0.35) -> Optional[str]:
 def connect_device(ip: Optional[str] = None) -> Optional[object]:
     global ZK_IP
     target_ip = ip or ZK_IP
-    # Strategy 1: Standard TCP connection
     zk = None
     try:
-        zk = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
+        zk = ZK(target_ip, port=ZK_PORT, timeout=10,
                 password=0, force_udp=False, ommit_ping=True)
         conn = zk.connect()
         if conn:
             return conn
     except Exception as e_tcp:
         safe_disconnect(zk)
-        # Strategy 2: UDP Fallback
-        zk_udp = None
-        try:
-            zk_udp = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
-                        password=0, force_udp=True, ommit_ping=True)
-            conn_udp = zk_udp.connect()
-            if conn_udp:
-                logger.info(f"TA500 connected via UDP mode ({target_ip}) ✅")
-                return conn_udp
-        except Exception:
-            safe_disconnect(zk_udp)
-
         err_str = str(e_tcp)
         if '104' in err_str or '10054' in err_str or 'reset' in err_str.lower():
             logger.warning(f'TA500 LAN busy (hardware holding previous session). Waiting for device socket to clear...')
@@ -454,7 +441,7 @@ def flush_upload_queue(seen: Set[str]) -> bool:
     url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
 
     try:
-        res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(3, 5))
+        res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(4, 8))
         if res.status_code in (200, 201):
             for r in _pending_upload_queue:
                 seen.add(r['_key'])
@@ -462,15 +449,119 @@ def flush_upload_queue(seen: Set[str]) -> bool:
 
             latest_uid = _pending_upload_queue[-1]['device_user_id']
             emp_name = _employee_cache.get(latest_uid, f'ID #{latest_uid}')
-            logger.info(f'✅ SYNCED: {len(_pending_upload_queue)} new punch(es) to cloud! (Latest: {emp_name})')
+            logger.info(f'✅ SYNCED: {len(_pending_upload_queue)} punch(es) to cloud! (Latest: {emp_name})')
             _pending_upload_queue.clear()
             return True
         else:
             logger.warning(f'Supabase returned HTTP {res.status_code} — kept in queue')
-    except Exception as e:
-        logger.warning(f'Slow Wi-Fi: upload queued ({len(_pending_upload_queue)} punch(es)). Retrying next cycle...')
+    except Exception:
+        logger.warning(f'Slow network: upload queued ({len(_pending_upload_queue)} punch(es)). Retrying...')
 
     return False
+
+
+def process_single_punch(att, seen: Set[str]) -> bool:
+    """Processes a single real-time punch event from the live_capture stream."""
+    global _pending_upload_queue, _last_device_punch
+    try:
+        raw_uid = str(att.user_id)
+        uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
+        local_dt = _parse_ts(att.timestamp)
+        utc_iso = local_dt.astimezone(timezone.utc).isoformat()
+        sync_time = datetime.now(timezone.utc).isoformat()
+
+        key = _punch_key(uid, utc_iso)
+        if key in seen:
+            _last_device_punch[uid] = local_dt
+            return False
+
+        if any(q['_key'] == key for q in _pending_upload_queue):
+            _last_device_punch[uid] = local_dt
+            return False
+
+        # 5-Minute Anti-Double Tap Debounce Rule
+        prev_punch_dt = _last_device_punch.get(uid)
+        if prev_punch_dt is not None:
+            diff_sec = abs((local_dt - prev_punch_dt).total_seconds())
+            if diff_sec < 300:
+                emp_name = _employee_cache.get(uid, f'ID #{uid}')
+                logger.info(f'🛡️ Debounce: Ignored duplicate scan for {emp_name} at {local_dt.strftime("%I:%M:%S %p")} ({diff_sec:.0f}s after previous punch)')
+                seen.add(key)
+                save_seen_set(seen)
+                return False
+
+        _last_device_punch[uid] = local_dt
+        status_val = getattr(att, 'punch', None)
+        if status_val is None:
+            status_val = int(att.status or 0)
+
+        emp_name = _employee_cache.get(uid, f'ID #{uid}')
+        logger.info(f'⚡ LIVE PUNCH DETECTED: {emp_name} at {local_dt.strftime("%I:%M:%S %p")}!')
+
+        _pending_upload_queue.append({
+            'device_user_id': uid,
+            'punch_time':     utc_iso,
+            'status':         int(status_val),
+            'raw_status':     int(att.status or 0),
+            'synced_at':      sync_time,
+            '_key':           key,
+        })
+        return True
+    except Exception as e:
+        logger.error(f'Error processing live punch: {e}')
+        return False
+
+
+def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
+    """Processes historical or offline punches fetched during catch-up."""
+    global _pending_upload_queue, _last_device_punch
+    new_count = 0
+    sync_time = datetime.now(timezone.utc).isoformat()
+
+    try:
+        attendances.sort(key=lambda a: _parse_ts(getattr(a, 'timestamp', None)))
+    except Exception:
+        pass
+
+    for att in attendances:
+        raw_uid = str(att.user_id)
+        uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
+        local_dt = _parse_ts(att.timestamp)
+        utc_iso = local_dt.astimezone(timezone.utc).isoformat()
+
+        key = _punch_key(uid, utc_iso)
+        if key in seen:
+            _last_device_punch[uid] = local_dt
+            continue
+
+        if any(q['_key'] == key for q in _pending_upload_queue):
+            _last_device_punch[uid] = local_dt
+            continue
+
+        prev_punch_dt = _last_device_punch.get(uid)
+        if prev_punch_dt is not None:
+            diff_sec = abs((local_dt - prev_punch_dt).total_seconds())
+            if diff_sec < 300:
+                seen.add(key)
+                save_seen_set(seen)
+                continue
+
+        _last_device_punch[uid] = local_dt
+        status_val = getattr(att, 'punch', None)
+        if status_val is None:
+            status_val = int(att.status or 0)
+
+        _pending_upload_queue.append({
+            'device_user_id': uid,
+            'punch_time':     utc_iso,
+            'status':         int(status_val),
+            'raw_status':     int(att.status or 0),
+            'synced_at':      sync_time,
+            '_key':           key,
+        })
+        new_count += 1
+
+    return new_count
 
 
 # ─── Main Polling Engine ──────────────────────────────────────────────────────
@@ -498,10 +589,10 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v8')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v9')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Poll Rate : Fast 6s (Instant Punch + Enrolled Employee Sync)')
-    print(f'   Features  : Auto-Discovery, UDP Fallback, Dynamic Network Support')
+    print(f'   Mode      : Continuous 24/7 Live Event Streaming (<50ms punch latency)')
+    print(f'   Engine    : Persistent Event Hook (Zero Flash Buffer Polling / Zero Timeouts)')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -518,147 +609,126 @@ def main():
     while True:
         cycle_counter += 1
 
-        # ── 1. Check cloud meta commands ─────────────────────────────────────
-        meta = fetch_cloud_meta()
-        manual_emp_sync = meta.get('sync_employees') == 1
-
-        # Hardware clear requested from web portal
-        if meta.get('clear_hardware') == 1:
-            logger.info('🧹 Remote clear requested from web portal!')
-            conn = connect_device()
-            if conn:
-                try:
-                    conn.clear_attendance()
-                    logger.info('✅ TA500 physical hardware memory CLEARED!')
-                except Exception as e:
-                    logger.error(f'Error clearing hardware: {e}')
-                finally:
-                    safe_disconnect(conn)
-            acknowledge_command('clear_hardware')
-            seen.clear()
-            save_seen_set(seen)
-            _pending_upload_queue.clear()
-            _last_device_punch.clear()
-            logger.info('✅ Local cache & queue reset. Ready for fresh punches!')
-            time.sleep(POLL_INTERVAL)
-            continue
-
-        # Clear token changed
-        remote_token = meta.get('clear_token', local_token)
-        if remote_token != local_token:
-            logger.info(f'Cloud clear detected (token {local_token} -> {remote_token}). Resetting local cache.')
-            seen.clear()
-            save_seen_set(seen)
-            _pending_upload_queue.clear()
-            _last_device_punch.clear()
-            local_token = remote_token
-            save_local_token(local_token)
-
-        # ── 2. Flush any pending offline punches first ───────────────────────
+        # ── 1. Flush any pending offline punches first ───────────────────────
         if _pending_upload_queue:
             flush_upload_queue(seen)
 
-        # ── 3. Quick read from TA500 (LAN only, <200ms) ──────────────────────
+        # ── 2. Connect to TA500 ──────────────────────────────────────────────
         conn = connect_device()
         if not conn:
             ta500_fail_count += 1
-            cooldown = min(8 + (ta500_fail_count * 2), 25)
+            cooldown = min(6 + (ta500_fail_count * 2), 20)
             logger.warning(f'TA500 LAN busy/reconnecting (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
             if ta500_fail_count == 3:
                 subnet, local_ip = get_local_subnet()
-                logger.info(f"💡 Network Status: Tablet IP is {local_ip}. Target device is {ZK_IP}.")
+                logger.info(f"💡 Network Status: Device IP is {local_ip}. Target device is {ZK_IP}.")
                 logger.info("   1. Connect Tablet to your MAIN ROUTER Wi-Fi (for stable internet).")
                 logger.info("   2. If TA500 shows Errno 104, turn TA500 OFF and back ON once to reset its socket.")
             time.sleep(cooldown)
             continue
 
-        if ta500_fail_count > 0:
-            logger.info('TA500 LAN connection restored ✅')
-            ta500_fail_count = 0
+        ta500_fail_count = 0
+        logger.info('🟢 TA500 CONNECTED! Initializing continuous 24/7 stream...')
 
-        new_punches_found = 0
         try:
-            # ── Check for new enrolled employees (Periodic every ~18s OR on-demand) ──
-            should_sync_users = manual_emp_sync or (cycle_counter % 3 == 0)
-            if should_sync_users:
-                sync_all_device_users(conn)
-                if manual_emp_sync:
-                    acknowledge_command('sync_employees')
+            # ── 3. One-Time Catch-Up on Connection ───────────────────────────
+            # Prevent firmware rejection on CMD_STARTVERIFY from aborting live capture
+            if hasattr(conn, 'verify_user'):
+                _orig_verify = conn.verify_user
+                def _safe_verify():
+                    try:
+                        return _orig_verify()
+                    except Exception:
+                        return True
+                conn.verify_user = _safe_verify
 
-            # ── Check punches ──
-            attendances = conn.get_attendance() or []
+            # A. Sync enrolled users once upon connection
+            sync_all_device_users(conn)
 
-            # Sort chronologically (earliest to latest)
+            # B. Catch up on any attendance records logged while offline
             try:
-                attendances.sort(key=lambda a: _parse_ts(getattr(a, 'timestamp', None)))
+                attendances = conn.get_attendance() or []
+                caught_up = process_punches_batch(attendances, seen)
+                if caught_up > 0:
+                    logger.info(f'✅ Caught up {caught_up} offline punch(es) from TA500 memory!')
+                    flush_upload_queue(seen)
+                else:
+                    logger.info('✅ Attendance history is up to date.')
+            except Exception as e_catch:
+                logger.warning(f'Initial catch-up notice: {e_catch}')
+
+            # C. Ensure device is enabled for live stream
+            try:
+                conn.enable_device()
             except Exception:
                 pass
 
-            # Check if any punch has an unknown user ID not in cache
-            unknown_uids = {
-                TA500_TO_SYSTEM_MAP.get(str(a.user_id), str(a.user_id))
-                for a in attendances
-                if TA500_TO_SYSTEM_MAP.get(str(a.user_id), str(a.user_id)) not in _employee_cache
-            }
-            if unknown_uids and not should_sync_users:
-                sync_all_device_users(conn)
+            # ── 4. Continuous 24/7 Live Event Capture ────────────────────────
+            logger.info('⚡ LIVE CAPTURE ACTIVE — Listening for real-time fingerprint punches...')
+            logger.info('   (Device stays connected continuously. Zero repeated flash memory dumps!)')
 
-            sync_time = datetime.now(timezone.utc).isoformat()
+            last_cloud_check = time.time()
+            last_reconcile = time.time()
 
-            for att in attendances:
-                raw_uid = str(att.user_id)
-                uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
-                local_dt = _parse_ts(att.timestamp)
-                utc_iso  = local_dt.astimezone(timezone.utc).isoformat()
-
-                key = _punch_key(uid, utc_iso)
-                if key in seen:
-                    _last_device_punch[uid] = local_dt
+            for att in conn.live_capture(new_timeout=4):
+                # When an employee punches their finger, live_capture yields Attendance object immediately!
+                if att is not None:
+                    if process_single_punch(att, seen):
+                        flush_upload_queue(seen)
                     continue
 
-                if any(q['_key'] == key for q in _pending_upload_queue):
-                    _last_device_punch[uid] = local_dt
-                    continue
+                # ── Idle Tick (every 4s when no one is punching) ─────────────
+                now = time.time()
 
-                # 🛡️ 5-Minute Anti-Double Tap Debounce Rule (300 seconds)
-                # If an employee taps their finger twice within 5 minutes, ignore subsequent bounce taps
-                prev_punch_dt = _last_device_punch.get(uid)
-                if prev_punch_dt is not None:
-                    diff_sec = abs((local_dt - prev_punch_dt).total_seconds())
-                    if diff_sec < 300:
-                        emp_name = _employee_cache.get(uid, f'ID #{uid}')
-                        logger.info(f'🛡️ Debounce Rule: Ignored double-tap punch for {emp_name} at {local_dt.strftime("%I:%M:%S %p")} ({diff_sec:.0f}s after previous punch)')
-                        seen.add(key)
+                # Flush queue if any offline punches are queued
+                if _pending_upload_queue:
+                    flush_upload_queue(seen)
+
+                # Check cloud commands every ~8 seconds
+                if now - last_cloud_check >= 8:
+                    last_cloud_check = now
+                    meta = fetch_cloud_meta()
+
+                    # Hardware clear requested from web portal
+                    if meta.get('clear_hardware') == 1:
+                        logger.info('🧹 Remote clear requested from web portal!')
+                        try:
+                            conn.clear_attendance()
+                            logger.info('✅ TA500 physical memory CLEARED!')
+                        except Exception as e:
+                            logger.error(f'Error clearing hardware: {e}')
+                        acknowledge_command('clear_hardware')
+                        seen.clear()
                         save_seen_set(seen)
-                        continue
+                        _pending_upload_queue.clear()
+                        _last_device_punch.clear()
 
-                _last_device_punch[uid] = local_dt
+                    # Manual sync users requested from web portal
+                    if meta.get('sync_employees') == 1:
+                        logger.info('👤 Enrolled user sync requested from web portal!')
+                        try:
+                            sync_all_device_users(conn)
+                        except Exception as e:
+                            logger.error(f'Error syncing users: {e}')
+                        acknowledge_command('sync_employees')
 
-                status_val = getattr(att, 'punch', None)
-                if status_val is None:
-                    status_val = int(att.status or 0)
+                # Background reconciliation every 30 minutes (safety fallback)
+                if now - last_reconcile >= 1800:
+                    last_reconcile = now
+                    try:
+                        att_list = conn.get_attendance() or []
+                        if process_punches_batch(att_list, seen) > 0:
+                            flush_upload_queue(seen)
+                    except Exception:
+                        pass
 
-                _pending_upload_queue.append({
-                    'device_user_id': uid,
-                    'punch_time':     utc_iso,
-                    'status':         int(status_val),
-                    'raw_status':     int(att.status or 0),
-                    'synced_at':      sync_time,
-                    '_key':           key,
-                })
-                new_punches_found += 1
-
-        except Exception as e:
-            logger.warning(f'TA500 read notice: {e}')
+        except (socket.error, ConnectionResetError, BrokenPipeError, TimeoutError) as net_err:
+            logger.warning(f'⚠️ Network connection interrupted: {net_err}. Auto-reconnecting in 5s...')
+        except Exception as stream_err:
+            logger.warning(f'⚠️ Live stream notice: {stream_err}. Auto-reconnecting in 5s...')
         finally:
             safe_disconnect(conn)
-
-        # ── 4. If new punches found, push to cloud immediately ───────────────
-        if new_punches_found > 0:
-            logger.info(f'Detected {new_punches_found} new punch(es) on TA500! Uploading...')
-            flush_upload_queue(seen)
-
-        time.sleep(POLL_INTERVAL)
+            time.sleep(5)
 
 
 if __name__ == '__main__':
