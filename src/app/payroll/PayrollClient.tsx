@@ -497,8 +497,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               <th className="px-2 py-1.5 text-center border-r border-slate-300 w-14">Days</th>
               <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 min-w-[95px] whitespace-nowrap">Regular Pay</th>
               <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 min-w-[95px] whitespace-nowrap text-amber-800 bg-amber-50/50">Holiday Pay</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 min-w-[95px] whitespace-nowrap text-purple-800">OT Pay</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 min-w-[110px] whitespace-nowrap text-rose-800">Late Ded.</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 min-w-[115px] whitespace-nowrap text-purple-800">OT Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 min-w-[115px] whitespace-nowrap text-rose-800">Late Ded.</th>
               <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 min-w-[115px] whitespace-nowrap font-black text-slate-900 bg-emerald-50/50">Gross Salary</th>
               <th className="px-2.5 py-1.5 text-center border-r border-slate-300 w-28">Payment</th>
               <th className="px-2 py-1.5 text-center w-16">Action</th>
@@ -576,13 +576,13 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
+                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200 whitespace-nowrap min-w-[115px]">
                     {emp.total_overtime_pay > 0 ? (
-                      <div className="leading-tight">
-                        <span className="font-bold text-purple-700">
+                      <div className="leading-tight whitespace-nowrap">
+                        <span className="font-bold text-purple-700 whitespace-nowrap">
                           +{formatCurrency(emp.total_overtime_pay)}
                         </span>
-                        <span className="block text-[9px] text-purple-500">
+                        <span className="block text-[9px] text-purple-500 whitespace-nowrap">
                           +{emp.total_overtime_hours.toFixed(1)}h
                         </span>
                       </div>
@@ -590,7 +590,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200 whitespace-nowrap min-w-[110px]">
+                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200 whitespace-nowrap min-w-[115px]">
                     {waiveDeductions ? (
                       <div className="leading-tight whitespace-nowrap">
                         <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
@@ -666,10 +666,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               <td className="px-2.5 py-1.5 text-right font-mono text-amber-800 bg-amber-50/60 border-r border-slate-300 whitespace-nowrap min-w-[95px]">
                 {subTotals.holidayPay > 0 ? `+${formatCurrency(subTotals.holidayPay)}` : '₱0.00'}
               </td>
-              <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300 whitespace-nowrap min-w-[95px]">
+              <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300 whitespace-nowrap min-w-[115px]">
                 {subTotals.otPay > 0 ? `+${formatCurrency(subTotals.otPay)}` : '₱0.00'}
               </td>
-              <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300 whitespace-nowrap min-w-[110px]">
+              <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300 whitespace-nowrap min-w-[115px]">
                 {subTotals.tardinessDed > 0 ? `-${formatCurrency(subTotals.tardinessDed)}` : '₱0.00'}
               </td>
               <td className="px-2.5 py-1.5 text-right font-mono text-emerald-800 bg-emerald-100/70 border-r border-slate-300 whitespace-nowrap min-w-[115px]">
