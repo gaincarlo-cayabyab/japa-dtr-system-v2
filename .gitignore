@@ -20,6 +20,13 @@ __pycache__/
 *.log
 venv/
 .venv/
+seen_punches.json
+sync_token.json
+ta500_ip.txt
+public/ta500_ip.txt
+public/seen_punches.json
+public/sync_token.json
+public/bridge.log
 
 # macOS
 .DS_Store
