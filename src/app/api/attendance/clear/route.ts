@@ -1,23 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { verifySessionToken } from '@/lib/auth'
+import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
 
 export async function DELETE(request: NextRequest) {
   try {
-    // Security check: Only IT Administrator (super_admin) can clear logs
-    const cookieStore = cookies()
-    const token = cookieStore.get('japa_session')?.value
+    const supabase = await createClient()
+    const token = request.cookies.get('japa_session')?.value
     const session = token ? verifySessionToken(token) : null
 
-    if (!session || session.role !== 'super_admin') {
+    const authCheck = await checkUserCanEdit(session, supabase)
+    if (!authCheck.canEdit) {
       return NextResponse.json(
-        { error: 'Forbidden: Only IT Administrator (Super Admin) has authorization to clear attendance logs.' },
+        { error: authCheck.reason || 'Forbidden: Only IT Administrator or approved 1-Hour Editors can clear attendance logs.' },
         { status: 403 }
       )
     }
-
-    const supabase = await createClient()
 
     // Parse body for selective clearing options
     let body: { mode?: string; date?: string; device_user_id?: string } = {}

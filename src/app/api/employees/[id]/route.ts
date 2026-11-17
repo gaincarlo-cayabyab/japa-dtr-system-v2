@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
 
 interface RouteContext {
   params: { id: string }
@@ -7,6 +8,17 @@ interface RouteContext {
 
 export async function PUT(request: NextRequest, { params }: RouteContext) {
   const supabase = await createClient()
+  const token = request.cookies.get('japa_session')?.value
+  const session = token ? verifySessionToken(token) : null
+
+  const authCheck = await checkUserCanEdit(session, supabase)
+  if (!authCheck.canEdit) {
+    return NextResponse.json(
+      { error: authCheck.reason || 'Forbidden: 1-Hour Edit Access approval from IT Administrator required to edit employees.' },
+      { status: 403 }
+    )
+  }
+
   const { id } = params
   const body = await request.json()
 
@@ -24,8 +36,19 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
   return NextResponse.json({ data })
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteContext) {
+export async function DELETE(request: NextRequest, { params }: RouteContext) {
   const supabase = await createClient()
+  const token = request.cookies.get('japa_session')?.value
+  const session = token ? verifySessionToken(token) : null
+
+  const authCheck = await checkUserCanEdit(session, supabase)
+  if (!authCheck.canEdit) {
+    return NextResponse.json(
+      { error: authCheck.reason || 'Forbidden: 1-Hour Edit Access approval from IT Administrator required to delete employees.' },
+      { status: 403 }
+    )
+  }
+
   const { id } = params
 
   // Get employee's device_user_id first

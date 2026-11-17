@@ -65,3 +65,43 @@ export function verifySessionToken(token: string): UserSession | null {
   }
 }
 
+/**
+ * Checks if a session has active Add/Edit/Delete permissions:
+ * - IT Administrator (super_admin / admin username): Permanent full access
+ * - JAPA Dee (japa_dee) / JAPA Pearly (japa_pearly): Temporary 1-hour access if granted by IT Super Admin
+ */
+export async function checkUserCanEdit(
+  session: UserSession | null,
+  supabase: any
+): Promise<{ canEdit: boolean; remainingSec?: number; reason?: string }> {
+  if (!session) {
+    return { canEdit: false, reason: 'Unauthorized: Session missing or invalid.' }
+  }
+
+  // Super admin always has full privileges
+  if (session.role === 'super_admin' || session.username === 'admin') {
+    return { canEdit: true }
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000)
+  try {
+    const { data } = await supabase
+      .from('sync_meta')
+      .select('value')
+      .eq('key', `edit_grant_${session.username}`)
+      .maybeSingle()
+
+    const grantExpiry = data?.value ? Number(data.value) : 0
+    if (grantExpiry > nowSec) {
+      return { canEdit: true, remainingSec: grantExpiry - nowSec }
+    }
+  } catch (err) {
+    console.error('Failed to check edit grant:', err)
+  }
+
+  return {
+    canEdit: false,
+    reason: 'Forbidden: 1-Hour Edit Access approval from IT Administrator is required.',
+  }
+}
+

@@ -18,6 +18,7 @@ import {
   DollarSign,
   X,
   Sparkles,
+  ShieldCheck,
 } from 'lucide-react'
 
 export type EmployeeWithRate = Employee & {
@@ -81,6 +82,55 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'mon_sat' | 'mon_fri'>('all')
+
+  // Auth & 1-Hour Temporary Edit Access
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
+  const [hasEditGrant, setHasEditGrant] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.authenticated && d.user) setCurrentUser(d.user)
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const checkGrant = async () => {
+      try {
+        const res = await fetch('/api/auth/edit-access')
+        if (res.ok) {
+          const data = await res.json()
+          if (currentUser?.username && data.activeGrants?.[currentUser.username]?.active) {
+            setHasEditGrant(true)
+          } else {
+            setHasEditGrant(false)
+          }
+        }
+      } catch {}
+    }
+
+    checkGrant()
+    const onAccessChanged = (e: any) => {
+      const grants = e.detail?.activeGrants
+      if (currentUser?.username && grants?.[currentUser.username]?.active) {
+        setHasEditGrant(true)
+      } else {
+        setHasEditGrant(false)
+      }
+    }
+    window.addEventListener('japa_edit_access_changed', onAccessChanged)
+    const interval = setInterval(checkGrant, 10000)
+    return () => {
+      window.removeEventListener('japa_edit_access_changed', onAccessChanged)
+      clearInterval(interval)
+    }
+  }, [currentUser])
+
+  const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
+  const canAddEditDelete = isSuperAdmin || hasEditGrant
+  const isDeeOrPearly = currentUser?.username === 'japa_dee' || currentUser?.username === 'japa_pearly'
 
   useEffect(() => {
     if (!toast) return
@@ -373,13 +423,30 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
             </button>
           </div>
 
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Add Employee
-          </button>
+          {canAddEditDelete ? (
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              Add Employee
+            </button>
+          ) : isDeeOrPearly ? (
+            <button
+              onClick={async () => {
+                await fetch('/api/auth/edit-access', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'request', targetUsername: currentUser?.username }),
+                })
+                setToast({ message: '1-Hour Edit Access request submitted to IT Administrator!', type: 'success' })
+              }}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all shadow-2xs"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Request Edit Access
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -483,39 +550,43 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
 
                       {/* Actions */}
                       <td className="px-5 py-3.5 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            onClick={() => openEdit(emp)}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                            title="Edit Employee"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          {deleteConfirm === emp.id ? (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleDelete(emp.id)}
-                                className="px-2 py-1 text-xs bg-rose-600 text-white rounded-lg font-bold"
-                              >
-                                Delete
-                              </button>
-                              <button
-                                onClick={() => setDeleteConfirm(null)}
-                                className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded-lg"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ) : (
+                        {canAddEditDelete ? (
+                          <div className="flex items-center justify-center gap-1.5">
                             <button
-                              onClick={() => setDeleteConfirm(emp.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                              title="Delete Employee"
+                              onClick={() => openEdit(emp)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                              title="Edit Employee"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              <Edit2 className="w-4 h-4" />
                             </button>
-                          )}
-                        </div>
+                            {deleteConfirm === emp.id ? (
+                              <div className="flex items-center gap-1">
+                                <button
+                                  onClick={() => handleDelete(emp.id)}
+                                  className="px-2 py-1 text-xs bg-rose-600 text-white rounded-lg font-bold"
+                                >
+                                  Delete
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirm(null)}
+                                  className="px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 rounded-lg"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setDeleteConfirm(emp.id)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Delete Employee"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 text-xs" title="1-Hour Edit Access required to edit/delete staff">—</span>
+                        )}
                       </td>
                     </tr>
                   )

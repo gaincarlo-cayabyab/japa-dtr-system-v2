@@ -24,6 +24,7 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
+  ShieldCheck,
 } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -114,6 +115,8 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
 
   // Current User & Super Admin check
   const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
+  const [hasEditGrant, setHasEditGrant] = useState(false)
+
   useEffect(() => {
     fetch('/api/auth/me')
       .then((r) => r.json())
@@ -122,7 +125,43 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       })
       .catch(() => {})
   }, [])
-  const isSuperAdmin = currentUser?.role === 'super_admin'
+
+  // Listen for temporary 1-hour edit access changes
+  useEffect(() => {
+    const checkGrant = async () => {
+      try {
+        const res = await fetch('/api/auth/edit-access')
+        if (res.ok) {
+          const data = await res.json()
+          if (currentUser?.username && data.activeGrants?.[currentUser.username]?.active) {
+            setHasEditGrant(true)
+          } else {
+            setHasEditGrant(false)
+          }
+        }
+      } catch {}
+    }
+
+    checkGrant()
+    const onAccessChanged = (e: any) => {
+      const grants = e.detail?.activeGrants
+      if (currentUser?.username && grants?.[currentUser.username]?.active) {
+        setHasEditGrant(true)
+      } else {
+        setHasEditGrant(false)
+      }
+    }
+    window.addEventListener('japa_edit_access_changed', onAccessChanged)
+    const interval = setInterval(checkGrant, 10000)
+    return () => {
+      window.removeEventListener('japa_edit_access_changed', onAccessChanged)
+      clearInterval(interval)
+    }
+  }, [currentUser])
+
+  const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
+  const canAddEditDelete = isSuperAdmin || hasEditGrant
+  const isDeeOrPearly = currentUser?.username === 'japa_dee' || currentUser?.username === 'japa_pearly'
 
   // Smart Clear modal state
   const [showClearModal, setShowClearModal] = useState(false)
@@ -428,7 +467,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
         </div>
 
         <div className="flex items-center gap-2.5">
-          {isSuperAdmin && (
+          {canAddEditDelete ? (
             <button
               onClick={openAddModal}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95"
@@ -436,7 +475,23 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
               <Plus className="w-4 h-4" />
               Add Punch
             </button>
-          )}
+          ) : isDeeOrPearly ? (
+            <button
+              onClick={async () => {
+                await fetch('/api/auth/edit-access', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ action: 'request', targetUsername: currentUser?.username }),
+                })
+                showToast('1-Hour Edit Access request submitted to IT Administrator!')
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-700 hover:bg-indigo-100 transition-all shadow-2xs"
+              title="Request 1-Hour Add/Edit/Delete access"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Request Edit Access
+            </button>
+          ) : null}
 
           <span
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
@@ -447,11 +502,11 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
             {isLive ? 'Live Sync' : 'Connecting…'}
           </span>
 
-          {isSuperAdmin && (
+          {canAddEditDelete && (
             <button
               onClick={() => setShowClearModal(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition-colors shadow-2xs"
-              title="Clear all logs (Super Admin Only)"
+              title="Clear logs (Super Admin / Authorized Editor)"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Clear
@@ -643,7 +698,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        {isSuperAdmin ? (
+                        {canAddEditDelete ? (
                           <div className="inline-flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
                             <button
                               onClick={() => openEditModal(log)}
@@ -661,7 +716,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
                             </button>
                           </div>
                         ) : (
-                          <span className="text-slate-300 text-xs">—</span>
+                          <span className="text-slate-300 text-xs" title="1-Hour Edit Access required to edit/delete punches">—</span>
                         )}
                       </td>
                     </tr>

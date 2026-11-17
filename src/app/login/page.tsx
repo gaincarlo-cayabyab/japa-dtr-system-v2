@@ -6,9 +6,8 @@ import { useRouter } from 'next/navigation'
 import {
   ShieldCheck,
   Briefcase,
-  Receipt,
-  Package,
   Users,
+  Building2,
   ChevronRight,
   ChevronLeft,
   Volume2,
@@ -16,8 +15,7 @@ import {
   Delete,
   Lock,
   AlertCircle,
-  Keyboard,
-  Check,
+  Sparkles,
 } from 'lucide-react'
 
 interface RoleOption {
@@ -30,63 +28,51 @@ interface RoleOption {
   iconColor: string
   desc: string
   username: string
-  defaultPin?: string
 }
 
 const ROLES: RoleOption[] = [
   {
     id: 'admin',
-    title: 'Administrator',
-    badge: 'Full Access',
-    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+    title: 'IT Administrator',
+    badge: 'Super Admin',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     icon: ShieldCheck,
-    iconBg: 'bg-blue-50',
-    iconColor: 'text-blue-600',
-    desc: 'Full workspace governance, financials, payroll & configurations',
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-600',
+    desc: 'Full workspace governance, hardware bridge, permissions & all logs',
     username: 'admin',
   },
   {
-    id: 'store_manager',
-    title: 'Store Manager',
-    badge: 'Managerial',
-    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    id: 'japa_dee',
+    title: 'JAPA Dee',
+    badge: 'CEO / Executive',
+    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
     icon: Briefcase,
+    iconBg: 'bg-amber-50',
+    iconColor: 'text-amber-600',
+    desc: 'Executive business oversight, attendance review & performance reports',
+    username: 'japa_dee',
+  },
+  {
+    id: 'japa_manager',
+    title: 'JAPA Manager',
+    badge: 'General Manager',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    icon: Building2,
     iconBg: 'bg-purple-50',
     iconColor: 'text-purple-600',
-    desc: 'Order sign-offs, sales quotations, reports & branch workflow',
+    desc: 'Store operations, employee shifts, DTR compliance & schedules',
     username: 'japa_manager',
   },
   {
-    id: 'cashier',
-    title: 'Cashier POS',
-    badge: 'POS Ready',
-    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    icon: Receipt,
-    iconBg: 'bg-emerald-50',
-    iconColor: 'text-emerald-600',
-    desc: 'Direct access to retail sales terminal, barcode lookup & checkout',
-    username: 'japa_pearly',
-  },
-  {
-    id: 'inventory',
-    title: 'Inventory Officer',
-    badge: 'Stock Audit',
-    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
-    icon: Package,
-    iconBg: 'bg-amber-50',
-    iconColor: 'text-amber-600',
-    desc: 'Multi-store catalog, stock adjustments & reorder thresholds',
-    username: 'japa_pearly',
-  },
-  {
-    id: 'production',
-    title: 'Production Staff',
-    badge: 'Shop Floor',
-    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
+    id: 'japa_pearly',
+    title: 'JAPA Pearly',
+    badge: 'Office Staff',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
     icon: Users,
-    iconBg: 'bg-sky-50',
-    iconColor: 'text-sky-600',
-    desc: '7-stage customized printing, heat-press, cutting & job statuses',
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-600',
+    desc: 'Office administration, biometric punch logs & workforce records',
     username: 'japa_pearly',
   },
 ]
@@ -271,12 +257,12 @@ export default function LoginPage() {
   const RoleIcon = selectedRole.icon
 
   return (
-    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#f8fafc] overflow-x-hidden relative select-none">
-      {/* ── LEFT HALF: JAPA 3D Print Studio Animation ─────────────────────── */}
-      <div className="w-full lg:w-1/2 min-h-[580px] lg:min-h-screen relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
-        {/* Top-Left Floating Pill (Identical to Image 2) */}
-        <div className="absolute top-6 left-6 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80">
-          <div className="relative w-7 h-7 rounded-lg overflow-hidden border border-slate-200 shadow-2xs flex-shrink-0 bg-white">
+    <div className="h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-slate-900 select-none">
+      {/* ── LEFT HALF: JAPA 3D Print Studio Animation (Fit in 100vh) ───────── */}
+      <div className="w-full lg:w-1/2 h-full relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
+        {/* Top-Left Floating Pill */}
+        <div className="absolute top-4 left-4 sm:top-5 sm:left-5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/95 backdrop-blur-md shadow-xs border border-slate-200/80">
+          <div className="relative w-6 h-6 rounded-lg overflow-hidden border border-slate-200 shadow-2xs flex-shrink-0 bg-white">
             <Image
               src="/japa-logo.jpg"
               alt="JAPA Logo"
@@ -286,15 +272,15 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <p className="text-xs font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
-            <p className="text-[10px] font-medium text-slate-500 leading-none mt-0.5">
+            <p className="text-[11px] font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
+            <p className="text-[9px] font-medium text-slate-500 leading-none mt-0.5">
               Enterprise Operations Workspace
             </p>
           </div>
         </div>
 
-        {/* 3D WebGL Three.js Print Studio Interactive Canvas */}
-        <div className="w-full h-full min-h-[580px] lg:min-h-screen relative bg-transparent">
+        {/* 3D WebGL Three.js Print Studio Canvas */}
+        <div className="w-full h-full relative bg-transparent">
           <iframe
             src="/print-animation/index.html?embed=1"
             title="JAPA Global Trading printing and apparel 3D animation"
@@ -303,74 +289,95 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* Bottom-Left Pill (Identical to Image 2) */}
-        <div className="absolute bottom-6 left-6 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/85 backdrop-blur-md shadow-xs border border-slate-200/60 text-[11px] font-medium text-slate-600">
+        {/* Bottom-Left Pill */}
+        <div className="absolute bottom-4 left-4 z-20 hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/85 backdrop-blur-md shadow-xs border border-slate-200/60 text-[10px] font-medium text-slate-600">
           <span>© 2026 JAPA Global Trading</span>
         </div>
 
-        {/* Bottom-Right Pill (Identical to Image 2) */}
-        <div className="absolute bottom-6 right-6 z-20 hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/90 backdrop-blur-md shadow-xs border border-emerald-200/80 text-[11px] font-bold text-emerald-700">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        {/* Bottom-Right Pill */}
+        <div className="absolute bottom-4 right-4 z-20 hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/90 backdrop-blur-md shadow-xs border border-emerald-200/80 text-[10px] font-bold text-emerald-700">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           <span>Dagupan &amp; Manila Nodes</span>
         </div>
       </div>
 
-      {/* ── RIGHT HALF: Floating Auth Card on Dotted Pastel Background ─────── */}
+      {/* ── RIGHT HALF: Colorful Vibrant Mesh Gradient (Zero Scroll) ─────── */}
       <div
-        className="w-full lg:w-1/2 min-h-screen flex flex-col justify-center items-center p-4 sm:p-8 lg:p-12 relative"
+        className="w-full lg:w-1/2 h-full flex flex-col justify-center items-center p-3 sm:p-5 lg:p-6 relative overflow-hidden"
         style={{
-          background: 'radial-gradient(circle at 50% 50%, #eff6ff 0%, #f0fdfa 40%, #f8fafc 100%)',
-          backgroundImage:
-            'radial-gradient(rgba(148, 163, 184, 0.25) 1.5px, transparent 1.5px)',
-          backgroundSize: '24px 24px',
+          background:
+            'linear-gradient(135deg, #090d16 0%, #0f172a 20%, #1e1b4b 45%, #2e1065 75%, #0f172a 100%)',
         }}
       >
-        {/* Floating White Card (Exact replica of Image 2) */}
+        {/* Vibrant Floating Mesh Gradient Orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-16 -right-16 w-80 h-80 bg-gradient-to-br from-indigo-500/30 to-purple-600/30 rounded-full blur-3xl animate-pulse" />
+          <div
+            className="absolute -bottom-16 -left-16 w-80 h-80 bg-gradient-to-tr from-cyan-500/25 to-blue-600/25 rounded-full blur-3xl animate-pulse"
+            style={{ animationDelay: '1.5s' }}
+          />
+          <div
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-r from-pink-500/15 via-purple-500/20 to-indigo-500/20 rounded-full blur-3xl"
+          />
+          {/* Subtle Cyber Grid */}
+          <div
+            className="absolute inset-0 opacity-15"
+            style={{
+              backgroundImage:
+                'radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)',
+              backgroundSize: '24px 24px',
+            }}
+          />
+        </div>
+
+        {/* ── Floating White Card (Fits 100vh with Zero Scroll) ───────────── */}
         <div
-          className="w-full max-w-[490px] bg-white/95 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-2xl shadow-indigo-900/10 border border-white/80 ring-1 ring-slate-900/5 relative transition-all duration-300"
-          style={{ boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.12)' }}
+          className="w-full max-w-[430px] bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-6 shadow-2xl shadow-black/40 border border-white/60 relative z-10 transition-all duration-300"
+          style={{
+            maxHeight: 'calc(100vh - 40px)',
+          }}
         >
           {/* Card Top Brand Row */}
-          <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs flex-shrink-0 bg-white">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
+            <div className="flex items-center gap-2.5">
+              <div className="relative w-8 h-8 rounded-xl overflow-hidden border border-slate-200/80 shadow-xs flex-shrink-0 bg-white">
                 <Image
                   src="/japa-logo.jpg"
                   alt="JAPA Logo"
                   fill
-                  className="object-contain p-1"
+                  className="object-contain p-0.5"
                   priority
                 />
               </div>
               <div>
-                <h2 className="text-base font-black text-slate-900 leading-tight">JAPA Global</h2>
-                <p className="text-xs font-semibold text-slate-400">Enterprise Operations</p>
+                <h2 className="text-sm font-black text-slate-900 leading-tight">JAPA Global</h2>
+                <p className="text-[11px] font-semibold text-slate-400">Enterprise Operations</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200/80 shadow-2xs">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200/80 shadow-2xs">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span>DAG &amp; MNL</span>
               </span>
             </div>
           </div>
 
-          {/* ── STEP 1: Select Role View (Exact UI from Image 2) ───────────── */}
+          {/* ── STEP 1: Select Role View (Exact 4 Authorized Roles) ────────── */}
           {step === 1 && (
-            <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="space-y-2.5 animate-in fade-in duration-150">
               <div className="flex items-center justify-between mb-1">
                 <div>
-                  <h3 className="text-lg font-black text-slate-900 leading-tight">Select Role</h3>
-                  <p className="text-xs text-slate-400 mt-0.5">Tap your operational team to sign in</p>
+                  <h3 className="text-base font-black text-slate-900 leading-tight">Select Role</h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Choose your authorized profile to sign in</p>
                 </div>
-                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
                   Step 1 of 2
                 </span>
               </div>
 
-              {/* Roles List */}
-              <div className="space-y-2.5 pt-1">
+              {/* Roles List (4 Exact Roles) */}
+              <div className="space-y-2 pt-0.5">
                 {ROLES.map((role) => {
                   const Icon = role.icon
                   return (
@@ -378,32 +385,32 @@ export default function LoginPage() {
                       key={role.id}
                       type="button"
                       onClick={() => handleSelectRole(role)}
-                      className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50/80 hover:border-indigo-300 hover:shadow-xs transition-all text-left group"
+                      className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50/80 hover:border-indigo-300 hover:shadow-xs transition-all text-left group"
                     >
-                      <div className="flex items-start gap-3 min-w-0 pr-2">
+                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
                         <div
-                          className={`w-9 h-9 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs`}
+                          className={`w-8 h-8 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
                         >
-                          <Icon className="w-5 h-5" />
+                          <Icon className="w-4 h-4" />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                               {role.title}
                             </span>
                             <span
-                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${role.badgeColor}`}
+                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${role.badgeColor}`}
                             >
                               {role.badge}
                             </span>
                           </div>
-                          <p className="text-xs text-slate-400 mt-0.5 leading-snug line-clamp-1">
+                          <p className="text-[11px] text-slate-400 mt-0.5 leading-tight truncate">
                             {role.desc}
                           </p>
                         </div>
                       </div>
 
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                     </button>
                   )
                 })}
@@ -413,9 +420,9 @@ export default function LoginPage() {
 
           {/* ── STEP 2: Enter PIN Keypad View ─────────────────────────────── */}
           {step === 2 && (
-            <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="space-y-3 animate-in fade-in duration-150">
               {/* Back to Roles navigation bar */}
-              <div className="flex items-center justify-between pb-2">
+              <div className="flex items-center justify-between pb-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -424,81 +431,80 @@ export default function LoginPage() {
                     setPin('')
                     setErrorMsg(null)
                   }}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-900 transition-colors"
                 >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Back to Roles</span>
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Change Role</span>
                 </button>
 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setSoundEnabled(!soundEnabled)}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-colors ${
+                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
                       soundEnabled
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                        : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                        : 'bg-slate-100 text-slate-400 border-slate-200'
                     }`}
-                    title={soundEnabled ? 'Mute Keypad Sound' : 'Enable Keypad Sound'}
                   >
                     {soundEnabled ? (
                       <>
-                        <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <Volume2 className="w-3 h-3 text-indigo-600" />
                         <span>Sound ON</span>
                       </>
                     ) : (
                       <>
-                        <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                        <VolumeX className="w-3 h-3 text-slate-400" />
                         <span>Muted</span>
                       </>
                     )}
                   </button>
-                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
                     Step 2 of 2
                   </span>
                 </div>
               </div>
 
               {/* Selected Role Banner */}
-              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
-                <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <div className="flex items-center gap-2">
                   <div
-                    className={`w-8 h-8 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
+                    className={`w-7 h-7 rounded-lg ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
                   >
-                    <RoleIcon className="w-4 h-4" />
+                    <RoleIcon className="w-3.5 h-3.5" />
                   </div>
                   <div>
                     <p className="text-xs font-black text-slate-900 leading-tight">
                       {selectedRole.title}
                     </p>
-                    <p className="text-[10px] text-slate-500">Security PIN Verification</p>
+                    <p className="text-[10px] text-slate-400">Enter Security PIN</p>
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${selectedRole.badgeColor}`}
+                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${selectedRole.badgeColor}`}
                 >
                   {selectedRole.badge}
                 </span>
               </div>
 
               {/* 6-Digit PIN Indicator Dots */}
-              <div className={`py-2 ${shake ? 'animate-shake' : ''}`}>
-                <div className="flex justify-center items-center gap-3">
+              <div className={`py-1 ${shake ? 'animate-shake' : ''}`}>
+                <div className="flex justify-center items-center gap-2.5">
                   {[0, 1, 2, 3, 4, 5].map((idx) => {
                     const isFilled = pin.length > idx
                     return (
                       <div
                         key={idx}
-                        className={`transition-all duration-200 ${
+                        className={`transition-all duration-150 ${
                           isFilled
-                            ? 'w-4 h-4 sm:w-5 sm:h-5 rounded-full scale-110 shadow-sm'
-                            : 'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-200 border-2 border-slate-300'
+                            ? 'w-3.5 h-3.5 rounded-full scale-110 shadow-sm'
+                            : 'w-3 h-3 rounded-full bg-slate-200 border-2 border-slate-300'
                         }`}
                         style={
                           isFilled
                             ? {
                                 background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
-                                boxShadow: '0 3px 8px rgba(37, 99, 235, 0.4)',
+                                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.4)',
                               }
                             : {}
                         }
@@ -509,22 +515,22 @@ export default function LoginPage() {
 
                 {/* Error Message */}
                 {errorMsg && (
-                  <div className="mt-2.5 flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl font-bold justify-center animate-in fade-in">
-                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" />
+                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg font-bold justify-center animate-in fade-in">
+                    <AlertCircle className="w-3 h-3 flex-shrink-0 text-rose-600" />
                     <span>{errorMsg}</span>
                   </div>
                 )}
               </div>
 
-              {/* 3x4 Keypad Grid */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[290px] mx-auto w-full pt-1">
+              {/* 3x4 Keypad Grid (Compact, fits perfectly in 100vh) */}
+              <div className="grid grid-cols-3 gap-2 max-w-[270px] mx-auto w-full">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                   <button
                     key={digit}
                     type="button"
                     onClick={() => handleNumClick(digit)}
                     disabled={loading}
-                    className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
+                    className="h-10 sm:h-11 rounded-xl bg-white border border-slate-200/90 text-xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-2xs flex items-center justify-center"
                   >
                     {digit}
                   </button>
@@ -535,7 +541,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={handleClear}
                   disabled={loading || pin.length === 0}
-                  className="h-12 sm:h-13 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
+                  className="h-10 sm:h-11 rounded-xl bg-rose-50 border border-rose-200 text-[10px] font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
                 >
                   Clear
                 </button>
@@ -545,7 +551,7 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => handleNumClick('0')}
                   disabled={loading}
-                  className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
+                  className="h-10 sm:h-11 rounded-xl bg-white border border-slate-200/90 text-xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-2xs flex items-center justify-center"
                 >
                   0
                 </button>
@@ -555,17 +561,17 @@ export default function LoginPage() {
                   type="button"
                   onClick={handleBackspace}
                   disabled={loading || pin.length === 0}
-                  className="h-12 sm:h-13 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
+                  className="h-10 sm:h-11 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
                   title="Backspace"
                 >
-                  <Delete className="w-5 h-5" />
+                  <Delete className="w-4 h-4" />
                 </button>
               </div>
 
               {/* Loading Indicator */}
               {loading && (
-                <div className="pt-2 flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 animate-pulse">
-                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <div className="pt-1 flex items-center justify-center gap-1.5 text-xs font-bold text-indigo-600 animate-pulse">
+                  <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24">
                     <circle
                       className="opacity-25"
                       cx="12"
@@ -576,21 +582,21 @@ export default function LoginPage() {
                     />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                   </svg>
-                  <span>Verifying Security PIN…</span>
+                  <span>Verifying PIN…</span>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Security & System Creator Footer below card (Identical to Image 2) */}
-        <div className="mt-5 flex flex-col items-center gap-1.5 text-center">
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
-            <Lock className="w-3.5 h-3.5 text-slate-400" />
+        {/* Security & System Creator Footer below card */}
+        <div className="mt-3 flex flex-col items-center gap-1 text-center relative z-10">
+          <div className="flex items-center gap-1.5 text-[11px] text-indigo-200/90 font-medium">
+            <Lock className="w-3 h-3 text-indigo-300" />
             <span>Encrypted Session · Enterprise Role-Based Access Control</span>
           </div>
-          <p className="text-[11px] text-slate-400 font-semibold">
-            Engineered &amp; Maintained by <span className="text-slate-700 font-bold">Gain Carlo Cayabyab</span> · IT Administrator
+          <p className="text-[10px] text-slate-400 font-semibold">
+            Engineered &amp; Maintained by <span className="text-white font-bold">Gain Carlo Cayabyab</span> · IT Administrator
           </p>
         </div>
       </div>

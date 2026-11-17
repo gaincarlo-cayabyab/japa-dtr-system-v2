@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { verifySessionToken } from '@/lib/auth'
+import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -39,10 +39,21 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ data, count, page })
 }
 
-// Administrator: Add new attendance punch
+// Administrator / Authorized 1-Hour Editor: Add new attendance punch
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const token = request.cookies.get('japa_session')?.value
+    const session = token ? verifySessionToken(token) : null
+
+    const authCheck = await checkUserCanEdit(session, supabase)
+    if (!authCheck.canEdit) {
+      return NextResponse.json(
+        { error: authCheck.reason || 'Forbidden: 1-Hour Edit Access approval from IT Administrator required.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { device_user_id, punch_time, status } = body
 
@@ -73,10 +84,21 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Administrator: Edit existing attendance punch
+// Administrator / Authorized 1-Hour Editor: Edit existing attendance punch
 export async function PUT(request: NextRequest) {
   try {
     const supabase = await createClient()
+    const token = request.cookies.get('japa_session')?.value
+    const session = token ? verifySessionToken(token) : null
+
+    const authCheck = await checkUserCanEdit(session, supabase)
+    if (!authCheck.canEdit) {
+      return NextResponse.json(
+        { error: authCheck.reason || 'Forbidden: 1-Hour Edit Access approval from IT Administrator required.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { id, device_user_id, punch_time, status } = body
 
@@ -105,22 +127,21 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-// Administrator: Delete single attendance punch (Super Admin only)
+// Administrator / Authorized 1-Hour Editor: Delete single attendance punch
 export async function DELETE(request: NextRequest) {
   try {
-    // Security check: Only IT Administrator (super_admin) can delete punches
-    const cookieStore = cookies()
-    const token = cookieStore.get('japa_session')?.value
+    const supabase = await createClient()
+    const token = request.cookies.get('japa_session')?.value
     const session = token ? verifySessionToken(token) : null
 
-    if (!session || session.role !== 'super_admin') {
+    const authCheck = await checkUserCanEdit(session, supabase)
+    if (!authCheck.canEdit) {
       return NextResponse.json(
-        { error: 'Forbidden: Only IT Administrator (Super Admin) has authorization to delete attendance punches.' },
+        { error: authCheck.reason || 'Forbidden: Only IT Administrator or approved 1-Hour Editors can delete punches.' },
         { status: 403 }
       )
     }
 
-    const supabase = await createClient()
     const { searchParams } = request.nextUrl
     let id = searchParams.get('id')
 
