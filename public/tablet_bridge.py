@@ -114,6 +114,7 @@ logging.basicConfig(
     ],
 )
 logger = logging.getLogger('tablet-bridge')
+logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 # ─── High-Performance Persistent HTTP Session ────────────────────────────────
 session = requests.Session()
@@ -188,18 +189,37 @@ def refresh_employee_cache() -> None:
         logger.warning(f'Employee cache refresh failed (will retry): {e}')
 
 
+def _parse_ts(ts_val) -> datetime:
+    """Robust timestamp parser with ZERO external dependencies (no dateutil required)."""
+    if isinstance(ts_val, datetime):
+        return TZ.localize(ts_val) if ts_val.tzinfo is None else ts_val
+    if isinstance(ts_val, str):
+        try:
+            clean = ts_val.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(clean)
+            return dt.astimezone(TZ) if dt.tzinfo else TZ.localize(dt)
+        except Exception:
+            pass
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d'):
+            try:
+                dt = datetime.strptime(ts_val.split('.')[0], fmt)
+                return TZ.localize(dt)
+            except Exception:
+                pass
+    return datetime.now(TZ)
+
+
 def init_recent_punches() -> None:
     """Preloads the most recent punch timestamp per employee to enforce 5-minute debounce across restarts."""
     global _last_device_punch
     try:
         url = f'{SUPABASE_URL}/rest/v1/attendance_logs?select=device_user_id,punch_time&order=punch_time.desc&limit=100'
-        res = session.get(url, headers=_HEADERS_AUTH, timeout=(3, 5))
+        res = session.get(url, headers=_HEADERS_AUTH, timeout=(4, 6))
         if res.status_code == 200:
-            from dateutil import parser as dp
             for row in res.json():
                 uid = str(row['device_user_id'])
                 if uid not in _last_device_punch:
-                    pt = dp.parse(row['punch_time']).astimezone(TZ)
+                    pt = _parse_ts(row['punch_time'])
                     _last_device_punch[uid] = pt
             logger.info(f'Anti-Double Tap Debounce active: {len(_last_device_punch)} employee punch history loaded')
     except Exception as e:
@@ -395,6 +415,7 @@ def connect_device(ip: Optional[str] = None) -> Optional[object]:
     global ZK_IP
     target_ip = ip or ZK_IP
     # Strategy 1: Standard TCP connection
+    zk = None
     try:
         zk = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
                 password=0, force_udp=False, ommit_ping=True)
@@ -402,7 +423,9 @@ def connect_device(ip: Optional[str] = None) -> Optional[object]:
         if conn:
             return conn
     except Exception as e_tcp:
-        # Strategy 2: UDP Fallback (solves Errno 104 Connection reset by peer)
+        safe_disconnect(zk)
+        # Strategy 2: UDP Fallback
+        zk_udp = None
         try:
             zk_udp = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
                         password=0, force_udp=True, ommit_ping=True)
@@ -411,8 +434,13 @@ def connect_device(ip: Optional[str] = None) -> Optional[object]:
                 logger.info(f"TA500 connected via UDP mode ({target_ip}) ✅")
                 return conn_udp
         except Exception:
-            pass
-        logger.warning(f'TA500 LAN connect notice ({target_ip}): {e_tcp}')
+            safe_disconnect(zk_udp)
+
+        err_str = str(e_tcp)
+        if '104' in err_str or '10054' in err_str or 'reset' in err_str.lower():
+            logger.warning(f'TA500 LAN busy (hardware holding previous session). Waiting for device socket to clear...')
+        else:
+            logger.warning(f'TA500 LAN connect notice ({target_ip}): {e_tcp}')
     return None
 
 
@@ -534,26 +562,13 @@ def main():
         conn = connect_device()
         if not conn:
             ta500_fail_count += 1
-            # Auto-probe network on attempt 2, 5, 12, 25
-            if ta500_fail_count in (2, 5, 12, 25):
-                logger.info("🔍 Probing local Wi-Fi for TA500 biometric machine...")
-                discovered = scan_for_ta500()
-                if discovered and discovered != ZK_IP:
-                    logger.info(f"🔄 Switched bridge target IP to newly discovered: {discovered}")
-                    ZK_IP = discovered
-                    save_device_ip(discovered)
-                    ta500_fail_count = 0
-                    continue
-
-            cooldown = min(5 * ta500_fail_count, 15)
-            logger.warning(f'TA500 LAN busy/unreachable (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
+            cooldown = min(8 + (ta500_fail_count * 2), 25)
+            logger.warning(f'TA500 LAN busy/reconnecting (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
             if ta500_fail_count == 3:
                 subnet, local_ip = get_local_subnet()
-                logger.info(f"💡 Tip: Tablet IP is {local_ip}. Bridge is querying {ZK_IP}.")
-                logger.info("   1. Verify TA500 is connected to the same Wi-Fi router.")
-                logger.info("   2. Check TA500 screen: Menu > Comm. > Wireless Network > IP Address.")
-                logger.info("   3. Restart TA500 (turn off/on) to clear hung sockets.")
-                logger.info("   4. You can also specify IP directly: python tablet_bridge.py <NEW_TA500_IP>")
+                logger.info(f"💡 Network Status: Tablet IP is {local_ip}. Target device is {ZK_IP}.")
+                logger.info("   1. Connect Tablet to your MAIN ROUTER Wi-Fi (for stable internet).")
+                logger.info("   2. If TA500 shows Errno 104, turn TA500 OFF and back ON once to reset its socket.")
             time.sleep(cooldown)
             continue
 
@@ -574,18 +589,8 @@ def main():
             attendances = conn.get_attendance() or []
 
             # Sort chronologically (earliest to latest)
-            def _att_key(a):
-                ts = getattr(a, 'timestamp', None)
-                if isinstance(ts, str):
-                    try:
-                        from dateutil import parser as dp
-                        return dp.parse(ts)
-                    except Exception:
-                        pass
-                return ts or datetime.min
-
             try:
-                attendances.sort(key=_att_key)
+                attendances.sort(key=lambda a: _parse_ts(getattr(a, 'timestamp', None)))
             except Exception:
                 pass
 
@@ -603,11 +608,7 @@ def main():
             for att in attendances:
                 raw_uid = str(att.user_id)
                 uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
-                naive_dt = att.timestamp
-                if isinstance(naive_dt, str):
-                    from dateutil import parser as dp
-                    naive_dt = dp.parse(naive_dt)
-                local_dt = TZ.localize(naive_dt) if naive_dt.tzinfo is None else naive_dt
+                local_dt = _parse_ts(att.timestamp)
                 utc_iso  = local_dt.astimezone(timezone.utc).isoformat()
 
                 key = _punch_key(uid, utc_iso)
