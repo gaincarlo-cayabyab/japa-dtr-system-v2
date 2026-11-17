@@ -83,7 +83,7 @@ export function AppFooter() {
               FingerTec TA500 Biometric Terminal (192.168.0.58)
             </span>
             <span className="text-slate-300">·</span>
-            <span className="text-slate-500">Bridge Engine v13</span>
+            <span className="text-slate-500">Bridge Engine v14</span>
             <span className="text-slate-300">·</span>
             <span className="flex items-center gap-1 text-emerald-600 font-bold">
               <ShieldCheck className="w-3.5 h-3.5" />

@@ -55,7 +55,8 @@ export function AppHeader() {
 
   const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
   const isManager = currentUser?.role === 'manager' || currentUser?.username === 'japa_manager'
-  const canApprove = isSuperAdmin || isManager
+  // 1-Hour Edit Access Approvals are EXCLUSIVELY available to IT Administrator
+  const canApprove = isSuperAdmin
   const isDeeOrPearly = currentUser?.username === 'japa_dee' || currentUser?.username === 'japa_pearly'
 
   // Fetch Edit Access Status

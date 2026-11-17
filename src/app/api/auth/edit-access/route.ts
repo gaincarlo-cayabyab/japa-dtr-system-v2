@@ -75,11 +75,7 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient()
     const nowSec = Math.floor(Date.now() / 1000)
 
-    const isPrivileged =
-      session?.role === 'super_admin' ||
-      session?.username === 'admin' ||
-      session?.role === 'manager' ||
-      session?.username === 'japa_manager'
+    const isSuperAdmin = session?.role === 'super_admin' || session?.username === 'admin'
 
     if (action === 'request') {
       const username = targetUsername || session?.username || 'japa_pearly'
@@ -89,15 +85,15 @@ export async function POST(req: NextRequest) {
       ])
       return NextResponse.json({
         success: true,
-        message: '1-Hour Edit Access request submitted to IT Administrator & Manager.',
+        message: '1-Hour Edit Access request submitted to IT Administrator.',
       })
     }
 
     if (action === 'approve') {
-      // Must be IT Super Admin or JAPA Manager to approve
-      if (!isPrivileged) {
+      // Must be IT Super Admin to approve
+      if (!isSuperAdmin) {
         return NextResponse.json(
-          { error: 'Only IT Administrator or JAPA Manager can approve edit requests.' },
+          { error: 'Forbidden: Only IT Administrator can approve edit requests.' },
           { status: 403 }
         )
       }
@@ -120,9 +116,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'decline' || action === 'revoke') {
-      if (!isPrivileged) {
+      if (!isSuperAdmin) {
         return NextResponse.json(
-          { error: 'Only IT Administrator or JAPA Manager can decline or revoke edit requests.' },
+          { error: 'Forbidden: Only IT Administrator can decline or revoke edit requests.' },
           { status: 403 }
         )
       }
