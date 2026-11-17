@@ -19,12 +19,18 @@ export async function GET(req: NextRequest) {
 
     const nowSec = Math.floor(Date.now() / 1000)
 
-    const pendingRequests = []
-    if (metaMap['edit_req_japa_dee'] === 1) {
-      pendingRequests.push({ username: 'japa_dee', displayName: 'JAPA Dee', role: 'CEO / Executive' })
+    const pendingRequests: { username: string; displayName: string; role: string }[] = []
+    const usersMap: Record<string, { displayName: string; role: string }> = {
+      japa_dee: { displayName: 'JAPA Dee', role: 'CEO / Executive' },
+      japa_pearly: { displayName: 'JAPA Pearly', role: 'Office Staff' },
     }
-    if (metaMap['edit_req_japa_pearly'] === 1) {
-      pendingRequests.push({ username: 'japa_pearly', displayName: 'JAPA Pearly', role: 'Office Staff' })
+
+    for (const [k, v] of Object.entries(metaMap)) {
+      if (k.startsWith('edit_req_') && !k.startsWith('edit_req_time_') && v === 1) {
+        const u = k.replace('edit_req_', '')
+        const info = usersMap[u] || { displayName: u, role: 'Staff' }
+        pendingRequests.push({ username: u, displayName: info.displayName, role: info.role })
+      }
     }
 
     const activeGrants: Record<string, { active: boolean; remainingSec: number }> = {
@@ -38,10 +44,17 @@ export async function GET(req: NextRequest) {
       },
     }
 
-    return NextResponse.json({
-      pendingRequests,
-      activeGrants,
-    })
+    return NextResponse.json(
+      {
+        pendingRequests,
+        activeGrants,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        },
+      }
+    )
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to fetch edit access status'
     return NextResponse.json({ error: msg }, { status: 500 })
@@ -62,6 +75,12 @@ export async function POST(req: NextRequest) {
     const supabase = await createClient()
     const nowSec = Math.floor(Date.now() / 1000)
 
+    const isPrivileged =
+      session?.role === 'super_admin' ||
+      session?.username === 'admin' ||
+      session?.role === 'manager' ||
+      session?.username === 'japa_manager'
+
     if (action === 'request') {
       const username = targetUsername || session?.username || 'japa_pearly'
       await supabase.from('sync_meta').upsert([
@@ -70,14 +89,17 @@ export async function POST(req: NextRequest) {
       ])
       return NextResponse.json({
         success: true,
-        message: '1-Hour Edit Access request submitted to IT Administrator.',
+        message: '1-Hour Edit Access request submitted to IT Administrator & Manager.',
       })
     }
 
     if (action === 'approve') {
-      // Must be Super Admin to approve
-      if (session?.role !== 'super_admin' && session?.username !== 'admin') {
-        return NextResponse.json({ error: 'Only IT Super Admin can approve edit requests.' }, { status: 403 })
+      // Must be IT Super Admin or JAPA Manager to approve
+      if (!isPrivileged) {
+        return NextResponse.json(
+          { error: 'Only IT Administrator or JAPA Manager can approve edit requests.' },
+          { status: 403 }
+        )
       }
 
       if (!targetUsername) {
@@ -98,8 +120,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'decline' || action === 'revoke') {
-      if (session?.role !== 'super_admin' && session?.username !== 'admin') {
-        return NextResponse.json({ error: 'Only IT Super Admin can decline or revoke edit requests.' }, { status: 403 })
+      if (!isPrivileged) {
+        return NextResponse.json(
+          { error: 'Only IT Administrator or JAPA Manager can decline or revoke edit requests.' },
+          { status: 403 }
+        )
       }
 
       if (!targetUsername) {

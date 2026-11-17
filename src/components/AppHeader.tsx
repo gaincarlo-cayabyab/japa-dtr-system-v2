@@ -54,12 +54,14 @@ export function AppHeader() {
   const modalRef = useRef<HTMLDivElement>(null)
 
   const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
+  const isManager = currentUser?.role === 'manager' || currentUser?.username === 'japa_manager'
+  const canApprove = isSuperAdmin || isManager
   const isDeeOrPearly = currentUser?.username === 'japa_dee' || currentUser?.username === 'japa_pearly'
 
   // Fetch Edit Access Status
   const fetchEditAccess = async () => {
     try {
-      const res = await fetch('/api/auth/edit-access')
+      const res = await fetch(`/api/auth/edit-access?t=${Date.now()}`, { cache: 'no-store' })
       if (res.ok) {
         const data = await res.json()
         setPendingRequests(data.pendingRequests || [])
@@ -84,14 +86,19 @@ export function AppHeader() {
     if (pathname === '/login') return
 
     // Fetch user
-    fetch('/api/auth/me')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.authenticated && data.user) {
-          setCurrentUser(data.user)
-        }
-      })
-      .catch(() => {})
+    const fetchUser = () => {
+      fetch(`/api/auth/me?t=${Date.now()}`, { cache: 'no-store' })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.authenticated && data.user) {
+            setCurrentUser(data.user)
+          }
+        })
+        .catch(() => {})
+    }
+
+    fetchUser()
+    const userInterval = setInterval(fetchUser, 5000)
 
     // Manila Time Clock
     const updateTime = () => {
@@ -121,10 +128,11 @@ export function AppHeader() {
 
     // Initial edit access poll
     fetchEditAccess()
-    const pollInterval = setInterval(fetchEditAccess, 8000)
+    const pollInterval = setInterval(fetchEditAccess, 4000)
 
     return () => {
       clearInterval(clockTimer)
+      clearInterval(userInterval)
       clearInterval(pollInterval)
     }
   }, [pathname])
@@ -283,8 +291,8 @@ export function AppHeader() {
           </Link>
 
           {/* ── 1-HOUR EDIT ACCESS CONTROLS ───────────────────────────────── */}
-          {/* 1. For Super Admin: Pending Approval Bell & Panel */}
-          {isSuperAdmin && (
+          {/* 1. For IT Admin & JAPA Manager: Pending Approval Bell & Panel */}
+          {canApprove && (
             <div className="relative" ref={modalRef}>
               <button
                 type="button"

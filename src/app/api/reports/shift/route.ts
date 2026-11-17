@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
-import { verifySessionToken } from '@/lib/auth'
+import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
 
 function parseTimeToTimestamp(timeStr: string, workDate: string, nextDate: string): string {
   if (timeStr.includes('T')) return timeStr
@@ -36,18 +36,17 @@ function parseTimeToTimestamp(timeStr: string, workDate: string, nextDate: strin
 
 export async function PUT(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('japa_session')?.value
+    const token = request.cookies.get('japa_session')?.value
     const session = token ? verifySessionToken(token) : null
 
-    if (!session || session.role !== 'super_admin') {
+    const supabase = await createClient()
+    const authCheck = await checkUserCanEdit(session, supabase)
+    if (!authCheck.canEdit) {
       return NextResponse.json(
-        { error: 'Forbidden: Only IT Administrator (Super Admin) has authorization to edit DTR shifts.' },
+        { error: authCheck.reason || 'Forbidden: 1-Hour Edit Access approval from IT Administrator or Manager is required to edit shifts.' },
         { status: 403 }
       )
     }
-
-    const supabase = await createClient()
     const body = await request.json()
     const {
       device_user_id,
@@ -117,7 +116,7 @@ export async function PUT(request: NextRequest) {
           work_date,
           attendance_status: attendance_status || 'present',
           notes: notes?.trim() || '',
-          created_by_username: session.username,
+          created_by_username: session?.username || 'authorized_user',
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'device_user_id,work_date' }
@@ -214,12 +213,16 @@ export async function PUT(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    const cookieStore = cookies()
-    const token = cookieStore.get('japa_session')?.value
+    const token = request.cookies.get('japa_session')?.value
     const session = token ? verifySessionToken(token) : null
 
-    if (!session || session.role !== 'super_admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    const supabase = await createClient()
+    const authCheck = await checkUserCanEdit(session, supabase)
+    if (!authCheck.canEdit) {
+      return NextResponse.json(
+        { error: authCheck.reason || 'Forbidden: 1-Hour Edit Access approval from IT Administrator or Manager is required to delete shifts.' },
+        { status: 403 }
+      )
     }
 
     const { searchParams } = new URL(request.url)
@@ -229,8 +232,6 @@ export async function DELETE(request: NextRequest) {
     if (!device_user_id || !work_date) {
       return NextResponse.json({ error: 'device_user_id and work_date are required' }, { status: 400 })
     }
-
-    const supabase = await createClient()
 
     const nextDateObj = new Date(`${work_date}T00:00:00+08:00`)
     nextDateObj.setDate(nextDateObj.getDate() + 1)

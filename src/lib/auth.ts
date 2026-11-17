@@ -78,8 +78,13 @@ export async function checkUserCanEdit(
     return { canEdit: false, reason: 'Unauthorized: Session missing or invalid.' }
   }
 
-  // Super admin always has full privileges
-  if (session.role === 'super_admin' || session.username === 'admin') {
+  // IT Administrator and JAPA Manager always have full edit/add/delete privileges
+  if (
+    session.role === 'super_admin' ||
+    session.username === 'admin' ||
+    session.role === 'manager' ||
+    session.username === 'japa_manager'
+  ) {
     return { canEdit: true }
   }
 

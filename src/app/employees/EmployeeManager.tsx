@@ -83,28 +83,36 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
   const [search, setSearch] = useState('')
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'mon_sat' | 'mon_fri'>('all')
 
-  // Auth & 1-Hour Temporary Edit Access
-  const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
+  // Auth & Access check (IT Admin, JAPA Manager & 1-Hour Approved Editors)
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string; canEdit?: boolean } | null>(null)
   const [hasEditGrant, setHasEditGrant] = useState(false)
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.authenticated && d.user) setCurrentUser(d.user)
-      })
-      .catch(() => {})
+  const refreshUserAccess = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/auth/me?t=${Date.now()}`, { cache: 'no-store' })
+      const d = await res.json()
+      if (d.authenticated && d.user) {
+        setCurrentUser(d.user)
+        if (d.user.canEdit) setHasEditGrant(true)
+      }
+    } catch {}
   }, [])
+
+  useEffect(() => {
+    refreshUserAccess()
+    const interval = setInterval(refreshUserAccess, 5000)
+    return () => clearInterval(interval)
+  }, [refreshUserAccess])
 
   useEffect(() => {
     const checkGrant = async () => {
       try {
-        const res = await fetch('/api/auth/edit-access')
+        const res = await fetch(`/api/auth/edit-access?t=${Date.now()}`, { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
           if (currentUser?.username && data.activeGrants?.[currentUser.username]?.active) {
             setHasEditGrant(true)
-          } else {
+          } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
             setHasEditGrant(false)
           }
         }
@@ -116,12 +124,12 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
       const grants = e.detail?.activeGrants
       if (currentUser?.username && grants?.[currentUser.username]?.active) {
         setHasEditGrant(true)
-      } else {
+      } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
         setHasEditGrant(false)
       }
     }
     window.addEventListener('japa_edit_access_changed', onAccessChanged)
-    const interval = setInterval(checkGrant, 10000)
+    const interval = setInterval(checkGrant, 5000)
     return () => {
       window.removeEventListener('japa_edit_access_changed', onAccessChanged)
       clearInterval(interval)
@@ -129,7 +137,8 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
   }, [currentUser])
 
   const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
-  const canAddEditDelete = isSuperAdmin || hasEditGrant
+  const isManager = currentUser?.role === 'manager' || currentUser?.username === 'japa_manager'
+  const canAddEditDelete = isSuperAdmin || isManager || hasEditGrant || Boolean(currentUser?.canEdit)
   const isDeeOrPearly = currentUser?.username === 'japa_dee' || currentUser?.username === 'japa_pearly'
 
   useEffect(() => {

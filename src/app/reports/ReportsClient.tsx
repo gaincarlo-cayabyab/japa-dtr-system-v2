@@ -207,17 +207,63 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
     } catch {}
   }
 
-  // Current logged in user check
-  const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.authenticated && d.user) setCurrentUser(d.user)
-      })
-      .catch(() => {})
+  // Current logged in user check (IT Admin, JAPA Manager & 1-Hour Approved Editors)
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string; canEdit?: boolean } | null>(null)
+  const [hasEditGrant, setHasEditGrant] = useState(false)
+
+  const refreshUserAccess = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/auth/me?t=${Date.now()}`, { cache: 'no-store' })
+      const d = await res.json()
+      if (d.authenticated && d.user) {
+        setCurrentUser(d.user)
+        if (d.user.canEdit) setHasEditGrant(true)
+      }
+    } catch {}
   }, [])
-  const isSuperAdmin = currentUser?.role === 'super_admin'
+
+  useEffect(() => {
+    refreshUserAccess()
+    const interval = setInterval(refreshUserAccess, 5000)
+    return () => clearInterval(interval)
+  }, [refreshUserAccess])
+
+  // Listen for temporary 1-hour edit access changes
+  useEffect(() => {
+    const checkGrant = async () => {
+      try {
+        const res = await fetch(`/api/auth/edit-access?t=${Date.now()}`, { cache: 'no-store' })
+        if (res.ok) {
+          const data = await res.json()
+          if (currentUser?.username && data.activeGrants?.[currentUser.username]?.active) {
+            setHasEditGrant(true)
+          } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
+            setHasEditGrant(false)
+          }
+        }
+      } catch {}
+    }
+
+    checkGrant()
+    const onAccessChanged = (e: any) => {
+      const grants = e.detail?.activeGrants
+      if (currentUser?.username && grants?.[currentUser.username]?.active) {
+        setHasEditGrant(true)
+      } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
+        setHasEditGrant(false)
+      }
+    }
+    window.addEventListener('japa_edit_access_changed', onAccessChanged)
+    const interval = setInterval(checkGrant, 5000)
+    return () => {
+      window.removeEventListener('japa_edit_access_changed', onAccessChanged)
+      clearInterval(interval)
+    }
+  }, [currentUser])
+
+  const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
+  const isManager = currentUser?.role === 'manager' || currentUser?.username === 'japa_manager'
+  const canAddEditDelete = isSuperAdmin || isManager || hasEditGrant || Boolean(currentUser?.canEdit)
 
   // OT Reason Modal state
   const [shiftNotes, setShiftNotes] = useState<Record<string, ShiftNote>>({})
@@ -972,8 +1018,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                 <th className="px-3 py-2.5 text-center text-purple-700 border-r border-slate-100 min-w-[65px]">OT</th>
                 <th className="px-3 py-2.5 text-center border-r border-slate-100 min-w-[110px]">Status</th>
                 <th className="px-3.5 py-2.5 text-left text-amber-800 min-w-[160px]">Remarks / Reason</th>
-                {isSuperAdmin && (
-                  <th className="px-3 py-2.5 text-center text-blue-700 min-w-[100px]">Admin</th>
+                {canAddEditDelete && (
+                  <th className="px-3 py-2.5 text-center text-blue-700 min-w-[100px]">Actions</th>
                 )}
               </tr>
             </thead>
@@ -1115,8 +1161,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       )}
                     </td>
 
-                    {/* Super Admin Action */}
-                    {isSuperAdmin && (
+                    {/* Action Column for Authorized Editors */}
+                    {canAddEditDelete && (
                       <td className="px-3 py-2 text-center">
                         <button
                           type="button"
@@ -1241,7 +1287,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                   <span className="text-[10px] text-amber-800 font-semibold truncate max-w-[170px]" title={note?.notes || note?.ot_reason}>
                     {note?.notes || note?.ot_reason ? `💬 ${note.notes || note.ot_reason}` : ''}
                   </span>
-                  {isSuperAdmin && (
+                  {canAddEditDelete && (
                     <button
                       type="button"
                       onClick={() => openEditForEmployee(item.emp, dateFilter)}
@@ -1365,7 +1411,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                                   💬 {note.notes || note.ot_reason}
                                 </p>
                               )}
-                              {isSuperAdmin && (
+                              {canAddEditDelete && (
                                 <button
                                   type="button"
                                   onClick={() => openEditShift(rec, note)}
@@ -1381,7 +1427,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200" title={note.notes}>
                                 🌴 Leave
                               </span>
-                              {isSuperAdmin && (
+                              {canAddEditDelete && (
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
@@ -1397,7 +1443,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-violet-800 bg-violet-50 border border-violet-200" title={note.notes}>
                                 🩺 Sick
                               </span>
-                              {isSuperAdmin && (
+                              {canAddEditDelete && (
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
@@ -1413,7 +1459,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200" title={note.notes}>
                                 ❌ Absent
                               </span>
-                              {isSuperAdmin && (
+                              {canAddEditDelete && (
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
@@ -1431,7 +1477,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                           ) : (
                             <div className="relative">
                               <span className="text-slate-300 font-mono text-xs">—</span>
-                              {isSuperAdmin && (
+                              {canAddEditDelete && (
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}

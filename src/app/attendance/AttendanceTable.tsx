@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { AttendanceLog, Employee } from '@/types/database'
 import { PUNCH_STATUS, PUNCH_STATUS_COLOR } from '@/types/database'
@@ -113,29 +113,37 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   const [employeesList, setEmployeesList] = useState<Employee[]>(employees)
   const [isLive, setIsLive] = useState(false)
 
-  // Current User & Super Admin check
-  const [currentUser, setCurrentUser] = useState<{ role: string; username: string } | null>(null)
+  // Current User & Access check (IT Admin, JAPA Manager & 1-Hour Approved Editors)
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string; canEdit?: boolean } | null>(null)
   const [hasEditGrant, setHasEditGrant] = useState(false)
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.authenticated && d.user) setCurrentUser(d.user)
-      })
-      .catch(() => {})
+  const refreshUserAccess = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/auth/me?t=${Date.now()}`, { cache: 'no-store' })
+      const d = await res.json()
+      if (d.authenticated && d.user) {
+        setCurrentUser(d.user)
+        if (d.user.canEdit) setHasEditGrant(true)
+      }
+    } catch {}
   }, [])
+
+  useEffect(() => {
+    refreshUserAccess()
+    const interval = setInterval(refreshUserAccess, 5000)
+    return () => clearInterval(interval)
+  }, [refreshUserAccess])
 
   // Listen for temporary 1-hour edit access changes
   useEffect(() => {
     const checkGrant = async () => {
       try {
-        const res = await fetch('/api/auth/edit-access')
+        const res = await fetch(`/api/auth/edit-access?t=${Date.now()}`, { cache: 'no-store' })
         if (res.ok) {
           const data = await res.json()
           if (currentUser?.username && data.activeGrants?.[currentUser.username]?.active) {
             setHasEditGrant(true)
-          } else {
+          } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
             setHasEditGrant(false)
           }
         }
@@ -147,12 +155,12 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       const grants = e.detail?.activeGrants
       if (currentUser?.username && grants?.[currentUser.username]?.active) {
         setHasEditGrant(true)
-      } else {
+      } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
         setHasEditGrant(false)
       }
     }
     window.addEventListener('japa_edit_access_changed', onAccessChanged)
-    const interval = setInterval(checkGrant, 10000)
+    const interval = setInterval(checkGrant, 5000)
     return () => {
       window.removeEventListener('japa_edit_access_changed', onAccessChanged)
       clearInterval(interval)
@@ -160,7 +168,8 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   }, [currentUser])
 
   const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
-  const canAddEditDelete = isSuperAdmin || hasEditGrant
+  const isManager = currentUser?.role === 'manager' || currentUser?.username === 'japa_manager'
+  const canAddEditDelete = isSuperAdmin || isManager || hasEditGrant || Boolean(currentUser?.canEdit)
   const isDeeOrPearly = currentUser?.username === 'japa_dee' || currentUser?.username === 'japa_pearly'
 
   // Smart Clear modal state
@@ -653,7 +662,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
                   <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Smart Type</th>
                   <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Raw Status</th>
                   <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
-                    {isSuperAdmin ? 'Admin Actions' : ''}
+                    {canAddEditDelete ? 'Actions' : ''}
                   </th>
                 </tr>
               </thead>
