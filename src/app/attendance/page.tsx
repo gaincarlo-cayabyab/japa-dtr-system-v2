@@ -7,12 +7,12 @@ export const dynamic = 'force-dynamic'
 export default async function AttendancePage() {
   const supabase = await createClient()
 
-  const [{ data: logs }, { data: employees }] = await Promise.all([
+  const [{ data: logs, count: totalCount }, { data: employees }] = await Promise.all([
     supabase
       .from('attendance_logs')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('punch_time', { ascending: false })
-      .limit(500),
+      .limit(2500),
     supabase.from('employees').select('*').order('full_name'),
   ])
 
@@ -29,6 +29,7 @@ export default async function AttendancePage() {
       <AttendanceTable
         initialLogs={(logs ?? []) as AttendanceLog[]}
         employees={(employees ?? []) as Employee[]}
+        initialTotalCount={totalCount ?? (logs?.length || 0)}
       />
     </div>
   )

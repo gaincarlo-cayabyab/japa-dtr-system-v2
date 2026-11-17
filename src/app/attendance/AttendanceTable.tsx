@@ -51,6 +51,7 @@ function getInitials(name: string) {
 interface AttendanceTableProps {
   initialLogs: AttendanceLog[]
   employees: Employee[]
+  initialTotalCount?: number
 }
 
 function formatPunchTime(ts: string) {
@@ -105,8 +106,9 @@ function getEmployeeName(deviceUserId: string, employees: Employee[]) {
   return employees.find((e) => e.device_user_id === deviceUserId)?.full_name ?? `ID #${deviceUserId}`
 }
 
-export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps) {
+export function AttendanceTable({ initialLogs, employees, initialTotalCount }: AttendanceTableProps) {
   const [logs, setLogs] = useState<AttendanceLog[]>(initialLogs)
+  const [totalCount, setTotalCount] = useState<number>(initialTotalCount ?? initialLogs.length)
   const [employeesList, setEmployeesList] = useState<Employee[]>(employees)
   const [isLive, setIsLive] = useState(false)
 
@@ -159,11 +161,12 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
   // Fetch Latest Logs
   const fetchLatest = async () => {
     const supabase = createClient()
-    const [{ data: freshLogs }, { data: freshEmps }] = await Promise.all([
-      supabase.from('attendance_logs').select('*').order('punch_time', { ascending: false }).limit(500),
+    const [{ data: freshLogs, count: freshCount }, { data: freshEmps }] = await Promise.all([
+      supabase.from('attendance_logs').select('*', { count: 'exact' }).order('punch_time', { ascending: false }).limit(2500),
       supabase.from('employees').select('*').order('full_name', { ascending: true }),
     ])
     if (freshLogs) setLogs(freshLogs)
+    if (typeof freshCount === 'number') setTotalCount(freshCount)
     if (freshEmps) setEmployeesList(freshEmps)
   }
 
@@ -465,7 +468,8 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Recorded Punches</p>
-            <p className="text-xl font-black text-slate-900 mt-0.5">{logs.length}</p>
+            <p className="text-xl font-black text-slate-900 mt-0.5">{totalCount.toLocaleString()}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Authoritative database total</p>
           </div>
         </div>
 
@@ -476,6 +480,7 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Employees</p>
             <p className="text-xl font-black text-slate-900 mt-0.5">{uniqueEmpsCount}</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">Enrolled workforce</p>
           </div>
         </div>
 
@@ -485,7 +490,12 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
           </div>
           <div>
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Filtered View Count</p>
-            <p className="text-xl font-black text-purple-700 mt-0.5">{filtered.length} entries</p>
+            <p className="text-xl font-black text-purple-700 mt-0.5">{filtered.length.toLocaleString()} entries</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {filtered.length === logs.length
+                ? `Showing all ${logs.length.toLocaleString()} loaded records`
+                : `Filtered from ${logs.length.toLocaleString()} loaded records`}
+            </p>
           </div>
         </div>
       </div>
