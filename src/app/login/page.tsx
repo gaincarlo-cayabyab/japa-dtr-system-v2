@@ -257,7 +257,7 @@ export default function LoginPage() {
   const RoleIcon = selectedRole.icon
 
   return (
-    <div className="h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-slate-900 select-none">
+    <div className="h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-slate-100 select-none">
       {/* ── LEFT HALF: JAPA 3D Print Studio Animation (Fit in 100vh) ───────── */}
       <div className="w-full lg:w-1/2 h-full relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
         {/* Top-Left Floating Pill */}
@@ -301,38 +301,37 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── RIGHT HALF: Colorful Vibrant Mesh Gradient (Zero Scroll) ─────── */}
+      {/* ── RIGHT HALF: Light Colorful Theme (Zero Scroll, Spacious Container) ── */}
       <div
         className="w-full lg:w-1/2 h-full flex flex-col justify-center items-center p-3 sm:p-5 lg:p-6 relative overflow-hidden"
         style={{
           background:
-            'linear-gradient(135deg, #090d16 0%, #0f172a 20%, #1e1b4b 45%, #2e1065 75%, #0f172a 100%)',
+            'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 25%, #f5f3ff 50%, #fdf2f8 75%, #ecfeff 100%)',
         }}
       >
-        {/* Vibrant Floating Mesh Gradient Orbs */}
+        {/* Soft Colorful Floating Ambient Orbs (Light Theme) */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-16 -right-16 w-80 h-80 bg-gradient-to-br from-indigo-500/30 to-purple-600/30 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute -top-12 -right-12 w-96 h-96 bg-gradient-to-br from-sky-300/40 via-cyan-300/30 to-blue-400/25 rounded-full blur-3xl animate-pulse" />
           <div
-            className="absolute -bottom-16 -left-16 w-80 h-80 bg-gradient-to-tr from-cyan-500/25 to-blue-600/25 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: '1.5s' }}
+            className="absolute -bottom-16 -left-16 w-96 h-96 bg-gradient-to-tr from-purple-300/40 via-indigo-300/30 to-pink-300/25 rounded-full blur-3xl animate-pulse"
+            style={{ animationDelay: '2s' }}
           />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-gradient-to-r from-pink-300/20 via-purple-200/25 to-blue-200/25 rounded-full blur-3xl" />
+
+          {/* Light Colorful Cyber Dot Matrix (Matching User's Preferred Image) */}
           <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-gradient-to-r from-pink-500/15 via-purple-500/20 to-indigo-500/20 rounded-full blur-3xl"
-          />
-          {/* Subtle Cyber Grid */}
-          <div
-            className="absolute inset-0 opacity-15"
+            className="absolute inset-0 opacity-40"
             style={{
               backgroundImage:
-                'radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)',
+                'radial-gradient(rgba(99, 102, 241, 0.25) 1.25px, transparent 1.25px)',
               backgroundSize: '24px 24px',
             }}
           />
         </div>
 
-        {/* ── Floating White Card (Fits 100vh with Zero Scroll) ───────────── */}
+        {/* ── Floating Spacious Card (Fits 100vh with Zero Scroll) ─────────── */}
         <div
-          className="w-full max-w-[430px] bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-6 shadow-2xl shadow-black/40 border border-white/60 relative z-10 transition-all duration-300"
+          className="w-full max-w-[530px] bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-6 shadow-2xl shadow-indigo-500/10 border border-slate-200/80 relative z-10 transition-all duration-300"
           style={{
             maxHeight: 'calc(100vh - 40px)',
           }}
@@ -363,21 +362,21 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* ── STEP 1: Select Role View (Exact 4 Authorized Roles) ────────── */}
+          {/* ── STEP 1: Select Role View (Exact 4 Authorized Roles, Spacious) ─ */}
           {step === 1 && (
-            <div className="space-y-2.5 animate-in fade-in duration-150">
+            <div className="space-y-3 animate-in fade-in duration-150">
               <div className="flex items-center justify-between mb-1">
                 <div>
-                  <h3 className="text-base font-black text-slate-900 leading-tight">Select Role</h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">Choose your authorized profile to sign in</p>
+                  <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">Select Role</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Choose your authorized profile to sign in</p>
                 </div>
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/70">
                   Step 1 of 2
                 </span>
               </div>
 
-              {/* Roles List (4 Exact Roles) */}
-              <div className="space-y-2 pt-0.5">
+              {/* Roles List (4 Exact Authorized Roles with Comfortable Width) */}
+              <div className="space-y-2.5 pt-0.5">
                 {ROLES.map((role) => {
                   const Icon = role.icon
                   return (
@@ -385,32 +384,32 @@ export default function LoginPage() {
                       key={role.id}
                       type="button"
                       onClick={() => handleSelectRole(role)}
-                      className="w-full flex items-center justify-between p-2.5 sm:p-3 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50/80 hover:border-indigo-300 hover:shadow-xs transition-all text-left group"
+                      className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 bg-white hover:bg-slate-50/90 hover:border-indigo-400 hover:shadow-md transition-all text-left group"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <div className="flex items-center gap-3 min-w-0 pr-2">
                         <div
-                          className={`w-8 h-8 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
+                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}
                         >
-                          <Icon className="w-4 h-4" />
+                          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                               {role.title}
                             </span>
                             <span
-                              className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${role.badgeColor}`}
+                              className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border ${role.badgeColor}`}
                             >
                               {role.badge}
                             </span>
                           </div>
-                          <p className="text-[11px] text-slate-400 mt-0.5 leading-tight truncate">
+                          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 leading-tight truncate">
                             {role.desc}
                           </p>
                         </div>
                       </div>
 
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
                     </button>
                   )
                 })}
@@ -431,9 +430,9 @@ export default function LoginPage() {
                     setPin('')
                     setErrorMsg(null)
                   }}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <ChevronLeft className="w-4 h-4" />
                   <span>Change Role</span>
                 </button>
 
@@ -441,47 +440,47 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setSoundEnabled(!soundEnabled)}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border transition-colors ${
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${
                       soundEnabled
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                        : 'bg-slate-100 text-slate-400 border-slate-200'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
                     }`}
                   >
                     {soundEnabled ? (
                       <>
-                        <Volume2 className="w-3 h-3 text-indigo-600" />
+                        <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
                         <span>Sound ON</span>
                       </>
                     ) : (
                       <>
-                        <VolumeX className="w-3 h-3 text-slate-400" />
+                        <VolumeX className="w-3.5 h-3.5 text-slate-400" />
                         <span>Muted</span>
                       </>
                     )}
                   </button>
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                  <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/70">
                     Step 2 of 2
                   </span>
                 </div>
               </div>
 
               {/* Selected Role Banner */}
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50/90 border border-slate-200/80">
+                <div className="flex items-center gap-2.5">
                   <div
-                    className={`w-7 h-7 rounded-lg ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
+                    className={`w-8 h-8 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
                   >
-                    <RoleIcon className="w-3.5 h-3.5" />
+                    <RoleIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <p className="text-xs font-black text-slate-900 leading-tight">
+                    <p className="text-xs sm:text-sm font-black text-slate-900 leading-tight">
                       {selectedRole.title}
                     </p>
-                    <p className="text-[10px] text-slate-400">Enter Security PIN</p>
+                    <p className="text-[11px] text-slate-500">Enter Security PIN</p>
                   </div>
                 </div>
                 <span
-                  className={`text-[9px] font-bold px-1.5 py-0.2 rounded-full border ${selectedRole.badgeColor}`}
+                  className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border ${selectedRole.badgeColor}`}
                 >
                   {selectedRole.badge}
                 </span>
@@ -489,7 +488,7 @@ export default function LoginPage() {
 
               {/* 6-Digit PIN Indicator Dots */}
               <div className={`py-1 ${shake ? 'animate-shake' : ''}`}>
-                <div className="flex justify-center items-center gap-2.5">
+                <div className="flex justify-center items-center gap-3">
                   {[0, 1, 2, 3, 4, 5].map((idx) => {
                     const isFilled = pin.length > idx
                     return (
@@ -498,13 +497,13 @@ export default function LoginPage() {
                         className={`transition-all duration-150 ${
                           isFilled
                             ? 'w-3.5 h-3.5 rounded-full scale-110 shadow-sm'
-                            : 'w-3 h-3 rounded-full bg-slate-200 border-2 border-slate-300'
+                            : 'w-3 h-3 rounded-full bg-slate-100 border-2 border-slate-300'
                         }`}
                         style={
                           isFilled
                             ? {
                                 background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
-                                boxShadow: '0 2px 6px rgba(37, 99, 235, 0.4)',
+                                boxShadow: '0 2px 8px rgba(37, 99, 235, 0.45)',
                               }
                             : {}
                         }
@@ -515,15 +514,15 @@ export default function LoginPage() {
 
                 {/* Error Message */}
                 {errorMsg && (
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg font-bold justify-center animate-in fade-in">
-                    <AlertCircle className="w-3 h-3 flex-shrink-0 text-rose-600" />
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl font-bold justify-center animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" />
                     <span>{errorMsg}</span>
                   </div>
                 )}
               </div>
 
-              {/* 3x4 Keypad Grid (Compact, fits perfectly in 100vh) */}
-              <div className="grid grid-cols-3 gap-2 max-w-[270px] mx-auto w-full">
+              {/* 3x4 Keypad Grid (Compact, fits in 100vh) */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[290px] mx-auto w-full">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                   <button
                     key={digit}
@@ -589,14 +588,15 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Security & System Creator Footer below card */}
-        <div className="mt-3 flex flex-col items-center gap-1 text-center relative z-10">
-          <div className="flex items-center gap-1.5 text-[11px] text-indigo-200/90 font-medium">
-            <Lock className="w-3 h-3 text-indigo-300" />
+        {/* Security & System Creator Footer below card (Light Theme) */}
+        <div className="mt-3.5 flex flex-col items-center gap-1 text-center relative z-10">
+          <div className="flex items-center gap-1.5 text-[11px] text-slate-600 font-medium">
+            <Lock className="w-3 h-3 text-indigo-600" />
             <span>Encrypted Session · Enterprise Role-Based Access Control</span>
           </div>
-          <p className="text-[10px] text-slate-400 font-semibold">
-            Engineered &amp; Maintained by <span className="text-white font-bold">Gain Carlo Cayabyab</span> · IT Administrator
+          <p className="text-[11px] text-slate-500 font-semibold">
+            Engineered &amp; Maintained by{' '}
+            <span className="text-slate-900 font-black">Gain Carlo Cayabyab</span> · IT Administrator
           </p>
         </div>
       </div>
