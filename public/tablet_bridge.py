@@ -29,8 +29,14 @@ try:
     import pytz
     import requests
     from requests.adapters import HTTPAdapter
-    from urllib3.util.retry import Retry
     from zk import ZK
+    try:
+        from urllib3.util.retry import Retry
+    except Exception:
+        try:
+            from requests.packages.urllib3.util.retry import Retry  # type: ignore
+        except Exception:
+            Retry = None
 except ImportError as e:
     print(f"Missing dependency: {e}")
     print("Run: pip install pyzk pytz requests urllib3")
@@ -77,8 +83,8 @@ def save_device_ip(ip: str) -> None:
 
 ZK_IP         = load_saved_ip()
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
-ZK_TIMEOUT    = 6   # Fast TCP timeout (LAN response is <100ms)
-POLL_INTERVAL = 6   # Fast 6-second poll for near-instant punch appearance
+ZK_TIMEOUT    = 25  # Generous TCP timeout for stable multi-packet transmission over Wi-Fi
+POLL_INTERVAL = 10  # 10-second poll cycle on persistent open socket
 TZ            = pytz.timezone('Asia/Manila')
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://blmthmojjnonbmwitzmc.supabase.co')
@@ -118,12 +124,15 @@ logging.getLogger('urllib3').setLevel(logging.ERROR)
 
 # ─── High-Performance Persistent HTTP Session ────────────────────────────────
 session = requests.Session()
-retry_strategy = Retry(
-    total=2,
-    backoff_factor=0.3,
-    status_forcelist=[500, 502, 503, 504],
-)
-adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=retry_strategy)
+if Retry is not None:
+    retry_strategy = Retry(
+        total=2,
+        backoff_factor=0.3,
+        status_forcelist=[500, 502, 503, 504],
+    )
+    adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=retry_strategy)
+else:
+    adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=2)
 session.mount('https://', adapter)
 session.mount('http://', adapter)
 
@@ -416,7 +425,7 @@ def connect_device(ip: Optional[str] = None) -> Optional[object]:
     target_ip = ip or ZK_IP
     zk = None
     try:
-        zk = ZK(target_ip, port=ZK_PORT, timeout=10,
+        zk = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
                 password=0, force_udp=False, ommit_ping=True)
         conn = zk.connect()
         if conn:
@@ -589,10 +598,10 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v9')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v10')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Continuous 24/7 Live Event Streaming (<50ms punch latency)')
-    print(f'   Engine    : Persistent Event Hook (Zero Flash Buffer Polling / Zero Timeouts)')
+    print(f'   Mode      : Persistent Socket Engine (Normal Biometric Sensor Mode)')
+    print(f'   Poll Rate : 10s Paced Interval (Zero Sensor Interference / No Timeouts)')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -602,7 +611,6 @@ def main():
     init_recent_punches()
     logger.info('Tablet bridge active. Press Ctrl+C to stop.')
 
-    local_token = load_local_token()
     ta500_fail_count = 0
     cycle_counter = 0
 
@@ -613,7 +621,7 @@ def main():
         if _pending_upload_queue:
             flush_upload_queue(seen)
 
-        # ── 2. Connect to TA500 ──────────────────────────────────────────────
+        # ── 2. Connect to TA500 (Persistent Open TCP Socket) ─────────────────
         conn = connect_device()
         if not conn:
             ta500_fail_count += 1
@@ -628,64 +636,35 @@ def main():
             continue
 
         ta500_fail_count = 0
-        logger.info('🟢 TA500 CONNECTED! Initializing continuous 24/7 stream...')
+        logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Biometric sensor ready for employee punches.')
+
+        # Ensure sensor is active and ready to accept fingerprints
+        try:
+            conn.enable_device()
+        except Exception:
+            pass
+
+        # Perform initial sync of enrolled employees
+        try:
+            sync_all_device_users(conn)
+        except Exception:
+            pass
+
+        inner_cycle = 0
+        last_cloud_check = time.time()
 
         try:
-            # ── 3. One-Time Catch-Up on Connection ───────────────────────────
-            # Prevent firmware rejection on CMD_STARTVERIFY from aborting live capture
-            if hasattr(conn, 'verify_user'):
-                _orig_verify = conn.verify_user
-                def _safe_verify():
-                    try:
-                        return _orig_verify()
-                    except Exception:
-                        return True
-                conn.verify_user = _safe_verify
-
-            # A. Sync enrolled users once upon connection
-            sync_all_device_users(conn)
-
-            # B. Catch up on any attendance records logged while offline
-            try:
-                attendances = conn.get_attendance() or []
-                caught_up = process_punches_batch(attendances, seen)
-                if caught_up > 0:
-                    logger.info(f'✅ Caught up {caught_up} offline punch(es) from TA500 memory!')
-                    flush_upload_queue(seen)
-                else:
-                    logger.info('✅ Attendance history is up to date.')
-            except Exception as e_catch:
-                logger.warning(f'Initial catch-up notice: {e_catch}')
-
-            # C. Ensure device is enabled for live stream
-            try:
-                conn.enable_device()
-            except Exception:
-                pass
-
-            # ── 4. Continuous 24/7 Live Event Capture ────────────────────────
-            logger.info('⚡ LIVE CAPTURE ACTIVE — Listening for real-time fingerprint punches...')
-            logger.info('   (Device stays connected continuously. Zero repeated flash memory dumps!)')
-
-            last_cloud_check = time.time()
-            last_reconcile = time.time()
-
-            for att in conn.live_capture(new_timeout=4):
-                # When an employee punches their finger, live_capture yields Attendance object immediately!
-                if att is not None:
-                    if process_single_punch(att, seen):
-                        flush_upload_queue(seen)
-                    continue
-
-                # ── Idle Tick (every 4s when no one is punching) ─────────────
-                now = time.time()
+            # ── 3. Persistent Loop on Single Open Connection ─────────────────
+            while True:
+                inner_cycle += 1
 
                 # Flush queue if any offline punches are queued
                 if _pending_upload_queue:
                     flush_upload_queue(seen)
 
-                # Check cloud commands every ~8 seconds
-                if now - last_cloud_check >= 8:
+                # Check cloud commands every ~20 seconds
+                now = time.time()
+                if now - last_cloud_check >= 20:
                     last_cloud_check = now
                     meta = fetch_cloud_meta()
 
@@ -712,23 +691,26 @@ def main():
                             logger.error(f'Error syncing users: {e}')
                         acknowledge_command('sync_employees')
 
-                # Background reconciliation every 30 minutes (safety fallback)
-                if now - last_reconcile >= 1800:
-                    last_reconcile = now
-                    try:
-                        att_list = conn.get_attendance() or []
-                        if process_punches_batch(att_list, seen) > 0:
-                            flush_upload_queue(seen)
-                    except Exception:
-                        pass
+                # Query attendance logs across persistent socket
+                attendances = conn.get_attendance() or []
+                new_punches = process_punches_batch(attendances, seen)
+
+                if new_punches > 0:
+                    logger.info(f'Detected {new_punches} new punch(es) on TA500! Uploading...')
+                    flush_upload_queue(seen)
+                elif inner_cycle % 3 == 0:
+                    # Heartbeat notice every ~30s so user knows sync is active
+                    logger.info(f'🟢 TA500 Active ({ZK_IP}) — Sensor ready, listening for punches...')
+
+                time.sleep(POLL_INTERVAL)
 
         except (socket.error, ConnectionResetError, BrokenPipeError, TimeoutError) as net_err:
-            logger.warning(f'⚠️ Network connection interrupted: {net_err}. Auto-reconnecting in 5s...')
-        except Exception as stream_err:
-            logger.warning(f'⚠️ Live stream notice: {stream_err}. Auto-reconnecting in 5s...')
+            logger.warning(f'⚠️ Network connection notice: {net_err}. Auto-reconnecting in 8s...')
+        except Exception as err:
+            logger.warning(f'⚠️ TA500 notice: {err}. Auto-reconnecting in 8s...')
         finally:
             safe_disconnect(conn)
-            time.sleep(5)
+            time.sleep(8)
 
 
 if __name__ == '__main__':
