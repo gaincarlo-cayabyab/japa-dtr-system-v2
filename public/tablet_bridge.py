@@ -21,8 +21,9 @@ import json
 import socket
 import hashlib
 import logging
+import concurrent.futures
 from datetime import datetime, timezone
-from typing import Optional, Set, List, Dict, Any
+from typing import Optional, Set, List, Dict, Any, Tuple
 
 try:
     import pytz
@@ -35,8 +36,46 @@ except ImportError as e:
     print("Run: pip install pyzk pytz requests urllib3")
     sys.exit(1)
 
-# ─── Configuration ────────────────────────────────────────────────────────────
-ZK_IP         = os.getenv('ZK_DEVICE_IP',  '192.168.68.146')
+# ─── Configuration & Dynamic IP Discovery ──────────────────────────────────────
+_SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+_SEEN_FILE   = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
+_TOKEN_FILE  = os.path.join(_SCRIPT_DIR, 'sync_token.json')
+_LOG_FILE    = os.path.join(_SCRIPT_DIR, 'bridge.log')
+_IP_FILE     = os.path.join(_SCRIPT_DIR, 'ta500_ip.txt')
+
+def load_saved_ip() -> str:
+    # 1. Command-line argument: python tablet_bridge.py 192.168.1.50
+    for arg in sys.argv[1:]:
+        if arg.startswith('--'):
+            continue
+        cleaned = arg.strip()
+        parts = cleaned.split('.')
+        if len(parts) == 4 and all(p.isdigit() for p in parts):
+            return cleaned
+    # 2. Environment variable
+    if os.getenv('ZK_DEVICE_IP'):
+        return os.getenv('ZK_DEVICE_IP').strip()
+    # 3. Saved IP from previous auto-discovery
+    if os.path.exists(_IP_FILE):
+        try:
+            with open(_IP_FILE, 'r') as f:
+                saved = f.read().strip()
+                parts = saved.split('.')
+                if len(parts) == 4 and all(p.isdigit() for p in parts):
+                    return saved
+        except Exception:
+            pass
+    # 4. Default fallback
+    return '192.168.68.146'
+
+def save_device_ip(ip: str) -> None:
+    try:
+        with open(_IP_FILE, 'w') as f:
+            f.write(ip.strip())
+    except Exception:
+        pass
+
+ZK_IP         = load_saved_ip()
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
 ZK_TIMEOUT    = 6   # Fast TCP timeout (LAN response is <100ms)
 POLL_INTERVAL = 6   # Fast 6-second poll for near-instant punch appearance
@@ -47,11 +86,6 @@ SUPABASE_KEY = os.getenv(
     'SUPABASE_SERVICE_ROLE_KEY',
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsbXRobW9qam5vbmJtd2l0em1jIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NDUzOTI3MCwiZXhwIjoyMTEwMTE1MjcwfQ.hsO_inZ9Faei67c5edyo4iGk9E96hMO5VYhiMKi9m6o'
 )
-
-_SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
-_SEEN_FILE   = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
-_TOKEN_FILE  = os.path.join(_SCRIPT_DIR, 'sync_token.json')
-_LOG_FILE    = os.path.join(_SCRIPT_DIR, 'bridge.log')
 
 # ─── Single-Instance Protection ───────────────────────────────────────────────
 _lock_socket: Optional[socket.socket] = None
@@ -241,14 +275,94 @@ def safe_disconnect(conn: Optional[object]) -> None:
         pass
 
 
-def connect_device() -> Optional[object]:
-    zk = ZK(ZK_IP, port=ZK_PORT, timeout=ZK_TIMEOUT,
-             password=0, force_udp=False, ommit_ping=True)
+def get_local_subnet() -> Tuple[Optional[str], Optional[str]]:
+    """Returns (subnet_prefix, local_ip), e.g. ('192.168.1', '192.168.1.45')."""
     try:
-        return zk.connect()
-    except Exception as e:
-        logger.warning(f'TA500 LAN connect notice: {e}')
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(('8.8.8.8', 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        parts = local_ip.split('.')
+        if len(parts) == 4:
+            return '.'.join(parts[:3]), local_ip
+    except Exception:
+        pass
+    return None, None
+
+
+def scan_for_ta500(timeout_per_host: float = 0.35) -> Optional[str]:
+    """Scans current Wi-Fi subnet for open TA500 biometrics machine on port 4370."""
+    subnet, local_ip = get_local_subnet()
+    if not subnet:
         return None
+
+    logger.info(f"🔎 Scanning Wi-Fi subnet {subnet}.1 - {subnet}.254 on port {ZK_PORT}...")
+    candidates = [f"{subnet}.{i}" for i in range(1, 255) if f"{subnet}.{i}" != local_ip]
+
+    def test_ip(ip: str) -> Optional[str]:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout_per_host)
+            res = sock.connect_ex((ip, ZK_PORT))
+            sock.close()
+            if res == 0:
+                return ip
+        except Exception:
+            pass
+        return None
+
+    found_hosts = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+        results = executor.map(test_ip, candidates)
+        for found in results:
+            if found:
+                found_hosts.append(found)
+
+    # Verify responsive hosts with PyZK
+    for ip in found_hosts:
+        for use_udp in (False, True):
+            try:
+                test_zk = ZK(ip, port=ZK_PORT, timeout=3, password=0, force_udp=use_udp, ommit_ping=True)
+                conn = test_zk.connect()
+                if conn:
+                    conn.disconnect()
+                    logger.info(f"🎯 Verified TA500 at {ip} (UDP={use_udp})!")
+                    save_device_ip(ip)
+                    return ip
+            except Exception:
+                pass
+
+    if found_hosts:
+        logger.info(f"🎯 Found port {ZK_PORT} open at {found_hosts[0]}!")
+        save_device_ip(found_hosts[0])
+        return found_hosts[0]
+
+    return None
+
+
+def connect_device(ip: Optional[str] = None) -> Optional[object]:
+    global ZK_IP
+    target_ip = ip or ZK_IP
+    # Strategy 1: Standard TCP connection
+    try:
+        zk = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
+                password=0, force_udp=False, ommit_ping=True)
+        conn = zk.connect()
+        if conn:
+            return conn
+    except Exception as e_tcp:
+        # Strategy 2: UDP Fallback (solves Errno 104 Connection reset by peer)
+        try:
+            zk_udp = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
+                        password=0, force_udp=True, ommit_ping=True)
+            conn_udp = zk_udp.connect()
+            if conn_udp:
+                logger.info(f"TA500 connected via UDP mode ({target_ip}) ✅")
+                return conn_udp
+        except Exception:
+            pass
+        logger.warning(f'TA500 LAN connect notice ({target_ip}): {e_tcp}')
+    return None
 
 
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
@@ -282,12 +396,33 @@ def flush_upload_queue(seen: Set[str]) -> bool:
 
 # ─── Main Polling Engine ──────────────────────────────────────────────────────
 def main():
+    if '--scan' in sys.argv:
+        subnet, local_ip = get_local_subnet()
+        print('=' * 60)
+        print('🔎 TA500 Network Diagnostic & Scanner')
+        print(f'   Tablet Local IP : {local_ip}')
+        print(f'   Current Subnet  : {subnet}.1 - {subnet}.254')
+        print('=' * 60)
+        found = scan_for_ta500()
+        if found:
+            print(f'✅ SUCCESS: Found TA500 Biometric Machine at: {found}')
+            print(f'   To start syncing, run: python tablet_bridge.py {found}')
+        else:
+            print(f'❌ No TA500 device found on {subnet}.x on port {ZK_PORT}')
+            print('   Tips:')
+            print('   1. Verify the TA500 is connected to the same Wi-Fi router.')
+            print('   2. On the TA500 keypad: press M/OK > Comm. > Wireless Network.')
+            print('   3. Check the IP address displayed on the TA500 screen.')
+            print('   4. Turn the TA500 OFF and back ON to reset its Wi-Fi chip.')
+        sys.exit(0)
+
     acquire_instance_lock()
-    global _pending_upload_queue
+    global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v7')
-    print(f'   Device IP : {ZK_IP}:{ZK_PORT}')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v8')
+    print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     print(f'   Poll Rate : Fast 6s (Instant Punch + Enrolled Employee Sync)')
+    print(f'   Features  : Auto-Discovery, UDP Fallback, Dynamic Network Support')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -345,8 +480,26 @@ def main():
         conn = connect_device()
         if not conn:
             ta500_fail_count += 1
+            # Auto-probe network on attempt 2, 5, 12, 25
+            if ta500_fail_count in (2, 5, 12, 25):
+                logger.info("🔍 Probing local Wi-Fi for TA500 biometric machine...")
+                discovered = scan_for_ta500()
+                if discovered and discovered != ZK_IP:
+                    logger.info(f"🔄 Switched bridge target IP to newly discovered: {discovered}")
+                    ZK_IP = discovered
+                    save_device_ip(discovered)
+                    ta500_fail_count = 0
+                    continue
+
             cooldown = min(5 * ta500_fail_count, 15)
-            logger.warning(f'TA500 LAN busy (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
+            logger.warning(f'TA500 LAN busy/unreachable (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
+            if ta500_fail_count == 3:
+                subnet, local_ip = get_local_subnet()
+                logger.info(f"💡 Tip: Tablet IP is {local_ip}. Bridge is querying {ZK_IP}.")
+                logger.info("   1. Verify TA500 is connected to the same Wi-Fi router.")
+                logger.info("   2. Check TA500 screen: Menu > Comm. > Wireless Network > IP Address.")
+                logger.info("   3. Restart TA500 (turn off/on) to clear hung sockets.")
+                logger.info("   4. You can also specify IP directly: python tablet_bridge.py <NEW_TA500_IP>")
             time.sleep(cooldown)
             continue
 

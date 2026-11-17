@@ -55,7 +55,7 @@ export default async function SyncPage() {
           <dl className="space-y-3">
             <div className="flex justify-between text-sm">
               <dt className="text-gray-500">Device IP</dt>
-              <dd className="font-mono font-medium text-gray-900">192.168.68.146</dd>
+              <dd className="font-mono font-medium text-gray-900">Auto-Detect / Dynamic (Port 4370)</dd>
             </div>
             <div className="flex justify-between text-sm">
               <dt className="text-gray-500">Port</dt>
