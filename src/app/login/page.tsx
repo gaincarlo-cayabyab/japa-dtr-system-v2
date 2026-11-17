@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
   Fingerprint,
@@ -13,6 +14,10 @@ import {
   ShieldCheck,
   Check,
   Keyboard,
+  Volume2,
+  VolumeX,
+  Code2,
+  Building2,
 } from 'lucide-react'
 
 interface SystemUser {
@@ -73,6 +78,93 @@ function getInitials(name: string) {
     .toUpperCase()
 }
 
+// ── Web Audio Synthesizer for Keypad Audio Feedback ──────────────────────────
+function playKeySound(type: 'tap' | 'backspace' | 'clear' | 'success' | 'error', soundEnabled: boolean) {
+  if (!soundEnabled) return
+  try {
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) return
+    const ctx = new AudioContextClass()
+
+    if (type === 'tap') {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(950, ctx.currentTime)
+      gain.gain.setValueAtTime(0.18, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.05)
+    } else if (type === 'backspace') {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(420, ctx.currentTime)
+      gain.gain.setValueAtTime(0.15, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.06)
+    } else if (type === 'clear') {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'triangle'
+      osc.frequency.setValueAtTime(320, ctx.currentTime)
+      osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.09)
+      gain.gain.setValueAtTime(0.15, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.09)
+    } else if (type === 'error') {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sawtooth'
+      osc.frequency.setValueAtTime(180, ctx.currentTime)
+      gain.gain.setValueAtTime(0.16, ctx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25)
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.start()
+      osc.stop(ctx.currentTime + 0.25)
+    } else if (type === 'success') {
+      const osc1 = ctx.createOscillator()
+      const gain1 = ctx.createGain()
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(880, ctx.currentTime)
+      gain1.gain.setValueAtTime(0.18, ctx.currentTime)
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1)
+      osc1.connect(gain1)
+      gain1.connect(ctx.destination)
+      osc1.start()
+      osc1.stop(ctx.currentTime + 0.1)
+
+      setTimeout(() => {
+        try {
+          const osc2 = ctx.createOscillator()
+          const gain2 = ctx.createGain()
+          osc2.type = 'sine'
+          osc2.frequency.setValueAtTime(1320, ctx.currentTime)
+          gain2.gain.setValueAtTime(0.2, ctx.currentTime)
+          gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18)
+          osc2.connect(gain2)
+          gain2.connect(ctx.destination)
+          osc2.start()
+          osc2.stop(ctx.currentTime + 0.18)
+        } catch {}
+      }, 100)
+    }
+  } catch {
+    // Ignore audio permission errors
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const [users, setUsers] = useState<SystemUser[]>([])
@@ -82,6 +174,7 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [shake, setShake] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(true)
+  const [soundEnabled, setSoundEnabled] = useState(true)
 
   useEffect(() => {
     async function loadUsers() {
@@ -116,26 +209,30 @@ export default function LoginPage() {
         })
         const data = await res.json()
         if (!res.ok) {
+          playKeySound('error', soundEnabled)
           setShake(true)
           setTimeout(() => setShake(false), 500)
           setErrorMsg(data.error || 'Incorrect PIN. Please try again.')
           setPin('')
           return
         }
+        playKeySound('success', soundEnabled)
         router.push('/')
         router.refresh()
       } catch {
+        playKeySound('error', soundEnabled)
         setErrorMsg('Network error. Please try again.')
         setPin('')
       } finally {
         setLoading(false)
       }
     },
-    [selectedUser, router]
+    [selectedUser, router, soundEnabled]
   )
 
   const handleNumClick = (digit: string) => {
     if (loading || pin.length >= 6) return
+    playKeySound('tap', soundEnabled)
     setErrorMsg(null)
     const newPin = pin + digit
     setPin(newPin)
@@ -144,12 +241,14 @@ export default function LoginPage() {
 
   const handleBackspace = () => {
     if (loading) return
+    playKeySound('backspace', soundEnabled)
     setErrorMsg(null)
     setPin((prev) => prev.slice(0, -1))
   }
 
   const handleClear = () => {
     if (loading) return
+    playKeySound('clear', soundEnabled)
     setErrorMsg(null)
     setPin('')
   }
@@ -172,291 +271,280 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center p-4 sm:p-6 lg:p-10 relative select-none"
+      className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 lg:p-8 select-none relative"
       style={{
         background:
-          'linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #4338ca 65%, #6366f1 100%)',
+          'radial-gradient(ellipse at top left, #1e1b4b 0%, #0f172a 45%, #020617 100%)',
       }}
     >
-      {/* Background ambient lighting effects */}
+      {/* Subtle Background Glows */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-32 -left-32 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute top-10 left-10 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse" />
         <div
-          className="absolute -bottom-32 -right-32 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl animate-pulse"
+          className="absolute bottom-10 right-10 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl animate-pulse"
           style={{ animationDelay: '1.5s' }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              'radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)',
-            backgroundSize: '32px 32px',
-          }}
         />
       </div>
 
-      {/* Main Spacious Container */}
+      {/* ── Main 2-Column Responsive Card Container ────────────────────────── */}
       <div
-        className="relative z-10 w-full max-w-5xl bg-white/95 backdrop-blur-2xl rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 border border-white/20"
-        style={{ boxShadow: '0 32px 80px rgba(0,0,0,0.35)' }}
+        className="relative z-10 w-full max-w-7xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 border border-slate-700/30"
+        style={{
+          boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
+          minHeight: '740px',
+        }}
       >
-        {/* ── LEFT COLUMN: User Selection Menu (Spacious, prominent) ── */}
-        <div
-          className="lg:col-span-6 p-6 sm:p-8 lg:p-10 flex flex-col justify-between relative overflow-hidden"
-          style={{
-            background:
-              'linear-gradient(155deg, #0f172a 0%, #1e1b4b 45%, #312e81 100%)',
-          }}
-        >
-          {/* Subtle Ambient Decorative Circles */}
-          <div className="absolute -top-16 -right-16 w-48 h-48 bg-white/5 rounded-full pointer-events-none" />
-          <div className="absolute -bottom-16 -left-16 w-48 h-48 bg-white/5 rounded-full pointer-events-none" />
-
-          {/* Top Branding */}
-          <div className="relative z-10 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
-                  <Fingerprint className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-black text-white tracking-tight leading-tight">
-                    JAPA DTR
-                  </h1>
-                  <p className="text-xs font-semibold text-indigo-300">
-                    Enterprise Attendance Portal
-                  </p>
-                </div>
+        {/* ── LEFT COLUMN: JAPA Print Studio 3D Interactive Animation ──────── */}
+        <div className="lg:col-span-7 xl:col-span-7 bg-[#0b0e14] relative flex flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/80">
+          {/* Top Brand Bar */}
+          <div className="p-4 sm:p-5 flex items-center justify-between border-b border-white/10 bg-black/40 backdrop-blur-md z-10">
+            <div className="flex items-center gap-3">
+              <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-white/20 shadow-md bg-white flex-shrink-0">
+                <Image
+                  src="/japa-logo.jpg"
+                  alt="JAPA Logo"
+                  fill
+                  className="object-contain p-0.5"
+                  priority
+                />
               </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base font-black text-white tracking-tight">JAPA</span>
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/30">
+                    GLOBAL TRADING
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 font-medium">The Craft of Print · 3D Studio</p>
+              </div>
+            </div>
 
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-indigo-200 text-xs font-bold border border-white/10">
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                Station #1
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-bold border border-emerald-500/30">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>TA500 Online</span>
               </span>
             </div>
-
-            <div className="pt-2">
-              <h2 className="text-base sm:text-lg font-black text-white leading-snug">
-                Select Operator Profile
-              </h2>
-              <p className="text-xs text-indigo-200/80 mt-0.5">
-                Choose your assigned profile to unlock the biometric control suite.
-              </p>
-            </div>
           </div>
 
-          {/* User Selection Options List (Prominent, large touch-friendly buttons) */}
-          <div className="relative z-10 my-6 space-y-3 flex-1 flex flex-col justify-center">
-            {loadingUsers ? (
-              <div className="space-y-3">
-                {[1, 2, 3, 4].map((i) => (
-                  <div
-                    key={i}
-                    className="h-16 rounded-2xl bg-white/5 animate-pulse"
-                  />
-                ))}
-              </div>
-            ) : (
-              users.map((u) => {
-                const isSelected = selectedUser?.username === u.username
-                const cfg = getRoleConfig(u.role)
-                return (
-                  <button
-                    key={u.username}
-                    type="button"
-                    onClick={() => {
-                      setSelectedUser(u)
-                      setPin('')
-                      setErrorMsg(null)
-                    }}
-                    className={`w-full flex items-center gap-3.5 p-3.5 sm:p-4 rounded-2xl border text-left transition-all duration-200 ${
-                      isSelected
-                        ? 'bg-white/15 border-emerald-400 shadow-lg shadow-black/20 scale-[1.02] ring-2 ring-emerald-400/30'
-                        : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                    }`}
-                  >
-                    <div
-                      className={`w-12 h-12 rounded-xl bg-gradient-to-br ${cfg.gradient} flex items-center justify-center text-white text-base font-black flex-shrink-0 shadow-md`}
-                    >
-                      {getInitials(u.display_name)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm sm:text-base font-black text-white truncate leading-snug">
-                        {u.display_name}
-                      </p>
-                      <p className="text-xs text-indigo-300 font-medium capitalize mt-0.5 truncate">
-                        {cfg.label}
-                      </p>
-                    </div>
-                    {isSelected ? (
-                      <div className="w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-400/40 flex-shrink-0">
-                        <Check className="w-4 h-4" />
-                      </div>
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-white/30 flex-shrink-0" />
-                    )}
-                  </button>
-                )
-              })
-            )}
+          {/* 3D WebGL Three.js Interactive Animation Embed */}
+          <div className="flex-1 w-full min-h-[440px] sm:min-h-[520px] lg:min-h-[620px] relative bg-[#0b0e14]">
+            <iframe
+              src="/print-animation/index.html?embed=1"
+              title="JAPA Global Trading printing and apparel 3D animation"
+              className="w-full h-full border-0 block absolute inset-0"
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'block',
+              }}
+            />
           </div>
 
-          {/* Footer Status Banner */}
-          <div className="relative z-10 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-indigo-200/80">
-            <span className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>TA500 Biometric Bridge Online</span>
-            </span>
-            <span className="font-mono text-[11px] text-indigo-400">v2.4 Protected</span>
+          {/* Bottom Technical Strip */}
+          <div className="px-5 py-3 border-t border-white/10 bg-black/40 backdrop-blur-md flex items-center justify-between text-xs text-slate-400 z-10">
+            <span className="text-[11px]">Sublimation · Commercial Apparel · DTG · Roll Services</span>
+            <span className="font-mono text-[10px] text-slate-500">v2.5 Terminal</span>
           </div>
         </div>
 
-        {/* ── RIGHT COLUMN: Prominent PIN Keypad ── */}
-        <div className="lg:col-span-6 p-6 sm:p-8 lg:p-10 flex flex-col justify-center items-center bg-gradient-to-br from-slate-50 via-white to-indigo-50/30">
-          <div className="w-full max-w-[340px] sm:max-w-[360px]">
-            {/* Active User Header Banner */}
-            {selectedUser && selectedRole ? (
-              <div className="flex flex-col items-center mb-5 text-center">
-                <div
-                  className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${selectedRole.gradient} flex items-center justify-center text-white text-2xl font-black shadow-lg shadow-indigo-500/20 mb-2.5`}
-                >
-                  {getInitials(selectedUser.display_name)}
-                </div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
-                  {selectedUser.display_name}
-                </h3>
-                <span className="mt-1 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
-                  {selectedRole.label}
-                </span>
-                <p className="text-xs text-slate-500 mt-2">
-                  Enter your 6-digit security PIN to access the dashboard.
-                </p>
+        {/* ── RIGHT COLUMN: Operator Profile Selection & PIN Keypad ────────── */}
+        <div className="lg:col-span-5 xl:col-span-5 p-6 sm:p-8 flex flex-col justify-between bg-gradient-to-br from-slate-50 via-white to-indigo-50/25">
+          {/* Top Bar with Sound Toggle */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm">
+                <Fingerprint className="w-4 h-4" />
               </div>
-            ) : (
-              <div className="flex flex-col items-center mb-5 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-2.5">
-                  <Lock className="w-7 h-7 text-slate-300" />
-                </div>
-                <p className="text-sm font-bold text-slate-500">
-                  Select an operator profile on the left
-                </p>
-              </div>
-            )}
+              <h2 className="text-sm font-black text-slate-900 tracking-tight">Security Access</h2>
+            </div>
 
-            {/* 6-Digit PIN Indicator Dots (Larger, prominent) */}
-            <div className={`mb-6 ${shake ? 'animate-shake' : ''}`}>
-              <div className="flex justify-center items-center gap-3.5">
-                {[0, 1, 2, 3, 4, 5].map((idx) => {
-                  const isFilled = pin.length > idx
+            {/* Audio Feedback Toggle */}
+            <button
+              type="button"
+              onClick={() => setSoundEnabled(!soundEnabled)}
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border transition-colors ${
+                soundEnabled
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                  : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+              }`}
+              title={soundEnabled ? 'Keypad sound enabled (Click to mute)' : 'Keypad sound muted (Click to enable)'}
+            >
+              {soundEnabled ? (
+                <>
+                  <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Sound ON</span>
+                </>
+              ) : (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Sound OFF</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Profile Selector (Dropdown / Pills) */}
+          <div className="mb-4">
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+              Select Operator Profile
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {loadingUsers ? (
+                <>
+                  <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+                  <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
+                </>
+              ) : (
+                users.slice(0, 4).map((u) => {
+                  const isSelected = selectedUser?.username === u.username
+                  const cfg = getRoleConfig(u.role)
                   return (
-                    <div
-                      key={idx}
-                      className={`transition-all duration-200 ${
-                        isFilled
-                          ? 'w-5 h-5 sm:w-6 sm:h-6 rounded-full scale-110 shadow-md'
-                          : 'w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-slate-200 border-2 border-slate-300'
+                    <button
+                      key={u.username}
+                      type="button"
+                      onClick={() => {
+                        playKeySound('tap', soundEnabled)
+                        setSelectedUser(u)
+                        setPin('')
+                        setErrorMsg(null)
+                      }}
+                      className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
+                        isSelected
+                          ? 'bg-indigo-50 border-indigo-400 shadow-xs ring-2 ring-indigo-400/20'
+                          : 'bg-white border-slate-200 hover:bg-slate-50'
                       }`}
-                      style={
-                        isFilled
-                          ? {
-                              background:
-                                'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
-                              boxShadow: '0 4px 12px rgba(79, 70, 229, 0.45)',
-                            }
-                          : {}
-                      }
-                    />
+                    >
+                      <div
+                        className={`w-7 h-7 rounded-lg bg-gradient-to-br ${cfg.gradient} flex items-center justify-center text-white text-[11px] font-black flex-shrink-0 shadow-2xs`}
+                      >
+                        {getInitials(u.display_name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                          {u.display_name.split(' ')[0]}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate">{u.role.replace('_', ' ')}</p>
+                      </div>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />}
+                    </button>
                   )
-                })}
-              </div>
-
-              {/* Error Message */}
-              {errorMsg && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3.5 py-1.5 rounded-xl font-bold justify-center animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
-                  <span>{errorMsg}</span>
-                </div>
+                })
               )}
             </div>
+          </div>
 
-            {/* Large, Touch-Friendly 3x4 Keypad Grid */}
-            <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-              {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-                <button
-                  key={digit}
-                  type="button"
-                  onClick={() => handleNumClick(digit)}
-                  disabled={loading}
-                  className="h-14 sm:h-16 rounded-2xl bg-white border border-slate-200 text-2xl sm:text-3xl font-black text-slate-800 transition-all duration-150 hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
-                >
-                  {digit}
-                </button>
-              ))}
+          {/* Active Profile Header */}
+          {selectedUser && selectedRole && (
+            <div className="flex flex-col items-center mb-3 text-center">
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <ShieldCheck className="w-3 h-3 text-indigo-600" />
+                {selectedRole.label}
+              </span>
+            </div>
+          )}
 
-              {/* Clear Button */}
-              <button
-                type="button"
-                onClick={handleClear}
-                disabled={loading || pin.length === 0}
-                className="h-14 sm:h-16 rounded-2xl bg-rose-50 border border-rose-200 text-xs sm:text-sm font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
-              >
-                Clear
-              </button>
-
-              {/* 0 Button */}
-              <button
-                type="button"
-                onClick={() => handleNumClick('0')}
-                disabled={loading}
-                className="h-14 sm:h-16 rounded-2xl bg-white border border-slate-200 text-2xl sm:text-3xl font-black text-slate-800 transition-all duration-150 hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
-              >
-                0
-              </button>
-
-              {/* Backspace Button */}
-              <button
-                type="button"
-                onClick={handleBackspace}
-                disabled={loading || pin.length === 0}
-                className="h-14 sm:h-16 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
-                title="Backspace"
-              >
-                <Delete className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
+          {/* 6-Digit PIN Indicator Dots */}
+          <div className={`mb-4 ${shake ? 'animate-shake' : ''}`}>
+            <div className="flex justify-center items-center gap-3">
+              {[0, 1, 2, 3, 4, 5].map((idx) => {
+                const isFilled = pin.length > idx
+                return (
+                  <div
+                    key={idx}
+                    className={`transition-all duration-200 ${
+                      isFilled
+                        ? 'w-4 h-4 sm:w-5 sm:h-5 rounded-full scale-110 shadow-sm'
+                        : 'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-200 border-2 border-slate-300'
+                    }`}
+                    style={
+                      isFilled
+                        ? {
+                            background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+                            boxShadow: '0 3px 8px rgba(37, 99, 235, 0.4)',
+                          }
+                        : {}
+                    }
+                  />
+                )
+              })}
             </div>
 
-            {/* Loading Indicator */}
-            {loading && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 animate-pulse">
-                <svg
-                  className="animate-spin h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                  />
-                </svg>
-                <span>Verifying Security PIN…</span>
+            {/* Error Message */}
+            {errorMsg && (
+              <div className="mt-2.5 flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1 rounded-xl font-bold justify-center animate-in fade-in">
+                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" />
+                <span>{errorMsg}</span>
               </div>
             )}
+          </div>
 
-            {/* Keyboard Support Hint */}
-            <div className="mt-5 pt-3 border-t border-slate-200/80 flex items-center justify-center gap-1.5 text-slate-500 text-[11px] font-medium">
-              <Keyboard className="w-3.5 h-3.5 text-slate-400" />
-              <span>You can also type directly using your physical keyboard numpad</span>
+          {/* 3x4 Keypad Grid */}
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[300px] mx-auto w-full">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                onClick={() => handleNumClick(digit)}
+                disabled={loading}
+                className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
+              >
+                {digit}
+              </button>
+            ))}
+
+            {/* Clear Button */}
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={loading || pin.length === 0}
+              className="h-12 sm:h-13 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
+            >
+              Clear
+            </button>
+
+            {/* 0 Button */}
+            <button
+              type="button"
+              onClick={() => handleNumClick('0')}
+              disabled={loading}
+              className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
+            >
+              0
+            </button>
+
+            {/* Backspace Button */}
+            <button
+              type="button"
+              onClick={handleBackspace}
+              disabled={loading || pin.length === 0}
+              className="h-12 sm:h-13 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
+              title="Backspace"
+            >
+              <Delete className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Loading Indicator */}
+          {loading && (
+            <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 animate-pulse">
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+              <span>Verifying Security PIN…</span>
             </div>
+          )}
+
+          {/* Keyboard hint & Creator Credit */}
+          <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-col items-center gap-1.5 text-center">
+            <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
+              <Keyboard className="w-3.5 h-3.5" />
+              <span>Type PIN with keypad or physical keyboard</span>
+            </div>
+            <p className="text-[10px] text-slate-400 font-semibold">
+              Engineered by <span className="text-slate-700 font-bold">Gain Carlo Cayabyab</span> · IT Administrator
+            </p>
           </div>
         </div>
       </div>

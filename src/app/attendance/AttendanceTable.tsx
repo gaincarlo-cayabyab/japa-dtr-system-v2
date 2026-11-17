@@ -26,7 +26,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 
-const PAGE_SIZE = 50
+const PAGE_SIZE = 20
 
 const AVATAR_GRADIENTS = [
   'from-blue-500 to-indigo-600',

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import {
@@ -78,8 +79,14 @@ export function Sidebar() {
     <aside className="w-64 h-screen bg-white border-r border-slate-200 flex flex-col flex-shrink-0 select-none">
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-200">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-sm shadow-blue-500/20">
-          <Fingerprint className="w-5 h-5 text-white" />
+        <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-slate-200 shadow-xs flex-shrink-0 bg-white">
+          <Image
+            src="/japa-logo.jpg"
+            alt="JAPA Logo"
+            fill
+            className="object-contain p-0.5"
+            priority
+          />
         </div>
         <div>
           <span className="text-base font-bold text-slate-900 tracking-tight">JAPA DTR</span>
