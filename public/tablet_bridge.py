@@ -137,6 +137,40 @@ _HEADERS_INSERT = {
     'Prefer':        'return=representation,resolution=ignore-duplicates',
 }
 
+# ─── TA500 Hardware Biometric ID to System Employee ID Mapping ────────────────
+# Maps physical FingerTec TA500 enrolled UID -> JAPA DTR System Employee ID
+# Hardware enrollment:
+# UID 1: Gain -> CAYABYAB, GAIN CARLO G. (#24)
+# UID 2: Pearly -> DE VERA, PEARLY B. (#4)
+# UID 3: Melanie -> TIU, MELANIE P. (#17)
+# UID 4: Janine -> GALVAN, JANINE KYLE (#9)
+# UID 5: Jamaica -> SORIANO, JAMAICA (#11)
+# UID 6: Lyca -> ESTACIO, LYCA (#7)
+# UID 7: Dennis -> ARDIENTE, DENNIS P. (#1)
+# UID 8: Ivan -> DE VERA, IVAN (#5)
+# UID 9: Jepoy -> BANIQUED, JEFFREY D. (#2)
+# UID 10: Jerwin -> DEE, JERWIN B. (#6)
+# UID 11: Carlo -> CAOILE, CARLO C. (#3)
+# UID 12: Larry -> ESTACIO, LARRY L. (#8)
+# UID 13: Randolf -> GALZOTE, RANDOLF J. (#14)
+# UID 14: Rowena -> ROMERO, ROWENA (#13)
+TA500_TO_SYSTEM_MAP: Dict[str, str] = {
+    '1':  '24',  # Gain Carlo Cayabyab
+    '2':  '4',   # Pearly B. De Vera
+    '3':  '17',  # Melanie P. Tiu
+    '4':  '9',   # Janine Kyle Galvan
+    '5':  '11',  # Jamaica Soriano
+    '6':  '7',   # Lyca Estacio
+    '7':  '1',   # Dennis P. Ardiente
+    '8':  '5',   # Ivan De Vera
+    '9':  '2',   # Jeffrey D. Baniqued (Jepoy)
+    '10': '6',   # Jerwin B. Dee
+    '11': '3',   # Carlo C. Caoile
+    '12': '8',   # Larry L. Estacio
+    '13': '14',  # Randolf J. Galzote
+    '14': '13',  # Rowena Romero
+}
+
 _employee_cache: Dict[str, str] = {}
 _pending_upload_queue: List[Dict[str, Any]] = []
 
@@ -155,8 +189,8 @@ def refresh_employee_cache() -> None:
 
 def sync_all_device_users(conn) -> int:
     """
-    Pulls all enrolled users from TA500 hardware memory.
-    If any newly enrolled employee is found, pushes them to Supabase employees table.
+    Pulls enrolled users from TA500 hardware memory.
+    Ensures hardware UIDs are mapped to their correct system employees.
     """
     global _employee_cache
     try:
@@ -166,18 +200,16 @@ def sync_all_device_users(conn) -> int:
 
         new_or_updated = []
         for u in users:
-            uid = str(u.user_id)
+            raw_uid = str(u.user_id)
+            uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
             raw_name = (u.name or '').strip()
             name = raw_name if raw_name else f'NN-{uid}'
 
-            # Check if this is a newly enrolled user or if their name was updated on device
+            # If user already exists in the system directory, don't overwrite
+            if uid in _employee_cache and not _employee_cache[uid].startswith('NN-'):
+                continue
+
             if uid not in _employee_cache:
-                new_or_updated.append({
-                    'device_user_id': uid,
-                    'full_name': name,
-                    'branch': 'Dagupan Main',
-                })
-            elif _employee_cache[uid].startswith('NN-') and not name.startswith('NN-'):
                 new_or_updated.append({
                     'device_user_id': uid,
                     'full_name': name,
@@ -520,15 +552,19 @@ def main():
             attendances = conn.get_attendance() or []
 
             # Check if any punch has an unknown user ID not in cache
-            unknown_uids = {str(a.user_id) for a in attendances
-                            if str(a.user_id) not in _employee_cache}
+            unknown_uids = {
+                TA500_TO_SYSTEM_MAP.get(str(a.user_id), str(a.user_id))
+                for a in attendances
+                if TA500_TO_SYSTEM_MAP.get(str(a.user_id), str(a.user_id)) not in _employee_cache
+            }
             if unknown_uids and not should_sync_users:
                 sync_all_device_users(conn)
 
             sync_time = datetime.now(timezone.utc).isoformat()
 
             for att in attendances:
-                uid = str(att.user_id)
+                raw_uid = str(att.user_id)
+                uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
                 naive_dt = att.timestamp
                 if isinstance(naive_dt, str):
                     from dateutil import parser as dp
