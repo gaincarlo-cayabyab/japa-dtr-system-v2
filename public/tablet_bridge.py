@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
-JAPA DTR Sync Bridge — Samsung Galaxy Tab A8 Edition (v6 Instant Employee & Punch Sync)
-High-performance biometric sync bridge designed for real-world office Wi-Fi.
+JAPA DTR Sync Bridge — Samsung Galaxy Tab A8 Edition (v12 Idle-Resilient 24/7 Engine)
+Reliable biometric sync bridge with automatic recovery from long idle periods.
 
-Key Upgrades in v6:
-  1. Automatic Enrolled Employee Sync: Continuously checks TA500 enrolled users
-     every ~20s. Any newly registered fingerprint user is automatically uploaded
-     to Supabase IMMEDIATELY — even before their very first punch!
-  2. Manual Web Sync Support: Clicking "Sync from TA500 Device" on the portal
-     triggers an immediate hardware user fetch within 5 seconds.
-  3. Fast 6s Punch Sync: Local attendance reads take <200ms.
-  4. Offline Queue / Weak Wi-Fi Resilience: Punches are never dropped or blocked.
-  5. Persistent HTTP Session: Keeps TLS alive for ultra-fast 100ms cloud uploads.
+Key Upgrades in v12:
+  1. safe_get_attendance(): Retries get_attendance() up to 3x on NoneType/packet errors
+     (the "sequence item 1: expected bytes-like object, NoneType found" bug after idle).
+  2. read_sizes() blip tolerance: Transient heartbeat failures skip the cycle instead
+     of triggering a full disconnect — 3 consecutive failures needed to reconnect.
+  3. Extended reconnect backoff: Up to 60s (was 20s) so TA500 hardware socket TIME_WAIT
+     fully clears before the next connect attempt.
+  4. Proactive 45-minute socket rotation: Reconnects before stale TCP state can build up,
+     preventing the first post-idle punch from hitting a corrupted buffer.
+  5. Graceful initial catch-up: Timeout on first connect no longer aborts — bridge
+     continues watching and retries on next punch event.
 """
 
 import os
@@ -598,10 +600,10 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v11')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v12')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     print(f'   Mode      : Smart Change-Detect Engine (read_sizes → get_attendance)')
-    print(f'   Heartbeat : Every 10s (0.1s check) | Full sync only on new punch')
+    print(f'   Heartbeat : Every 10s | Auto-retry on idle-period errors | 45min socket refresh')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -613,6 +615,27 @@ def main():
 
     ta500_fail_count = 0
     cycle_counter = 0
+    # ── Proactive socket rotation: re-connect every 45 min to prevent stale TCP state ──
+    MAX_CONNECTION_AGE = 2700  # 45 minutes in seconds
+
+    def safe_get_attendance(conn, label: str = '', max_retries: int = 3, retry_delay: int = 4) -> list:
+        """Retry get_attendance() up to max_retries times for transient NoneType/packet errors."""
+        for attempt in range(max_retries):
+            try:
+                result = conn.get_attendance()
+                return result or []
+            except Exception as e:
+                err_str = str(e).lower()
+                recoverable = any(x in err_str for x in ['nonetype', 'bytes', 'invalid', 'timed out', 'timeout'])
+                if recoverable and attempt < max_retries - 1:
+                    logger.warning(
+                        f'TA500 attendance fetch attempt {attempt + 1}/{max_retries} failed{(" (" + label + ")") if label else ""}: {e}. '
+                        f'Retrying in {retry_delay}s...'
+                    )
+                    time.sleep(retry_delay)
+                else:
+                    raise
+        return []
 
     while True:
         cycle_counter += 1
@@ -625,7 +648,8 @@ def main():
         conn = connect_device()
         if not conn:
             ta500_fail_count += 1
-            cooldown = min(6 + (ta500_fail_count * 2), 20)
+            # Extended backoff: TA500 hardware holds socket up to ~60s after disconnect
+            cooldown = min(10 + (ta500_fail_count * 5), 60)
             logger.warning(f'TA500 LAN busy/reconnecting (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
             if ta500_fail_count == 3:
                 subnet, local_ip = get_local_subnet()
@@ -636,6 +660,7 @@ def main():
             continue
 
         ta500_fail_count = 0
+        connection_start = time.time()
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Smart change-detect engine active.')
 
         # Ensure sensor is always in normal biometric verification mode
@@ -658,24 +683,34 @@ def main():
             logger.info(f'📊 TA500 has {known_record_count} total attendance records on device.')
             # Fetch and sync them all to catch up on any missed while offline
             if known_record_count > 0:
-                atts = conn.get_attendance() or []
-                caught_up = process_punches_batch(atts, seen)
-                if caught_up > 0:
-                    logger.info(f'✅ Caught up {caught_up} offline punch(es) from TA500 memory!')
-                    flush_upload_queue(seen)
-                else:
-                    logger.info('✅ All attendance records are already synced. Watching for new punches...')
+                try:
+                    atts = safe_get_attendance(conn, label='initial catch-up', max_retries=2, retry_delay=5)
+                    caught_up = process_punches_batch(atts, seen)
+                    if caught_up > 0:
+                        logger.info(f'✅ Caught up {caught_up} offline punch(es) from TA500 memory!')
+                        flush_upload_queue(seen)
+                    else:
+                        logger.info('✅ All attendance records are already synced. Watching for new punches...')
+                except Exception as e_fetch:
+                    # Graceful skip — don't disconnect, just watch for new changes
+                    logger.warning(f'Initial catch-up skipped (will retry on next punch): {e_fetch}')
         except Exception as e_init:
             logger.warning(f'Initial sync notice: {e_init}')
 
         inner_cycle = 0
         last_cloud_check = time.time()
         last_heartbeat = time.time()
+        read_sizes_fail_streak = 0  # consecutive read_sizes failures before triggering reconnect
 
         try:
             # ── 4. Main Loop: read_sizes() heartbeat, get_attendance() on change ──
             while True:
                 inner_cycle += 1
+
+                # ── Proactive socket rotation (every 45 min) ──────────────────
+                if time.time() - connection_start >= MAX_CONNECTION_AGE:
+                    logger.info('🔄 Proactive refresh: rotating socket to prevent stale connection. Reconnecting...')
+                    break
 
                 # Flush pending offline punches
                 if _pending_upload_queue:
@@ -710,15 +745,29 @@ def main():
                         acknowledge_command('sync_employees')
 
                 # ── KEY: Ultra-fast read_sizes() heartbeat (0.05-1.5s) ──────
-                conn.read_sizes()
-                current_count = conn.records
+                try:
+                    conn.read_sizes()
+                    current_count = conn.records
+                    read_sizes_fail_streak = 0  # reset on success
+                except Exception as e_rs:
+                    err_str = str(e_rs).lower()
+                    read_sizes_fail_streak += 1
+                    # Transient packet errors (NoneType, timeout) — skip this cycle, stay connected
+                    if any(x in err_str for x in ['nonetype', 'bytes', 'invalid', 'timed out', 'timeout']) \
+                            and read_sizes_fail_streak <= 3:
+                        logger.warning(f'⚠️ TA500 heartbeat blip ({read_sizes_fail_streak}/3): {e_rs}. Skipping cycle...')
+                        time.sleep(POLL_INTERVAL)
+                        continue
+                    # Hard network errors or repeated failures → reconnect
+                    logger.warning(f'⚠️ TA500 heartbeat failed ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
+                    raise
 
                 if current_count > known_record_count:
-                    # New punch(es) detected! Fetch only now.
+                    # New punch(es) detected! Fetch with retry (handles stale-buffer NoneType errors)
                     delta = current_count - known_record_count
                     logger.info(f'🆕 {delta} new punch(es) detected on TA500! Fetching records...')
                     try:
-                        atts = conn.get_attendance() or []
+                        atts = safe_get_attendance(conn, label='punch sync', max_retries=3, retry_delay=4)
                         new_punches = process_punches_batch(atts, seen)
                         known_record_count = current_count
                         if new_punches > 0:
@@ -727,7 +776,13 @@ def main():
                         else:
                             logger.info('Records fetched — duplicates skipped (already synced).')
                     except Exception as e_att:
-                        logger.warning(f'TA500 read notice: {e_att}')
+                        # get_attendance failed all retries — stay connected, try again next punch
+                        logger.warning(
+                            f'⚠️ TA500 fetch failed after retries: {e_att}. '
+                            f'Staying connected — will retry on next punch.'
+                        )
+                        # Advance count by delta-1 so the next heartbeat still detects the unsynced punch
+                        known_record_count = max(known_record_count, current_count - 1)
                 else:
                     known_record_count = current_count
                     # Heartbeat log every ~30 seconds
