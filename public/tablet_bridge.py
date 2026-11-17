@@ -83,8 +83,8 @@ def save_device_ip(ip: str) -> None:
 
 ZK_IP         = load_saved_ip()
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
-ZK_TIMEOUT    = 25  # Generous TCP timeout for stable multi-packet transmission over Wi-Fi
-POLL_INTERVAL = 10  # 10-second poll cycle on persistent open socket
+ZK_TIMEOUT    = 60   # Long TCP timeout — allows get_attendance() to complete fully
+POLL_INTERVAL = 10   # read_sizes() heartbeat every 10s (ultra-fast, 0.1s each)
 TZ            = pytz.timezone('Asia/Manila')
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://blmthmojjnonbmwitzmc.supabase.co')
@@ -598,10 +598,10 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v10')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v11')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Persistent Socket Engine (Normal Biometric Sensor Mode)')
-    print(f'   Poll Rate : 10s Paced Interval (Zero Sensor Interference / No Timeouts)')
+    print(f'   Mode      : Smart Change-Detect Engine (read_sizes → get_attendance)')
+    print(f'   Heartbeat : Every 10s (0.1s check) | Full sync only on new punch')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -636,9 +636,9 @@ def main():
             continue
 
         ta500_fail_count = 0
-        logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Biometric sensor ready for employee punches.')
+        logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Smart change-detect engine active.')
 
-        # Ensure sensor is active and ready to accept fingerprints
+        # Ensure sensor is always in normal biometric verification mode
         try:
             conn.enable_device()
         except Exception:
@@ -650,29 +650,48 @@ def main():
         except Exception:
             pass
 
+        # ── 3. Initial catch-up: Fetch all existing records on first connect ──
+        known_record_count = 0
+        try:
+            conn.read_sizes()
+            known_record_count = conn.records
+            logger.info(f'📊 TA500 has {known_record_count} total attendance records on device.')
+            # Fetch and sync them all to catch up on any missed while offline
+            if known_record_count > 0:
+                atts = conn.get_attendance() or []
+                caught_up = process_punches_batch(atts, seen)
+                if caught_up > 0:
+                    logger.info(f'✅ Caught up {caught_up} offline punch(es) from TA500 memory!')
+                    flush_upload_queue(seen)
+                else:
+                    logger.info('✅ All attendance records are already synced. Watching for new punches...')
+        except Exception as e_init:
+            logger.warning(f'Initial sync notice: {e_init}')
+
         inner_cycle = 0
         last_cloud_check = time.time()
+        last_heartbeat = time.time()
 
         try:
-            # ── 3. Persistent Loop on Single Open Connection ─────────────────
+            # ── 4. Main Loop: read_sizes() heartbeat, get_attendance() on change ──
             while True:
                 inner_cycle += 1
 
-                # Flush queue if any offline punches are queued
+                # Flush pending offline punches
                 if _pending_upload_queue:
                     flush_upload_queue(seen)
 
-                # Check cloud commands every ~20 seconds
+                # Check cloud portal commands every ~20 seconds
                 now = time.time()
                 if now - last_cloud_check >= 20:
                     last_cloud_check = now
                     meta = fetch_cloud_meta()
 
-                    # Hardware clear requested from web portal
                     if meta.get('clear_hardware') == 1:
                         logger.info('🧹 Remote clear requested from web portal!')
                         try:
                             conn.clear_attendance()
+                            known_record_count = 0
                             logger.info('✅ TA500 physical memory CLEARED!')
                         except Exception as e:
                             logger.error(f'Error clearing hardware: {e}')
@@ -682,7 +701,6 @@ def main():
                         _pending_upload_queue.clear()
                         _last_device_punch.clear()
 
-                    # Manual sync users requested from web portal
                     if meta.get('sync_employees') == 1:
                         logger.info('👤 Enrolled user sync requested from web portal!')
                         try:
@@ -691,23 +709,38 @@ def main():
                             logger.error(f'Error syncing users: {e}')
                         acknowledge_command('sync_employees')
 
-                # Query attendance logs across persistent socket
-                attendances = conn.get_attendance() or []
-                new_punches = process_punches_batch(attendances, seen)
+                # ── KEY: Ultra-fast read_sizes() heartbeat (0.05-1.5s) ──────
+                conn.read_sizes()
+                current_count = conn.records
 
-                if new_punches > 0:
-                    logger.info(f'Detected {new_punches} new punch(es) on TA500! Uploading...')
-                    flush_upload_queue(seen)
-                elif inner_cycle % 3 == 0:
-                    # Heartbeat notice every ~30s so user knows sync is active
-                    logger.info(f'🟢 TA500 Active ({ZK_IP}) — Sensor ready, listening for punches...')
+                if current_count > known_record_count:
+                    # New punch(es) detected! Fetch only now.
+                    delta = current_count - known_record_count
+                    logger.info(f'🆕 {delta} new punch(es) detected on TA500! Fetching records...')
+                    try:
+                        atts = conn.get_attendance() or []
+                        new_punches = process_punches_batch(atts, seen)
+                        known_record_count = current_count
+                        if new_punches > 0:
+                            logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
+                            flush_upload_queue(seen)
+                        else:
+                            logger.info('Records fetched — duplicates skipped (already synced).')
+                    except Exception as e_att:
+                        logger.warning(f'TA500 read notice: {e_att}')
+                else:
+                    known_record_count = current_count
+                    # Heartbeat log every ~30 seconds
+                    if now - last_heartbeat >= 30:
+                        last_heartbeat = now
+                        logger.info(f'🟢 TA500 Active ({ZK_IP}) — {known_record_count} records | Sensor ready for punches...')
 
                 time.sleep(POLL_INTERVAL)
 
         except (socket.error, ConnectionResetError, BrokenPipeError, TimeoutError) as net_err:
-            logger.warning(f'⚠️ Network connection notice: {net_err}. Auto-reconnecting in 8s...')
+            logger.warning(f'⚠️ Network connection dropped: {net_err}. Auto-reconnecting in 8s...')
         except Exception as err:
-            logger.warning(f'⚠️ TA500 notice: {err}. Auto-reconnecting in 8s...')
+            logger.warning(f'⚠️ TA500 stream notice: {err}. Auto-reconnecting in 8s...')
         finally:
             safe_disconnect(conn)
             time.sleep(8)
