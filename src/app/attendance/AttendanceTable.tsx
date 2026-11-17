@@ -319,6 +319,8 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
       // Sort chronologically (earliest punch first)
       group.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime())
 
+      const firstPunchTime = new Date(group[0].punch_time).getTime()
+
       group.forEach((log, index) => {
         if (index === 0) {
           // The very first punch of the shift is always Time In
@@ -328,12 +330,25 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             icon: '🟢',
           })
         } else {
-          // Any subsequent punch for that shift is Time Out
-          roleMap.set(log.id, {
-            label: 'Time Out',
-            badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
-            icon: '🔴',
-          })
+          // Anti-Double Tap Rule: calculate difference in minutes from first arrival punch
+          const punchTime = new Date(log.punch_time).getTime()
+          const diffMinutes = (punchTime - firstPunchTime) / (1000 * 60)
+
+          if (diffMinutes < 15) {
+            // Punches within 15 minutes of arrival are considered double-taps/confirmations, NOT premature Time Out!
+            roleMap.set(log.id, {
+              label: 'Time In',
+              badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+              icon: '🟢',
+            })
+          } else {
+            // 15+ minutes after arrival = valid Time Out
+            roleMap.set(log.id, {
+              label: 'Time Out',
+              badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+              icon: '🔴',
+            })
+          }
         }
       })
     })

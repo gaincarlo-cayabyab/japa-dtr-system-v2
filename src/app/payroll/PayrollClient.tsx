@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import type { EmployeePayrollSummary, DailyPayrollRecord, PayrollPayment } from '@/types/database'
 import { format } from 'date-fns'
 import {
@@ -182,8 +183,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   }
 
   // Fetch Payroll and Payment Records
-  const fetchPayrollAndPayments = async () => {
-    setLoading(true)
+  const fetchPayrollAndPayments = async (silent: boolean = false) => {
+    if (!silent) setLoading(true)
     try {
       const params = new URLSearchParams({
         start_date: startDate,
@@ -208,15 +209,43 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         setPayments(paymentsJson.data || [])
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error computing payroll'
-      setToast({ message: msg, type: 'error' })
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : 'Error computing payroll'
+        setToast({ message: msg, type: 'error' })
+      }
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
   useEffect(() => {
     fetchPayrollAndPayments()
+  }, [startDate, endDate, branchFilter])
+
+  // Background Auto-Refresh & Realtime Subscription
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('payroll-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
+        fetchPayrollAndPayments(true)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_compensation' }, () => {
+        fetchPayrollAndPayments(true)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'payroll_payments' }, () => {
+        fetchPayrollAndPayments(true)
+      })
+      .subscribe()
+
+    const interval = setInterval(() => {
+      fetchPayrollAndPayments(true)
+    }, 15000)
+
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(interval)
+    }
   }, [startDate, endDate, branchFilter])
 
   // Payment Map lookup
@@ -466,11 +495,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               <th className="px-2 py-1.5 text-center border-r border-slate-300 w-16">Sched</th>
               <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Daily Rate</th>
               <th className="px-2 py-1.5 text-center border-r border-slate-300 w-14">Days</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Regular Pay</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-amber-800 bg-amber-50/50">Holiday Pay</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 text-purple-800">OT Pay</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-20 text-rose-800">Late Ded.</th>
-              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 font-black text-slate-900 bg-emerald-50/50">Gross Salary</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 min-w-[95px] whitespace-nowrap">Regular Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 min-w-[95px] whitespace-nowrap text-amber-800 bg-amber-50/50">Holiday Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24 min-w-[95px] whitespace-nowrap text-purple-800">OT Pay</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 min-w-[110px] whitespace-nowrap text-rose-800">Late Ded.</th>
+              <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-28 min-w-[115px] whitespace-nowrap font-black text-slate-900 bg-emerald-50/50">Gross Salary</th>
               <th className="px-2.5 py-1.5 text-center border-r border-slate-300 w-28">Payment</th>
               <th className="px-2 py-1.5 text-center w-16">Action</th>
             </tr>
@@ -561,24 +590,24 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                       <span className="text-slate-300">—</span>
                     )}
                   </td>
-                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200">
+                  <td className="px-2.5 py-1 text-right font-mono text-xs border-r border-slate-200 whitespace-nowrap min-w-[110px]">
                     {waiveDeductions ? (
-                      <div className="leading-tight">
-                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <div className="leading-tight whitespace-nowrap">
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                           ₱0.00 Waived
                         </span>
                         {emp.total_tardiness_minutes > 0 && (
-                          <span className="block text-[9px] text-slate-400">
+                          <span className="block text-[9px] text-slate-400 whitespace-nowrap">
                             {emp.total_tardiness_minutes}m (waived)
                           </span>
                         )}
                       </div>
                     ) : emp.total_tardiness_deduction > 0 ? (
-                      <div className="leading-tight">
-                        <span className="font-semibold text-rose-600">
+                      <div className="leading-tight whitespace-nowrap">
+                        <span className="font-semibold text-rose-600 whitespace-nowrap">
                           -{formatCurrency(emp.total_tardiness_deduction)}
                         </span>
-                        <span className="block text-[9px] text-rose-400">
+                        <span className="block text-[9px] text-rose-400 whitespace-nowrap">
                           {emp.total_tardiness_minutes}m
                         </span>
                       </div>
@@ -634,16 +663,16 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               <td className="px-2.5 py-1.5 text-right font-mono border-r border-slate-300">
                 {formatCurrency(subTotals.regularPay)}
               </td>
-              <td className="px-2.5 py-1.5 text-right font-mono text-amber-800 bg-amber-50/60 border-r border-slate-300">
+              <td className="px-2.5 py-1.5 text-right font-mono text-amber-800 bg-amber-50/60 border-r border-slate-300 whitespace-nowrap min-w-[95px]">
                 {subTotals.holidayPay > 0 ? `+${formatCurrency(subTotals.holidayPay)}` : '₱0.00'}
               </td>
-              <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300">
+              <td className="px-2.5 py-1.5 text-right font-mono text-purple-800 border-r border-slate-300 whitespace-nowrap min-w-[95px]">
                 {subTotals.otPay > 0 ? `+${formatCurrency(subTotals.otPay)}` : '₱0.00'}
               </td>
-              <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300">
+              <td className="px-2.5 py-1.5 text-right font-mono text-rose-700 border-r border-slate-300 whitespace-nowrap min-w-[110px]">
                 {subTotals.tardinessDed > 0 ? `-${formatCurrency(subTotals.tardinessDed)}` : '₱0.00'}
               </td>
-              <td className="px-2.5 py-1.5 text-right font-mono text-emerald-800 bg-emerald-100/70 border-r border-slate-300">
+              <td className="px-2.5 py-1.5 text-right font-mono text-emerald-800 bg-emerald-100/70 border-r border-slate-300 whitespace-nowrap min-w-[115px]">
                 {formatCurrency(subTotals.grossPay)}
               </td>
               <td colSpan={2} className="px-2.5 py-1.5 text-center text-[10px] text-slate-500 font-bold uppercase">

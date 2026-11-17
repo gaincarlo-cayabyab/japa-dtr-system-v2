@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import type { DailyDtr } from '@/types/database'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
+import { createClient } from '@/lib/supabase/client'
 import {
   Clock,
   Download,
@@ -136,6 +137,45 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
       // ignore
     }
   }, [])
+
+  // Background Auto-Refresh & Realtime Subscription for DTR Reports
+  const fetchFreshDtr = useCallback(async () => {
+    try {
+      const supabase = createClient()
+      const { data: freshDtr } = await supabase
+        .from('daily_dtr')
+        .select('*')
+        .order('work_date', { ascending: false })
+        .order('full_name')
+      if (freshDtr) {
+        setData(freshDtr as DailyDtr[])
+      }
+    } catch (e) {
+      console.error('Error refreshing DTR reports:', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('reports-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
+        fetchFreshDtr()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_notes' }, () => {
+        fetchFreshDtr()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
+        fetchFreshDtr()
+      })
+      .subscribe()
+
+    const interval = setInterval(fetchFreshDtr, 15000)
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(interval)
+    }
+  }, [fetchFreshDtr])
 
   // Sync date changes across views and persist to localStorage
   const handleDateChange = (val: string) => {

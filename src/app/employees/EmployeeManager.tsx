@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { Employee } from '@/types/database'
@@ -87,6 +87,62 @@ export function EmployeeManager({ initialEmployees }: EmployeeManagerProps) {
     const t = setTimeout(() => setToast(null), 3500)
     return () => clearTimeout(t)
   }, [toast])
+
+  // Background Auto-Refresh & Realtime Subscription
+  const fetchFreshEmployees = useCallback(async () => {
+    try {
+      const supabase = createClient()
+      const [{ data: emps }, { data: comp }] = await Promise.all([
+        supabase.from('employees').select('*').order('full_name'),
+        supabase.from('employee_compensation').select('*'),
+      ])
+
+      if (emps) {
+        const compMap = new Map<string, { daily_rate: number; hourly_rate: number; schedule_type: string }>()
+        comp?.forEach((c) => {
+          const daily = Number(c.daily_rate) || 550.0
+          const hourly = c.hourly_rate ? Number(c.hourly_rate) : Math.round((daily / 8) * 100) / 100
+          compMap.set(c.device_user_id, {
+            daily_rate: daily,
+            hourly_rate: hourly,
+            schedule_type: c.schedule_type || 'mon_sat',
+          })
+        })
+
+        const combined = emps.map((emp) => {
+          const c = compMap.get(emp.device_user_id)
+          return {
+            ...emp,
+            daily_rate: c?.daily_rate ?? 550.0,
+            hourly_rate: c?.hourly_rate ?? 68.75,
+            schedule_type: (c?.schedule_type as 'mon_sat' | 'mon_fri') ?? (emp.full_name.includes('GAIN CARLO') ? 'mon_fri' : 'mon_sat'),
+          }
+        })
+        setEmployees(combined)
+      }
+    } catch (e) {
+      console.error('Error refreshing employees:', e)
+    }
+  }, [])
+
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('employees-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
+        fetchFreshEmployees()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'employee_compensation' }, () => {
+        fetchFreshEmployees()
+      })
+      .subscribe()
+
+    const interval = setInterval(fetchFreshEmployees, 15000)
+    return () => {
+      supabase.removeChannel(channel)
+      clearInterval(interval)
+    }
+  }, [fetchFreshEmployees])
 
   // Sorted alphabetically from A to Z
   const sortedAndFiltered = useMemo(() => {

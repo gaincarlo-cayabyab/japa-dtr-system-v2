@@ -173,6 +173,7 @@ TA500_TO_SYSTEM_MAP: Dict[str, str] = {
 
 _employee_cache: Dict[str, str] = {}
 _pending_upload_queue: List[Dict[str, Any]] = []
+_last_device_punch: Dict[str, datetime] = {}
 
 
 def refresh_employee_cache() -> None:
@@ -185,6 +186,24 @@ def refresh_employee_cache() -> None:
             logger.info(f'Employee cache: {len(_employee_cache)} employees loaded')
     except Exception as e:
         logger.warning(f'Employee cache refresh failed (will retry): {e}')
+
+
+def init_recent_punches() -> None:
+    """Preloads the most recent punch timestamp per employee to enforce 5-minute debounce across restarts."""
+    global _last_device_punch
+    try:
+        url = f'{SUPABASE_URL}/rest/v1/attendance_logs?select=device_user_id,punch_time&order=punch_time.desc&limit=100'
+        res = session.get(url, headers=_HEADERS_AUTH, timeout=(3, 5))
+        if res.status_code == 200:
+            from dateutil import parser as dp
+            for row in res.json():
+                uid = str(row['device_user_id'])
+                if uid not in _last_device_punch:
+                    pt = dp.parse(row['punch_time']).astimezone(TZ)
+                    _last_device_punch[uid] = pt
+            logger.info(f'Anti-Double Tap Debounce active: {len(_last_device_punch)} employee punch history loaded')
+    except Exception as e:
+        logger.warning(f'Recent punches init notice: {e}')
 
 
 def sync_all_device_users(conn) -> int:
@@ -461,6 +480,7 @@ def main():
     logger.info(f'Loaded {len(seen)} previously-synced punch hashes.')
 
     refresh_employee_cache()
+    init_recent_punches()
     logger.info('Tablet bridge active. Press Ctrl+C to stop.')
 
     local_token = load_local_token()
@@ -490,6 +510,7 @@ def main():
             seen.clear()
             save_seen_set(seen)
             _pending_upload_queue.clear()
+            _last_device_punch.clear()
             logger.info('✅ Local cache & queue reset. Ready for fresh punches!')
             time.sleep(POLL_INTERVAL)
             continue
@@ -501,6 +522,7 @@ def main():
             seen.clear()
             save_seen_set(seen)
             _pending_upload_queue.clear()
+            _last_device_punch.clear()
             local_token = remote_token
             save_local_token(local_token)
 
@@ -551,6 +573,22 @@ def main():
             # ── Check punches ──
             attendances = conn.get_attendance() or []
 
+            # Sort chronologically (earliest to latest)
+            def _att_key(a):
+                ts = getattr(a, 'timestamp', None)
+                if isinstance(ts, str):
+                    try:
+                        from dateutil import parser as dp
+                        return dp.parse(ts)
+                    except Exception:
+                        pass
+                return ts or datetime.min
+
+            try:
+                attendances.sort(key=_att_key)
+            except Exception:
+                pass
+
             # Check if any punch has an unknown user ID not in cache
             unknown_uids = {
                 TA500_TO_SYSTEM_MAP.get(str(a.user_id), str(a.user_id))
@@ -574,10 +612,26 @@ def main():
 
                 key = _punch_key(uid, utc_iso)
                 if key in seen:
+                    _last_device_punch[uid] = local_dt
                     continue
 
                 if any(q['_key'] == key for q in _pending_upload_queue):
+                    _last_device_punch[uid] = local_dt
                     continue
+
+                # 🛡️ 5-Minute Anti-Double Tap Debounce Rule (300 seconds)
+                # If an employee taps their finger twice within 5 minutes, ignore subsequent bounce taps
+                prev_punch_dt = _last_device_punch.get(uid)
+                if prev_punch_dt is not None:
+                    diff_sec = abs((local_dt - prev_punch_dt).total_seconds())
+                    if diff_sec < 300:
+                        emp_name = _employee_cache.get(uid, f'ID #{uid}')
+                        logger.info(f'🛡️ Debounce Rule: Ignored double-tap punch for {emp_name} at {local_dt.strftime("%I:%M:%S %p")} ({diff_sec:.0f}s after previous punch)')
+                        seen.add(key)
+                        save_seen_set(seen)
+                        continue
+
+                _last_device_punch[uid] = local_dt
 
                 status_val = getattr(att, 'punch', None)
                 if status_val is None:

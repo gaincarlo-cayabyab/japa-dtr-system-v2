@@ -113,12 +113,13 @@ export function DashboardClient({
     return () => { supabase.removeChannel(channel); clearInterval(interval) }
   }, [fetchFreshData])
 
-  // Smart punch role detection
+  // Smart punch role detection (Strictly Time In 🟢 or Time Out 🔴 with 15m anti-bounce window)
   const smartRoles = useMemo(() => {
     const shiftMap = new Map<string, any[]>()
     const getOpDate = (ts: string) => {
       const d = new Date(ts)
-      const shifted = new Date(d.getTime() - 4 * 60 * 60 * 1000)
+      // +8h Manila - 4h operational cutoff = +4h
+      const shifted = new Date(d.getTime() + 4 * 60 * 60 * 1000)
       return shifted.toISOString().slice(0, 10)
     }
     for (const log of recentPunches || []) {
@@ -129,16 +130,20 @@ export function DashboardClient({
     const roleMap = new Map<string, { label: string; color: string; icon: string }>()
     shiftMap.forEach((group) => {
       group.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime())
-      const first = group[0]
-      const last = group[group.length - 1]
-      const diffMin = (new Date(last.punch_time).getTime() - new Date(first.punch_time).getTime()) / 60000
-      group.forEach((log) => {
-        if (log.id === first.id) {
+      const firstPunchTime = new Date(group[0].punch_time).getTime()
+      group.forEach((log, index) => {
+        if (index === 0) {
           roleMap.set(log.id, { label: 'Time In', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '🟢' })
-        } else if (log.id === last.id && diffMin >= 3) {
-          roleMap.set(log.id, { label: 'Time Out', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: '🔴' })
         } else {
-          roleMap.set(log.id, { label: 'Mid-Shift', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: '🔵' })
+          const punchTime = new Date(log.punch_time).getTime()
+          const diffMin = (punchTime - firstPunchTime) / 60000
+          if (diffMin < 15) {
+            // Within 15 minutes of arrival = arrival confirmation, keep as Time In
+            roleMap.set(log.id, { label: 'Time In', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: '🟢' })
+          } else {
+            // 15+ minutes after arrival = valid Time Out
+            roleMap.set(log.id, { label: 'Time Out', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: '🔴' })
+          }
         }
       })
     })
