@@ -1,82 +1,95 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
-  Fingerprint,
+  ShieldCheck,
+  Briefcase,
+  Receipt,
+  Package,
+  Users,
+  ChevronRight,
+  ChevronLeft,
+  Volume2,
+  VolumeX,
   Delete,
   Lock,
   AlertCircle,
-  CheckCircle2,
-  Sparkles,
-  ChevronRight,
-  ShieldCheck,
-  Check,
   Keyboard,
-  Volume2,
-  VolumeX,
-  Code2,
-  Building2,
+  Check,
 } from 'lucide-react'
 
-interface SystemUser {
+interface RoleOption {
+  id: string
+  title: string
+  badge: string
+  badgeColor: string
+  icon: React.ElementType
+  iconBg: string
+  iconColor: string
+  desc: string
   username: string
-  display_name: string
-  role: string
+  defaultPin?: string
 }
 
-const ROLE_CONFIG: Record<string, { label: string; gradient: string; badgeBg: string }> = {
-  ceo: {
-    label: 'Chief Executive Officer (CEO)',
-    gradient: 'from-amber-500 via-orange-500 to-yellow-600',
-    badgeBg: 'bg-amber-50 text-amber-800 border-amber-200',
+const ROLES: RoleOption[] = [
+  {
+    id: 'admin',
+    title: 'Administrator',
+    badge: 'Full Access',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200',
+    icon: ShieldCheck,
+    iconBg: 'bg-blue-50',
+    iconColor: 'text-blue-600',
+    desc: 'Full workspace governance, financials, payroll & configurations',
+    username: 'admin',
   },
-  manager: {
-    label: 'General Manager',
-    gradient: 'from-blue-600 via-indigo-600 to-cyan-600',
-    badgeBg: 'bg-blue-50 text-blue-800 border-blue-200',
+  {
+    id: 'store_manager',
+    title: 'Store Manager',
+    badge: 'Managerial',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
+    icon: Briefcase,
+    iconBg: 'bg-purple-50',
+    iconColor: 'text-purple-600',
+    desc: 'Order sign-offs, sales quotations, reports & branch workflow',
+    username: 'japa_manager',
   },
-  super_admin: {
-    label: 'IT Administrator (Super Admin)',
-    gradient: 'from-emerald-500 via-teal-600 to-indigo-600',
-    badgeBg: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+  {
+    id: 'cashier',
+    title: 'Cashier POS',
+    badge: 'POS Ready',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    icon: Receipt,
+    iconBg: 'bg-emerald-50',
+    iconColor: 'text-emerald-600',
+    desc: 'Direct access to retail sales terminal, barcode lookup & checkout',
+    username: 'japa_pearly',
   },
-  staff: {
-    label: 'Office Staff',
-    gradient: 'from-purple-500 via-indigo-500 to-pink-500',
-    badgeBg: 'bg-purple-50 text-purple-800 border-purple-200',
+  {
+    id: 'inventory',
+    title: 'Inventory Officer',
+    badge: 'Stock Audit',
+    badgeColor: 'bg-amber-50 text-amber-700 border-amber-200',
+    icon: Package,
+    iconBg: 'bg-amber-50',
+    iconColor: 'text-amber-600',
+    desc: 'Multi-store catalog, stock adjustments & reorder thresholds',
+    username: 'japa_pearly',
   },
-  admin: {
-    label: 'Administrator',
-    gradient: 'from-violet-600 via-purple-600 to-indigo-700',
-    badgeBg: 'bg-violet-50 text-violet-800 border-violet-200',
+  {
+    id: 'production',
+    title: 'Production Staff',
+    badge: 'Shop Floor',
+    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200',
+    icon: Users,
+    iconBg: 'bg-sky-50',
+    iconColor: 'text-sky-600',
+    desc: '7-stage customized printing, heat-press, cutting & job statuses',
+    username: 'japa_pearly',
   },
-  viewer: {
-    label: 'Viewer',
-    gradient: 'from-orange-400 via-amber-500 to-yellow-500',
-    badgeBg: 'bg-orange-50 text-orange-800 border-orange-200',
-  },
-}
-
-function getRoleConfig(role: string) {
-  return (
-    ROLE_CONFIG[role] ?? {
-      label: role.replace('_', ' '),
-      gradient: 'from-slate-600 to-slate-800',
-      badgeBg: 'bg-slate-50 text-slate-800 border-slate-200',
-    }
-  )
-}
-
-function getInitials(name: string) {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-}
+]
 
 // ── Web Audio Synthesizer for Keypad Audio Feedback ──────────────────────────
 function playKeySound(type: 'tap' | 'backspace' | 'clear' | 'success' | 'error', soundEnabled: boolean) {
@@ -167,45 +180,23 @@ function playKeySound(type: 'tap' | 'backspace' | 'clear' | 'success' | 'error',
 
 export default function LoginPage() {
   const router = useRouter()
-  const [users, setUsers] = useState<SystemUser[]>([])
-  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null)
+  const [step, setStep] = useState<1 | 2>(1)
+  const [selectedRole, setSelectedRole] = useState<RoleOption>(ROLES[0])
   const [pin, setPin] = useState<string>('')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [shake, setShake] = useState(false)
-  const [loadingUsers, setLoadingUsers] = useState(true)
   const [soundEnabled, setSoundEnabled] = useState(true)
-
-  useEffect(() => {
-    async function loadUsers() {
-      try {
-        const res = await fetch('/api/auth/users')
-        const data = await res.json()
-        if (data.users && data.users.length > 0) {
-          setUsers(data.users)
-          const defaultUser =
-            data.users.find((u: SystemUser) => u.username === 'admin') || data.users[0]
-          setSelectedUser(defaultUser)
-        }
-      } catch (err) {
-        console.error('Failed to load users:', err)
-      } finally {
-        setLoadingUsers(false)
-      }
-    }
-    loadUsers()
-  }, [])
 
   const submitLogin = useCallback(
     async (pinToSubmit: string) => {
-      if (!selectedUser) return
       setLoading(true)
       setErrorMsg(null)
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: selectedUser.username, pin: pinToSubmit }),
+          body: JSON.stringify({ username: selectedRole.username, pin: pinToSubmit }),
         })
         const data = await res.json()
         if (!res.ok) {
@@ -227,7 +218,7 @@ export default function LoginPage() {
         setLoading(false)
       }
     },
-    [selectedUser, router, soundEnabled]
+    [selectedRole, router, soundEnabled]
   )
 
   const handleNumClick = (digit: string) => {
@@ -255,297 +246,352 @@ export default function LoginPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key >= '0' && e.key <= '9') {
-        handleNumClick(e.key)
-      } else if (e.key === 'Backspace') {
-        handleBackspace()
-      } else if (e.key === 'Escape') {
-        handleClear()
+      if (step === 2) {
+        if (e.key >= '0' && e.key <= '9') {
+          handleNumClick(e.key)
+        } else if (e.key === 'Backspace') {
+          handleBackspace()
+        } else if (e.key === 'Escape') {
+          handleClear()
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleNumClick])
+  }, [step, handleNumClick])
 
-  const selectedRole = selectedUser ? getRoleConfig(selectedUser.role) : null
+  const handleSelectRole = (role: RoleOption) => {
+    playKeySound('tap', soundEnabled)
+    setSelectedRole(role)
+    setPin('')
+    setErrorMsg(null)
+    setStep(2)
+  }
+
+  const RoleIcon = selectedRole.icon
 
   return (
-    <div
-      className="min-h-screen w-full flex items-center justify-center p-3 sm:p-5 lg:p-8 select-none relative"
-      style={{
-        background:
-          'radial-gradient(ellipse at top left, #1e1b4b 0%, #0f172a 45%, #020617 100%)',
-      }}
-    >
-      {/* Subtle Background Glows */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-10 left-10 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse" />
-        <div
-          className="absolute bottom-10 right-10 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl animate-pulse"
-          style={{ animationDelay: '1.5s' }}
-        />
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#f8fafc] overflow-x-hidden relative select-none">
+      {/* ── LEFT HALF: JAPA 3D Print Studio Animation ─────────────────────── */}
+      <div className="w-full lg:w-1/2 min-h-[580px] lg:min-h-screen relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
+        {/* Top-Left Floating Pill (Identical to Image 2) */}
+        <div className="absolute top-6 left-6 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/95 backdrop-blur-md shadow-sm border border-slate-200/80">
+          <div className="relative w-7 h-7 rounded-lg overflow-hidden border border-slate-200 shadow-2xs flex-shrink-0 bg-white">
+            <Image
+              src="/japa-logo.jpg"
+              alt="JAPA Logo"
+              fill
+              className="object-contain p-0.5"
+              priority
+            />
+          </div>
+          <div>
+            <p className="text-xs font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
+            <p className="text-[10px] font-medium text-slate-500 leading-none mt-0.5">
+              Enterprise Operations Workspace
+            </p>
+          </div>
+        </div>
+
+        {/* 3D WebGL Three.js Print Studio Interactive Canvas */}
+        <div className="w-full h-full min-h-[580px] lg:min-h-screen relative bg-transparent">
+          <iframe
+            src="/print-animation/index.html?embed=1"
+            title="JAPA Global Trading printing and apparel 3D animation"
+            className="w-full h-full border-0 block absolute inset-0"
+            style={{ width: '100%', height: '100%', display: 'block' }}
+          />
+        </div>
+
+        {/* Bottom-Left Pill (Identical to Image 2) */}
+        <div className="absolute bottom-6 left-6 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/85 backdrop-blur-md shadow-xs border border-slate-200/60 text-[11px] font-medium text-slate-600">
+          <span>© 2026 JAPA Global Trading</span>
+        </div>
+
+        {/* Bottom-Right Pill (Identical to Image 2) */}
+        <div className="absolute bottom-6 right-6 z-20 hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-white/90 backdrop-blur-md shadow-xs border border-emerald-200/80 text-[11px] font-bold text-emerald-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Dagupan &amp; Manila Nodes</span>
+        </div>
       </div>
 
-      {/* ── Main 2-Column Responsive Card Container ────────────────────────── */}
+      {/* ── RIGHT HALF: Floating Auth Card on Dotted Pastel Background ─────── */}
       <div
-        className="relative z-10 w-full max-w-7xl bg-white rounded-3xl shadow-2xl overflow-hidden grid grid-cols-1 lg:grid-cols-12 border border-slate-700/30"
+        className="w-full lg:w-1/2 min-h-screen flex flex-col justify-center items-center p-4 sm:p-8 lg:p-12 relative"
         style={{
-          boxShadow: '0 32px 80px rgba(0,0,0,0.5)',
-          minHeight: '740px',
+          background: 'radial-gradient(circle at 50% 50%, #eff6ff 0%, #f0fdfa 40%, #f8fafc 100%)',
+          backgroundImage:
+            'radial-gradient(rgba(148, 163, 184, 0.25) 1.5px, transparent 1.5px)',
+          backgroundSize: '24px 24px',
         }}
       >
-        {/* ── LEFT COLUMN: JAPA Print Studio 3D Interactive Animation ──────── */}
-        <div className="lg:col-span-7 xl:col-span-7 bg-[#0b0e14] relative flex flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/80">
-          {/* Top Brand Bar */}
-          <div className="p-4 sm:p-5 flex items-center justify-between border-b border-white/10 bg-black/40 backdrop-blur-md z-10">
+        {/* Floating White Card (Exact replica of Image 2) */}
+        <div
+          className="w-full max-w-[490px] bg-white/95 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-2xl shadow-indigo-900/10 border border-white/80 ring-1 ring-slate-900/5 relative transition-all duration-300"
+          style={{ boxShadow: '0 25px 60px -15px rgba(15, 23, 42, 0.12)' }}
+        >
+          {/* Card Top Brand Row */}
+          <div className="flex items-center justify-between pb-5 border-b border-slate-100 mb-6">
             <div className="flex items-center gap-3">
-              <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-white/20 shadow-md bg-white flex-shrink-0">
+              <div className="relative w-10 h-10 rounded-2xl overflow-hidden border border-slate-200/80 shadow-xs flex-shrink-0 bg-white">
                 <Image
                   src="/japa-logo.jpg"
                   alt="JAPA Logo"
                   fill
-                  className="object-contain p-0.5"
+                  className="object-contain p-1"
                   priority
                 />
               </div>
               <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-base font-black text-white tracking-tight">JAPA</span>
-                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/30">
-                    GLOBAL TRADING
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 font-medium">The Craft of Print · 3D Studio</p>
+                <h2 className="text-base font-black text-slate-900 leading-tight">JAPA Global</h2>
+                <p className="text-xs font-semibold text-slate-400">Enterprise Operations</p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-bold border border-emerald-500/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>TA500 Online</span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200/80 shadow-2xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>DAG &amp; MNL</span>
               </span>
             </div>
           </div>
 
-          {/* 3D WebGL Three.js Interactive Animation Embed */}
-          <div className="flex-1 w-full min-h-[440px] sm:min-h-[520px] lg:min-h-[620px] relative bg-[#0b0e14]">
-            <iframe
-              src="/print-animation/index.html?embed=1"
-              title="JAPA Global Trading printing and apparel 3D animation"
-              className="w-full h-full border-0 block absolute inset-0"
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'block',
-              }}
-            />
-          </div>
-
-          {/* Bottom Technical Strip */}
-          <div className="px-5 py-3 border-t border-white/10 bg-black/40 backdrop-blur-md flex items-center justify-between text-xs text-slate-400 z-10">
-            <span className="text-[11px]">Sublimation · Commercial Apparel · DTG · Roll Services</span>
-            <span className="font-mono text-[10px] text-slate-500">v2.5 Terminal</span>
-          </div>
-        </div>
-
-        {/* ── RIGHT COLUMN: Operator Profile Selection & PIN Keypad ────────── */}
-        <div className="lg:col-span-5 xl:col-span-5 p-6 sm:p-8 flex flex-col justify-between bg-gradient-to-br from-slate-50 via-white to-indigo-50/25">
-          {/* Top Bar with Sound Toggle */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm">
-                <Fingerprint className="w-4 h-4" />
+          {/* ── STEP 1: Select Role View (Exact UI from Image 2) ───────────── */}
+          {step === 1 && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 leading-tight">Select Role</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Tap your operational team to sign in</p>
+                </div>
+                <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                  Step 1 of 2
+                </span>
               </div>
-              <h2 className="text-sm font-black text-slate-900 tracking-tight">Security Access</h2>
-            </div>
 
-            {/* Audio Feedback Toggle */}
-            <button
-              type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border transition-colors ${
-                soundEnabled
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                  : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-              }`}
-              title={soundEnabled ? 'Keypad sound enabled (Click to mute)' : 'Keypad sound muted (Click to enable)'}
-            >
-              {soundEnabled ? (
-                <>
-                  <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Sound ON</span>
-                </>
-              ) : (
-                <>
-                  <VolumeX className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Sound OFF</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Profile Selector (Dropdown / Pills) */}
-          <div className="mb-4">
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
-              Select Operator Profile
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {loadingUsers ? (
-                <>
-                  <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
-                  <div className="h-12 rounded-xl bg-slate-100 animate-pulse" />
-                </>
-              ) : (
-                users.slice(0, 4).map((u) => {
-                  const isSelected = selectedUser?.username === u.username
-                  const cfg = getRoleConfig(u.role)
+              {/* Roles List */}
+              <div className="space-y-2.5 pt-1">
+                {ROLES.map((role) => {
+                  const Icon = role.icon
                   return (
                     <button
-                      key={u.username}
+                      key={role.id}
                       type="button"
-                      onClick={() => {
-                        playKeySound('tap', soundEnabled)
-                        setSelectedUser(u)
-                        setPin('')
-                        setErrorMsg(null)
-                      }}
-                      className={`flex items-center gap-2 p-2 rounded-xl border text-left transition-all ${
-                        isSelected
-                          ? 'bg-indigo-50 border-indigo-400 shadow-xs ring-2 ring-indigo-400/20'
-                          : 'bg-white border-slate-200 hover:bg-slate-50'
-                      }`}
+                      onClick={() => handleSelectRole(role)}
+                      className="w-full flex items-center justify-between p-3.5 rounded-2xl border border-slate-200/70 bg-white hover:bg-slate-50/80 hover:border-indigo-300 hover:shadow-xs transition-all text-left group"
                     >
-                      <div
-                        className={`w-7 h-7 rounded-lg bg-gradient-to-br ${cfg.gradient} flex items-center justify-center text-white text-[11px] font-black flex-shrink-0 shadow-2xs`}
-                      >
-                        {getInitials(u.display_name)}
+                      <div className="flex items-start gap-3 min-w-0 pr-2">
+                        <div
+                          className={`w-9 h-9 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 mt-0.5 shadow-2xs`}
+                        >
+                          <Icon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                              {role.title}
+                            </span>
+                            <span
+                              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${role.badgeColor}`}
+                            >
+                              {role.badge}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-400 mt-0.5 leading-snug line-clamp-1">
+                            {role.desc}
+                          </p>
+                        </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-slate-900 truncate leading-tight">
-                          {u.display_name.split(' ')[0]}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate">{u.role.replace('_', ' ')}</p>
-                      </div>
-                      {isSelected && <Check className="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" />}
+
+                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
                     </button>
                   )
-                })
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 2: Enter PIN Keypad View ─────────────────────────────── */}
+          {step === 2 && (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              {/* Back to Roles navigation bar */}
+              <div className="flex items-center justify-between pb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playKeySound('tap', soundEnabled)
+                    setStep(1)
+                    setPin('')
+                    setErrorMsg(null)
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Back to Roles</span>
+                </button>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold border transition-colors ${
+                      soundEnabled
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                        : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
+                    }`}
+                    title={soundEnabled ? 'Mute Keypad Sound' : 'Enable Keypad Sound'}
+                  >
+                    {soundEnabled ? (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Sound ON</span>
+                      </>
+                    ) : (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Muted</span>
+                      </>
+                    )}
+                  </button>
+                  <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-lg">
+                    Step 2 of 2
+                  </span>
+                </div>
+              </div>
+
+              {/* Selected Role Banner */}
+              <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-200/80">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className={`w-8 h-8 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
+                  >
+                    <RoleIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-900 leading-tight">
+                      {selectedRole.title}
+                    </p>
+                    <p className="text-[10px] text-slate-500">Security PIN Verification</p>
+                  </div>
+                </div>
+                <span
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${selectedRole.badgeColor}`}
+                >
+                  {selectedRole.badge}
+                </span>
+              </div>
+
+              {/* 6-Digit PIN Indicator Dots */}
+              <div className={`py-2 ${shake ? 'animate-shake' : ''}`}>
+                <div className="flex justify-center items-center gap-3">
+                  {[0, 1, 2, 3, 4, 5].map((idx) => {
+                    const isFilled = pin.length > idx
+                    return (
+                      <div
+                        key={idx}
+                        className={`transition-all duration-200 ${
+                          isFilled
+                            ? 'w-4 h-4 sm:w-5 sm:h-5 rounded-full scale-110 shadow-sm'
+                            : 'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-200 border-2 border-slate-300'
+                        }`}
+                        style={
+                          isFilled
+                            ? {
+                                background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
+                                boxShadow: '0 3px 8px rgba(37, 99, 235, 0.4)',
+                              }
+                            : {}
+                        }
+                      />
+                    )
+                  })}
+                </div>
+
+                {/* Error Message */}
+                {errorMsg && (
+                  <div className="mt-2.5 flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl font-bold justify-center animate-in fade-in">
+                    <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" />
+                    <span>{errorMsg}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* 3x4 Keypad Grid */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[290px] mx-auto w-full pt-1">
+                {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+                  <button
+                    key={digit}
+                    type="button"
+                    onClick={() => handleNumClick(digit)}
+                    disabled={loading}
+                    className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
+                  >
+                    {digit}
+                  </button>
+                ))}
+
+                {/* Clear Button */}
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  disabled={loading || pin.length === 0}
+                  className="h-12 sm:h-13 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
+                >
+                  Clear
+                </button>
+
+                {/* 0 Button */}
+                <button
+                  type="button"
+                  onClick={() => handleNumClick('0')}
+                  disabled={loading}
+                  className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
+                >
+                  0
+                </button>
+
+                {/* Backspace Button */}
+                <button
+                  type="button"
+                  onClick={handleBackspace}
+                  disabled={loading || pin.length === 0}
+                  className="h-12 sm:h-13 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
+                  title="Backspace"
+                >
+                  <Delete className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Loading Indicator */}
+              {loading && (
+                <div className="pt-2 flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 animate-pulse">
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                  </svg>
+                  <span>Verifying Security PIN…</span>
+                </div>
               )}
             </div>
-          </div>
-
-          {/* Active Profile Header */}
-          {selectedUser && selectedRole && (
-            <div className="flex flex-col items-center mb-3 text-center">
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                <ShieldCheck className="w-3 h-3 text-indigo-600" />
-                {selectedRole.label}
-              </span>
-            </div>
           )}
+        </div>
 
-          {/* 6-Digit PIN Indicator Dots */}
-          <div className={`mb-4 ${shake ? 'animate-shake' : ''}`}>
-            <div className="flex justify-center items-center gap-3">
-              {[0, 1, 2, 3, 4, 5].map((idx) => {
-                const isFilled = pin.length > idx
-                return (
-                  <div
-                    key={idx}
-                    className={`transition-all duration-200 ${
-                      isFilled
-                        ? 'w-4 h-4 sm:w-5 sm:h-5 rounded-full scale-110 shadow-sm'
-                        : 'w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-slate-200 border-2 border-slate-300'
-                    }`}
-                    style={
-                      isFilled
-                        ? {
-                            background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
-                            boxShadow: '0 3px 8px rgba(37, 99, 235, 0.4)',
-                          }
-                        : {}
-                    }
-                  />
-                )
-              })}
-            </div>
-
-            {/* Error Message */}
-            {errorMsg && (
-              <div className="mt-2.5 flex items-center gap-1.5 text-xs text-rose-700 bg-rose-50 border border-rose-200 px-3 py-1 rounded-xl font-bold justify-center animate-in fade-in">
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 text-rose-600" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
+        {/* Security & System Creator Footer below card (Identical to Image 2) */}
+        <div className="mt-5 flex flex-col items-center gap-1.5 text-center">
+          <div className="flex items-center gap-2 text-xs text-slate-500 font-medium">
+            <Lock className="w-3.5 h-3.5 text-slate-400" />
+            <span>Encrypted Session · Enterprise Role-Based Access Control</span>
           </div>
-
-          {/* 3x4 Keypad Grid */}
-          <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[300px] mx-auto w-full">
-            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
-              <button
-                key={digit}
-                type="button"
-                onClick={() => handleNumClick(digit)}
-                disabled={loading}
-                className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
-              >
-                {digit}
-              </button>
-            ))}
-
-            {/* Clear Button */}
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={loading || pin.length === 0}
-              className="h-12 sm:h-13 rounded-2xl bg-rose-50 border border-rose-200 text-xs font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
-            >
-              Clear
-            </button>
-
-            {/* 0 Button */}
-            <button
-              type="button"
-              onClick={() => handleNumClick('0')}
-              disabled={loading}
-              className="h-12 sm:h-13 rounded-2xl bg-white border border-slate-200/90 text-2xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
-            >
-              0
-            </button>
-
-            {/* Backspace Button */}
-            <button
-              type="button"
-              onClick={handleBackspace}
-              disabled={loading || pin.length === 0}
-              className="h-12 sm:h-13 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
-              title="Backspace"
-            >
-              <Delete className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Loading Indicator */}
-          {loading && (
-            <div className="mt-3 flex items-center justify-center gap-2 text-xs font-bold text-indigo-600 animate-pulse">
-              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-              </svg>
-              <span>Verifying Security PIN…</span>
-            </div>
-          )}
-
-          {/* Keyboard hint & Creator Credit */}
-          <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-col items-center gap-1.5 text-center">
-            <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-medium">
-              <Keyboard className="w-3.5 h-3.5" />
-              <span>Type PIN with keypad or physical keyboard</span>
-            </div>
-            <p className="text-[10px] text-slate-400 font-semibold">
-              Engineered by <span className="text-slate-700 font-bold">Gain Carlo Cayabyab</span> · IT Administrator
-            </p>
-          </div>
+          <p className="text-[11px] text-slate-400 font-semibold">
+            Engineered &amp; Maintained by <span className="text-slate-700 font-bold">Gain Carlo Cayabyab</span> · IT Administrator
+          </p>
         </div>
       </div>
 

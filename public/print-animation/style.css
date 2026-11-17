@@ -13,3 +13,6 @@
 @media(max-width:760px){.site-header{height:76px}.brand img{height:44px;width:44px}.brand-wordmark strong{font-size:24px}.brand-wordmark>span{font-size:6px;letter-spacing:1.8px}.studio-intro h1{font-size:40px}.studio{height:700px}.studio #viewport{top:210px;bottom:130px}.scene-label{top:211px}.studio-intro{top:28px}.scene-caption h2{font-size:23px}.scene-caption p{max-width:95%;font-size:10px}.caption-line{gap:10px}.caption-star{font-size:30px}.scene-caption h2{max-width:90%}body.panel-mode .studio-intro h1{font-size:38px}}
 @media(min-width:761px){.experience{height:calc(100svh - 172px)}.studio #viewport{top:140px;bottom:120px}}
 body.panel-mode:not(.is-framed) .experience{max-width:640px;margin:0 auto;min-height:620px;border-left:1px solid var(--line);border-right:1px solid var(--line)}body.panel-mode:not(.is-framed){background:#e8ebf3}body.panel-mode .panel-exit{position:fixed;bottom:14px;right:20px}
+
+body.is-framed .panel-exit, body.panel-mode .panel-exit { display: none !important; } body.is-framed { background: transparent !important; }
+
