@@ -100,7 +100,7 @@ def acquire_instance_lock():
     except socket.error:
         print("⚠️ [WARNING] Another instance of tablet_bridge is already running in background!")
         print("   Only 1 bridge instance can connect to TA500 to prevent connection collisions.")
-        print("   If you want to restart it fresh, run: pkill -f python")
+        print("   To stop it and start fresh, run: pkill -9 -f python")
         sys.exit(0)
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
