@@ -55,9 +55,49 @@ interface AttendanceTableProps {
 
 function formatPunchTime(ts: string) {
   try {
-    return format(new Date(ts), 'MMM d, yyyy · hh:mm aa')
+    const d = new Date(ts)
+    const datePart = d.toLocaleDateString('en-US', {
+      timeZone: 'Asia/Manila',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    const timePart = d.toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Manila',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
+    return `${datePart} · ${timePart}`
   } catch {
     return ts
+  }
+}
+
+// Helpers for Philippine timezone (Asia/Manila)
+function getManilaDateStr(ts: string): string {
+  try {
+    const d = new Date(ts)
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d)
+  } catch {
+    return ts.slice(0, 10)
+  }
+}
+
+function getOperationalDateStr(ts: string): string {
+  try {
+    const d = new Date(ts)
+    // In Manila time (UTC+8), subtract 4 hours for 4:00 AM cutoff
+    // (UTC + 8h - 4h = UTC + 4h)
+    const shifted = new Date(d.getTime() + 4 * 60 * 60 * 1000)
+    return shifted.toISOString().slice(0, 10)
+  } catch {
+    return ts.slice(0, 10)
   }
 }
 
@@ -263,47 +303,36 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
     }
   }
 
-  // Smart punch detection (Time In vs Time Out with 4:00 AM cutoff)
+  // Smart punch detection (Time In vs Time Out only — strictly no mid-shift)
   const smartRoles = useMemo(() => {
     const shiftMap = new Map<string, AttendanceLog[]>()
-    const getOpDate = (ts: string) => {
-      const d = new Date(ts)
-      const shifted = new Date(d.getTime() - 4 * 60 * 60 * 1000)
-      return shifted.toISOString().slice(0, 10)
-    }
 
     for (const log of logs) {
-      const opDate = getOpDate(log.punch_time)
+      const opDate = getOperationalDateStr(log.punch_time)
       const key = `${log.device_user_id}_${opDate}`
       if (!shiftMap.has(key)) shiftMap.set(key, [])
       shiftMap.get(key)!.push(log)
     }
 
-    const roleMap = new Map<string, { label: string; badgeClass: string; icon: string }>()
+    const roleMap = new Map<string, { label: 'Time In' | 'Time Out'; badgeClass: string; icon: string }>()
     shiftMap.forEach((group) => {
+      // Sort chronologically (earliest punch first)
       group.sort((a, b) => new Date(a.punch_time).getTime() - new Date(b.punch_time).getTime())
-      const first = group[0]
-      const last = group[group.length - 1]
-      const diffMin = (new Date(last.punch_time).getTime() - new Date(first.punch_time).getTime()) / 60000
 
-      group.forEach((log) => {
-        if (log.id === first.id) {
+      group.forEach((log, index) => {
+        if (index === 0) {
+          // The very first punch of the shift is always Time In
           roleMap.set(log.id, {
             label: 'Time In',
             badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
             icon: '🟢',
           })
-        } else if (log.id === last.id && diffMin >= 3) {
+        } else {
+          // Any subsequent punch for that shift is Time Out
           roleMap.set(log.id, {
             label: 'Time Out',
             badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
             icon: '🔴',
-          })
-        } else {
-          roleMap.set(log.id, {
-            label: 'Mid-Shift',
-            badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
-            icon: '🔵',
           })
         }
       })
@@ -316,15 +345,15 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
     return logs.filter((log) => {
       const empName = getEmployeeName(log.device_user_id, employeesList).toLowerCase()
       if (dateFilter) {
-        const logDate = log.punch_time.slice(0, 10)
-        if (logDate !== dateFilter) return false
+        const manilaDate = getManilaDateStr(log.punch_time)
+        const opDate = getOperationalDateStr(log.punch_time)
+        if (manilaDate !== dateFilter && opDate !== dateFilter) return false
       }
       if (employeeFilter && log.device_user_id !== employeeFilter) return false
       if (statusFilter !== 'all') {
         const role = smartRoles.get(log.id)
         if (statusFilter === 'in' && role?.label !== 'Time In') return false
         if (statusFilter === 'out' && role?.label !== 'Time Out') return false
-        if (statusFilter === 'mid' && role?.label !== 'Mid-Shift') return false
       }
       if (nameSearch && !empName.includes(nameSearch.toLowerCase())) return false
       return true
@@ -483,11 +512,13 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="">All Employees ({employeesList.length})</option>
-            {employeesList.map((emp) => (
-              <option key={emp.id} value={emp.device_user_id}>
-                {emp.full_name}
-              </option>
-            ))}
+            {[...employeesList]
+              .sort((a, b) => a.full_name.localeCompare(b.full_name))
+              .map((emp) => (
+                <option key={emp.id} value={emp.device_user_id}>
+                  {emp.full_name} (#{emp.device_user_id})
+                </option>
+              ))}
           </select>
         </div>
 
@@ -500,9 +531,8 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
             className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="all">All Types</option>
-            <option value="in">Time In</option>
-            <option value="out">Time Out</option>
-            <option value="mid">Mid-Shift</option>
+            <option value="in">🟢 Time In</option>
+            <option value="out">🔴 Time Out</option>
           </select>
         </div>
 
@@ -674,11 +704,13 @@ export function AttendanceTable({ initialLogs, employees }: AttendanceTableProps
                   onChange={(e) => setSelectedEmpId(e.target.value)}
                   className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {employeesList.map((emp) => (
-                    <option key={emp.id} value={emp.device_user_id}>
-                      #{emp.device_user_id} — {emp.full_name}
-                    </option>
-                  ))}
+                  {[...employeesList]
+                    .sort((a, b) => a.full_name.localeCompare(b.full_name))
+                    .map((emp) => (
+                      <option key={emp.id} value={emp.device_user_id}>
+                        #{emp.device_user_id} — {emp.full_name}
+                      </option>
+                    ))}
                 </select>
               </div>
 
