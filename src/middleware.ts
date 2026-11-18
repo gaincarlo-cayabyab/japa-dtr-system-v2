@@ -9,7 +9,7 @@ export function middleware(request: NextRequest) {
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/api/sync-token') ||
+    pathname.startsWith('/api/sync') ||
     pathname.startsWith('/tablet_bridge.py') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon.ico') ||
