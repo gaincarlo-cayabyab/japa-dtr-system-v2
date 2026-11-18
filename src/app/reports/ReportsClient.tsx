@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { DailyDtr } from '@/types/database'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
 import { createClient } from '@/lib/supabase/client'
+import { normalizeDtrRecord, CalculationMode } from '@/lib/payroll'
 import {
   Clock,
   Download,
@@ -131,6 +132,40 @@ export function ReportsClient({
   const [branchFilter, setBranchFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Calculation Mode: 'exact' (Real-Time Raw) | 'normalized' (Standard Shift Policy)
+  const [calcMode, setCalcMode] = useState<CalculationMode>('exact')
+
+  // Restore saved calculation mode preference
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem('japa_calculation_mode') as CalculationMode
+      if (savedMode === 'exact' || savedMode === 'normalized') {
+        setCalcMode(savedMode)
+      }
+    } catch {}
+  }, [])
+
+  const handleToggleCalcMode = (mode: CalculationMode) => {
+    setCalcMode(mode)
+    try {
+      localStorage.setItem('japa_calculation_mode', mode)
+    } catch {}
+    setToast({
+      message: mode === 'normalized'
+        ? '✨ Standard Normalized Shift Policy active (anti-overtime exaggeration)!'
+        : '⏱️ Exact Biometrics active (real-time raw punches).',
+      type: 'success',
+    })
+  }
+
+  // Active dataset transformed by calculation mode
+  const effectiveData = useMemo(() => {
+    if (calcMode === 'normalized') {
+      return data.map(normalizeDtrRecord)
+    }
+    return data
+  }, [data, calcMode])
 
   // Restore saved date from localStorage on mount so page refreshes/edits stay on user's chosen date
   useEffect(() => {
@@ -321,7 +356,7 @@ export function ReportsClient({
 
   const filtered = useMemo(() => {
     const weekRange = viewMode === 'weekly' ? getWeekRange(weekAnchor) : null
-    return data.filter((row) => {
+    return effectiveData.filter((row) => {
       if (branchFilter && row.branch !== branchFilter) return false
       if (statusFilter !== 'all' && row.shift_status !== statusFilter) return false
       if (searchQuery.trim() !== '') {
@@ -334,7 +369,7 @@ export function ReportsClient({
       if (viewMode === 'weekly' && weekRange) return row.work_date >= weekRange.start && row.work_date <= weekRange.end
       return row.work_date === dateFilter
     })
-  }, [data, viewMode, monthFilter, dateFilter, weekAnchor, branchFilter, statusFilter, searchQuery])
+  }, [effectiveData, viewMode, monthFilter, dateFilter, weekAnchor, branchFilter, statusFilter, searchQuery])
 
   // Summary statistics
   const uniqueEmployees = new Set(filtered.map((r) => r.employee_id)).size
@@ -375,7 +410,7 @@ export function ReportsClient({
 
     return chartDates.map((dateStr) => {
       // Find all records for this date from the master dataset
-      const dateRecords = data.filter((r) => {
+      const dateRecords = effectiveData.filter((r) => {
         if (r.work_date !== dateStr) return false
         if (branchFilter && r.branch !== branchFilter) return false
         return true
@@ -413,7 +448,7 @@ export function ReportsClient({
         isSelected: dateStr === dateFilter,
       }
     })
-  }, [chartDates, data, branchFilter, employees, dateFilter])
+  }, [chartDates, effectiveData, branchFilter, employees, dateFilter])
 
   // Top Overtime Staff
   const topOvertimeEmployees = useMemo(() => {
@@ -437,7 +472,7 @@ export function ReportsClient({
       return [...employees].sort((a, b) => a.full_name.localeCompare(b.full_name))
     }
     const map = new Map<string, EmployeeInfo>()
-    data.forEach((r) => {
+    effectiveData.forEach((r) => {
       if (!map.has(r.device_user_id)) {
         map.set(r.device_user_id, {
           id: r.employee_id,
@@ -448,7 +483,7 @@ export function ReportsClient({
       }
     })
     return Array.from(map.values()).sort((a, b) => a.full_name.localeCompare(b.full_name))
-  }, [employees, data])
+  }, [employees, effectiveData])
 
   // Daily Roster: All employees for dateFilter with Attendance / Absent / Leave status
   // When an employee has no punch / no data, status is 'None' (renders as '—')
@@ -469,7 +504,7 @@ export function ReportsClient({
     const mapped = list.map((emp) => {
       const isMonFri = emp.full_name.includes('GAIN CARLO')
       const isRestDay = isMonFri ? (dayOfWeek === 0 || dayOfWeek === 6) : (dayOfWeek === 0)
-      const rec = data.find(
+      const rec = effectiveData.find(
         (r) => String(r.device_user_id) === String(emp.device_user_id) && r.work_date === dateFilter
       )
       const note = shiftNotes[`${emp.device_user_id}_${dateFilter}`]
@@ -516,7 +551,7 @@ export function ReportsClient({
     const manila = filteredByStatus.filter((item) => item.emp.branch === 'Manila')
 
     return { dagupanDaily: dagupan, manilaDaily: manila }
-  }, [allEmployeesList, branchFilter, searchQuery, dateFilter, data, shiftNotes, statusFilter])
+  }, [allEmployeesList, branchFilter, searchQuery, dateFilter, effectiveData, shiftNotes, statusFilter])
 
   // 7 Calendar days for the active week (Mon through Sun)
   const weekDays = useMemo(() => {
@@ -946,6 +981,7 @@ export function ReportsClient({
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
+      calc_mode: calcMode,
     })
     if (branchFilter) params.append('branch', branchFilter)
     window.open(`/api/reports/excel?${params.toString()}`, '_blank')
@@ -989,7 +1025,7 @@ export function ReportsClient({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `JAPA_DTR_Smart_${label}.csv`
+    a.download = `JAPA_DTR_${calcMode === 'normalized' ? 'Normalized' : 'Exact'}_${label}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -2099,6 +2135,65 @@ export function ReportsClient({
           </div>
         </div>
       )}
+
+      {/* Calculation Mode Switcher (Exact Biometrics vs Standard Normalized) */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md border border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1 max-w-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">DTR Calculation Engine</span>
+            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+              calcMode === 'normalized'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                : 'bg-blue-500/20 text-blue-300 border-blue-400/40'
+            }`}>
+              {calcMode === 'normalized' ? '✨ Standard Normalized (Clean Policy)' : '⏱️ Exact Biometrics (Raw Real-Time)'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {calcMode === 'normalized' ? (
+              <span>
+                <strong>Standard Shift Policy:</strong> Morning arrival (8:00–9:05 AM) normalizes to <strong>9:00 AM</strong> · Post-shift departure (6:00–6:30 PM) normalizes to <strong>6:00 PM</strong> to eliminate casual punch delays and anti-overtime exaggeration · Authorized OT calculated in completed 30-min blocks.
+              </span>
+            ) : (
+              <span>
+                <strong>Raw Biometric Stream:</strong> Displays exact physical hardware punches to the exact minute as captured by the FingerTec TA500 terminal.
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* Segmented Switcher Control */}
+        <div className="flex items-center p-1 bg-slate-800/90 rounded-xl border border-slate-700/80 shadow-inner flex-shrink-0 self-start md:self-center">
+          <button
+            type="button"
+            onClick={() => handleToggleCalcMode('exact')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              calcMode === 'exact'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Switch to Exact Biometrics: Shows raw hardware timestamps to the minute"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Exact Biometrics</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleToggleCalcMode('normalized')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              calcMode === 'normalized'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-black'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Switch to Standard Normalized: 9:00 AM – 6:00 PM shift alignment with anti-overtime exaggeration buffer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Standard Normalized</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-400/20 text-emerald-200 uppercase font-extrabold ml-0.5">Policy</span>
+          </button>
+        </div>
+      </div>
 
       {/* Filter Toolbar */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-wrap gap-3 items-end">

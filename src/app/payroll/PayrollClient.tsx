@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EmployeePayrollSummary, DailyPayrollRecord, PayrollPayment } from '@/types/database'
+import { CalculationMode } from '@/lib/payroll'
 import { format } from 'date-fns'
 import {
   Calculator,
@@ -94,8 +95,33 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const [searchQuery, setSearchQuery] = useState('')
   // Display style: 'table' (default compact grid) | 'cards'
   const [displayMode, setDisplayMode] = useState<'table' | 'cards'>('table')
-  // Option to Turn OFF (waive) all late deductions across all staff
+  // Calculation Mode: 'exact' (Real-Time Raw) | 'normalized' (Standard Shift Policy)
+  const [calcMode, setCalcMode] = useState<CalculationMode>('exact')
   const [waiveDeductions, setWaiveDeductions] = useState<boolean>(false)
+
+  // Restore saved calculation mode preference
+  useEffect(() => {
+    try {
+      const savedMode = localStorage.getItem('japa_calculation_mode') as CalculationMode
+      if (savedMode === 'exact' || savedMode === 'normalized') {
+        setCalcMode(savedMode)
+      }
+    } catch {}
+  }, [])
+
+  const handleToggleCalcMode = (mode: CalculationMode) => {
+    setCalcMode(mode)
+    try {
+      localStorage.setItem('japa_calculation_mode', mode)
+    } catch {}
+    fetchPayrollAndPayments(false, mode)
+    setToast({
+      message: mode === 'normalized'
+        ? '✨ Standard Normalized Shift Policy activated (anti-overtime exaggeration)!'
+        : '⏱️ Exact Biometrics mode activated (real-time raw punches).',
+      type: 'success',
+    })
+  }
 
   // Restore saved deductions toggle preference
   useEffect(() => {
@@ -183,12 +209,14 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   }
 
   // Fetch Payroll and Payment Records
-  const fetchPayrollAndPayments = async (silent: boolean = false) => {
+  const fetchPayrollAndPayments = async (silent: boolean = false, overrideCalcMode?: CalculationMode) => {
     if (!silent) setLoading(true)
     try {
+      const modeToUse = overrideCalcMode || calcMode
       const params = new URLSearchParams({
         start_date: startDate,
         end_date: endDate,
+        calc_mode: modeToUse,
       })
       if (branchFilter) params.append('branch', branchFilter)
 
@@ -220,7 +248,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
   useEffect(() => {
     fetchPayrollAndPayments()
-  }, [startDate, endDate, branchFilter])
+  }, [startDate, endDate, branchFilter, calcMode])
 
   // Background Auto-Refresh & Realtime Subscription
   useEffect(() => {
@@ -452,6 +480,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     const params = new URLSearchParams({
       start_date: startDate,
       end_date: endDate,
+      calc_mode: calcMode,
     })
     if (branchFilter) params.append('branch', branchFilter)
     window.open(`/api/reports/excel?${params.toString()}`, '_blank')
@@ -973,6 +1002,65 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               DOLE Holiday Premiums
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* Calculation Mode Switcher (Exact Biometrics vs Standard Normalized) */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white rounded-2xl p-4 sm:p-5 shadow-md border border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="space-y-1 max-w-2xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-indigo-300">Payroll Calculation Engine</span>
+            <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+              calcMode === 'normalized'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/40'
+                : 'bg-blue-500/20 text-blue-300 border-blue-400/40'
+            }`}>
+              {calcMode === 'normalized' ? '✨ Standard Normalized Active (Anti-Overtime Exaggeration)' : '⏱️ Exact Biometrics Active (Raw Real-Time)'}
+            </span>
+          </div>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {calcMode === 'normalized' ? (
+              <span>
+                <strong>Shift-Aligned Policy:</strong> 8:00–9:05 AM arrival aligns to <strong>9:00 AM</strong> · 6:00–6:30 PM departure aligns to <strong>6:00 PM</strong> to eliminate casual clock-out delays from exaggerating payroll · Overtime credited in clean completed 30-min blocks.
+              </span>
+            ) : (
+              <span>
+                <strong>Raw Biometric Stream:</strong> Computes wages using exact physical hardware punches to the exact minute as captured by the FingerTec TA500 terminal.
+              </span>
+            )}
+          </p>
+        </div>
+
+        {/* Segmented Switcher Control */}
+        <div className="flex items-center p-1 bg-slate-800/90 rounded-xl border border-slate-700/80 shadow-inner flex-shrink-0 self-start md:self-center">
+          <button
+            type="button"
+            onClick={() => handleToggleCalcMode('exact')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              calcMode === 'exact'
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Switch to Exact Biometrics: Computes payroll using raw hardware timestamps"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Exact Biometrics</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleToggleCalcMode('normalized')}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+              calcMode === 'normalized'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-black'
+                : 'text-slate-400 hover:text-white'
+            }`}
+            title="Switch to Standard Normalized: 9:00 AM – 6:00 PM shift alignment with anti-overtime exaggeration buffer"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Standard Normalized</span>
+            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-400/20 text-emerald-200 uppercase font-extrabold ml-0.5">Policy</span>
+          </button>
         </div>
       </div>
 

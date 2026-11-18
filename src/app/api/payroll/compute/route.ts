@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date') || defaultStart
     const endDate = searchParams.get('end_date') || defaultEnd
     const branch = searchParams.get('branch')
+    const calcMode = (searchParams.get('calc_mode') || 'exact') as 'exact' | 'normalized'
 
     // 1. Fetch settings
     const { data: settingsData } = await supabase
@@ -103,7 +104,8 @@ export async function GET(request: NextRequest) {
         emp,
         (dtrList as DailyDtr[]) || [],
         comp,
-        settings
+        settings,
+        calcMode
       )
     })
 
@@ -127,6 +129,7 @@ export async function GET(request: NextRequest) {
       success: true,
       period: { start: startDate, end: endDate },
       branch: branch || 'All Branches',
+      calc_mode: calcMode,
       totals,
       employees: summaries,
     })

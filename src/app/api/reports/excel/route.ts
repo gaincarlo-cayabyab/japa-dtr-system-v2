@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date') || defaultStart
     const endDate = searchParams.get('end_date') || defaultEnd
     const branch = searchParams.get('branch')
+    const calcMode = (searchParams.get('calc_mode') || 'exact') as 'exact' | 'normalized'
 
     // 1. Fetch settings
     const { data: settingsData } = await supabase
@@ -111,7 +112,8 @@ export async function GET(request: NextRequest) {
         emp,
         (dtrList as DailyDtr[]) || [],
         comp,
-        settings
+        settings,
+        calcMode
       )
     })
 
@@ -151,7 +153,8 @@ export async function GET(request: NextRequest) {
 
     payrollSheet.mergeCells('A2:Q2')
     const subTitleCell = payrollSheet.getCell('A2')
-    subTitleCell.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Generated: ${format(new Date(), 'PPpp')}`
+    const modeLabel = calcMode === 'normalized' ? 'Standard Normalized (Shift Policy)' : 'Exact Biometrics (Raw Real-Time)'
+    subTitleCell.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Calculation Mode: ${modeLabel}   |   Generated: ${format(new Date(), 'PPpp')}`
     subTitleCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } }
     subTitleCell.alignment = { vertical: 'middle', horizontal: 'center' }
     payrollSheet.getRow(2).height = 20
@@ -325,7 +328,7 @@ export async function GET(request: NextRequest) {
 
     dtrSheet.mergeCells('A2:L2')
     const dtrSub = dtrSheet.getCell('A2')
-    dtrSub.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Smart 4:00 AM Operational Cutoff Applied`
+    dtrSub.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Mode: ${modeLabel}   |   Smart 4:00 AM Operational Cutoff Applied`
     dtrSub.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } }
     dtrSub.alignment = { vertical: 'middle', horizontal: 'center' }
     dtrSheet.getRow(2).height = 20

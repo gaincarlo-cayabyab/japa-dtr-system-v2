@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { normalizeDtrRecord, CalculationMode } from '@/lib/payroll'
+import type { DailyDtr } from '@/types/database'
 
 interface DailyDtrRow {
   full_name: string
@@ -36,6 +38,7 @@ export async function GET(request: NextRequest) {
   const month = searchParams.get('month') // YYYY-MM
   const branch = searchParams.get('branch')
   const format = searchParams.get('format') ?? 'json'
+  const calcMode = (searchParams.get('calc_mode') || 'exact') as CalculationMode
 
   let query = supabase
     .from('daily_dtr')
@@ -59,7 +62,8 @@ export async function GET(request: NextRequest) {
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const rows = (data ?? []) as DailyDtrRow[]
+  const rawRows = (data ?? []) as unknown as DailyDtr[]
+  const rows = (calcMode === 'normalized' ? rawRows.map(normalizeDtrRecord) : rawRows) as unknown as DailyDtrRow[]
 
   if (format === 'csv') {
     const headers = [

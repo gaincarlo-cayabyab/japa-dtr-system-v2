@@ -9,6 +9,111 @@ import type {
 } from '@/types/database'
 import { getHolidayForDate } from '@/lib/holidays'
 
+export type CalculationMode = 'exact' | 'normalized'
+
+function getNextWorkDate(workDate: string): string {
+  const [y, m, d] = workDate.split('-').map(Number)
+  const nextDateObj = new Date(Date.UTC(y, m - 1, d + 1))
+  return nextDateObj.toISOString().slice(0, 10)
+}
+
+/**
+ * Normalizes a DailyDtr record according to standard business shift rules:
+ * 1. Morning Arrival Normalization:
+ *    - Check-in between 08:00 AM (480m) and 09:05 AM (545m) Manila Time aligns to 09:00:00 AM.
+ *    - Check-in after 09:05 AM keeps actual arrival (genuine tardiness logged).
+ * 2. Post-Shift Anti-Overtime Exaggeration Buffer:
+ *    - Check-out between 06:00 PM (1080m) and 06:30 PM (1110m) Manila Time aligns to 06:00:00 PM.
+ *      (Eliminates casual linger around the biometric device from inflating payroll OT).
+ *    - Check-out after 06:30 PM credits authorized overtime in completed 30-minute blocks (e.g. 18:30, 19:00, 23:00).
+ *    - Check-out before 06:00 PM keeps actual departure (under-time logged).
+ * 3. Re-computes hours_worked (with 12:00 PM - 1:00 PM lunch break deduction) and overtime_hours.
+ */
+export function normalizeDtrRecord(dtr: DailyDtr): DailyDtr {
+  if (!dtr.first_check_in) return dtr
+
+  const workDate = dtr.work_date
+  const nextDate = getNextWorkDate(workDate)
+
+  // Parse first_check_in in Manila Time (UTC+8)
+  const inDt = new Date(dtr.first_check_in)
+  const inUtcHours = inDt.getUTCHours()
+  const inUtcMinutes = inDt.getUTCMinutes()
+  const inManilaHour = (inUtcHours + 8) % 24
+  const inTotalMin = inManilaHour * 60 + inUtcMinutes
+
+  let normInTime = dtr.first_check_in
+
+  // Morning arrival normalization:
+  // If arrived between 08:00 AM (480m) and 09:05 AM (545m) -> normalized to 09:00 AM
+  if (inTotalMin >= 480 && inTotalMin <= 545) {
+    normInTime = `${workDate}T09:00:00+08:00`
+  }
+
+  let normOutTime = dtr.last_check_out
+  if (dtr.last_check_out) {
+    const outDt = new Date(dtr.last_check_out)
+    const outUtcHours = outDt.getUTCHours()
+    const outUtcMinutes = outDt.getUTCMinutes()
+    const outManilaHour = (outUtcHours + 8) % 24
+    const outTotalMin = outManilaHour * 60 + outUtcMinutes
+
+    // Check if checkout is past midnight (00:00 to 04:00 belongs to nextDate)
+    const isPastMidnight = outManilaHour < 4
+
+    if (!isPastMidnight) {
+      // Post-shift departure buffer: 06:00 PM (1080m) to 06:30 PM (1110m)
+      // Clamps to 06:00 PM (no false casual OT)
+      if (outTotalMin >= 1080 && outTotalMin <= 1110) {
+        normOutTime = `${workDate}T18:00:00+08:00`
+      } else if (outTotalMin > 1110) {
+        // Beyond 6:30 PM: credit overtime in clean completed 30-min blocks
+        const excessMins = outTotalMin - 1080
+        const completedHalfHours = Math.floor(excessMins / 30)
+        const normMinOfDay = 1080 + completedHalfHours * 30
+        const normH = Math.floor(normMinOfDay / 60)
+        const normM = normMinOfDay % 60
+        normOutTime = `${workDate}T${String(normH).padStart(2, '0')}:${String(normM).padStart(2, '0')}:00+08:00`
+      }
+    }
+  }
+
+  // Re-calculate hours worked & overtime based on normalized punches
+  let hoursWorked = Number(dtr.hours_worked || 0)
+  let overtimeHours = Number(dtr.overtime_hours || 0)
+
+  if (normInTime && normOutTime) {
+    const startMs = new Date(normInTime).getTime()
+    const endMs = new Date(normOutTime).getTime()
+    if (endMs > startMs) {
+      const elapsedHours = (endMs - startMs) / (1000 * 60 * 60)
+
+      // Lunch break deduction: if shift spans 12:00 PM to 1:00 PM (1h deduction)
+      let lunchDeduction = 0
+      const lunchStart = new Date(`${workDate}T12:00:00+08:00`).getTime()
+      const lunchEnd = new Date(`${workDate}T13:00:00+08:00`).getTime()
+      if (endMs > lunchStart && startMs < lunchEnd) {
+        const overlapStart = Math.max(startMs, lunchStart)
+        const overlapEnd = Math.min(endMs, lunchEnd)
+        lunchDeduction = Math.max(0, (overlapEnd - overlapStart) / (1000 * 60 * 60))
+      }
+
+      const netHours = Math.max(0, elapsedHours - lunchDeduction)
+      hoursWorked = Math.round(netHours * 100) / 100
+      overtimeHours = Math.max(0, Math.round((hoursWorked - 8.00) * 100) / 100)
+    }
+  }
+
+  return {
+    ...dtr,
+    first_check_in: normInTime,
+    last_check_out: normOutTime,
+    hours_worked: hoursWorked,
+    overtime_hours: overtimeHours,
+    shift_status: normOutTime ? 'Completed' : (dtr.shift_status || 'On Duty'),
+  }
+}
+
 export interface DOLEMultipliers {
   base: number
   ot: number
@@ -279,14 +384,19 @@ export function computeEmployeePayroll(
   employee: Employee,
   dtrList: DailyDtr[],
   comp: EmployeeCompensation,
-  settings: PayrollSettings
+  settings: PayrollSettings,
+  calcMode: CalculationMode = 'exact'
 ): EmployeePayrollSummary {
   const dailyRate = Number(comp.daily_rate) || 0
   const hourlyRate = comp.hourly_rate
     ? Number(comp.hourly_rate)
     : dailyRate / (settings.work_hours_per_day || 8)
 
-  const records = dtrList
+  const effectiveDtrList = calcMode === 'normalized'
+    ? dtrList.map(normalizeDtrRecord)
+    : dtrList
+
+  const records = effectiveDtrList
     .filter((d) => d.device_user_id === employee.device_user_id)
     .sort((a, b) => a.work_date.localeCompare(b.work_date))
     .map((dtr) => computeDailyPayroll(dtr, comp, settings))
