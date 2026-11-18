@@ -117,8 +117,8 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     fetchPayrollAndPayments(false, mode)
     setToast({
       message: mode === 'normalized'
-        ? '✨ Standard Normalized Shift Policy activated (anti-overtime exaggeration)!'
-        : '⏱️ Exact Biometrics mode activated (real-time raw punches).',
+        ? '✨ Corporate Standard Shift Policy activated.'
+        : '⏱️ Exact Biometrics activated (raw unadjusted timekeeping).',
       type: 'success',
     })
   }
@@ -1021,11 +1021,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           <p className="text-xs text-slate-300 leading-relaxed">
             {calcMode === 'normalized' ? (
               <span>
-                <strong>Shift-Aligned Policy:</strong> 8:00–9:05 AM arrival aligns to <strong>9:00 AM</strong> · 6:00–6:30 PM departure aligns to <strong>6:00 PM</strong> to eliminate casual clock-out delays from exaggerating payroll · Overtime credited in clean completed 30-min blocks.
+                <strong>Corporate Standard Shift Policy:</strong> Core working hours are standardized from 09:00 AM to 06:00 PM. Incorporates an authorized morning grace window (08:00–09:05 AM) and reconciles routine egress intervals (06:01–06:30 PM) to ensure equitable, audit-ready payroll. Authorized overtime beyond 06:30 PM is recognized in structured 30-minute intervals.
               </span>
             ) : (
               <span>
-                <strong>Raw Biometric Stream:</strong> Computes wages using exact physical hardware punches to the exact minute as captured by the FingerTec TA500 terminal.
+                <strong>Raw Biometric Timekeeping:</strong> Computes payroll wages strictly from unadjusted physical time punches recorded by the FingerTec TA500 terminal for forensic timekeeping audits and biometric punch verification.
               </span>
             )}
           </p>

@@ -65,6 +65,27 @@ def get_supabase() -> Client:
         raise ValueError('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env')
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
+# ─── TA500 Hardware Biometric ID to System Employee ID Mapping ────────────────
+TA500_TO_SYSTEM_MAP: dict[str, str] = {
+    '1':  '24',  # Gain Carlo Cayabyab
+    '2':  '4',   # Pearly B. De Vera
+    '3':  '17',  # Melanie P. Tiu
+    '4':  '9',   # Janine Kyle Galvan
+    '5':  '11',  # Jamaica Soriano
+    '6':  '7',   # Lyca Estacio
+    '7':  '1',   # Dennis P. Ardiente
+    '8':  '5',   # Ivan De Vera
+    '9':  '2',   # Jeffrey D. Baniqued
+    '10': '6',   # Jerwin B. Dee
+    '11': '3',   # Carlo C. Caoile
+    '12': '8',   # Larry L. Estacio
+    '13': '14',  # Randolf J. Galzote
+    '14': '13',  # Rowena Romero
+    '15': '19',  # Asky Sentenillar
+    '16': '15',  # Juvell Luna
+    '17': '16',  # Henry M. Tiozon
+}
+
 # ─── Employee cache ───────────────────────────────────────────────────────────
 _employee_cache: dict[str, str] = {}  # device_user_id → full_name
 _cache_lock = threading.Lock()
@@ -121,8 +142,10 @@ def sync_device_data(supabase: Client) -> int:
         unknown_uids = set()
         with _cache_lock:
             for att in attendances:
-                if str(att.user_id) not in _employee_cache:
-                    unknown_uids.add(str(att.user_id))
+                raw_uid = str(att.user_id)
+                sys_uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
+                if sys_uid not in _employee_cache:
+                    unknown_uids.add(raw_uid)
 
         if unknown_uids:
             logger.info(f'Resolving new employee names from device for IDs: {unknown_uids}...')
@@ -130,11 +153,12 @@ def sync_device_data(supabase: Client) -> int:
             new_users = []
             with _cache_lock:
                 for u in users:
-                    uid = str(u.user_id)
-                    if uid in unknown_uids:
-                        name = u.name.strip() if u.name and u.name.strip() else f'NN-{uid}'
+                    raw_uid = str(u.user_id)
+                    sys_uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
+                    if raw_uid in unknown_uids and sys_uid not in _employee_cache:
+                        name = u.name.strip() if u.name and u.name.strip() else f'NN-{sys_uid}'
                         new_users.append({
-                            'device_user_id': uid,
+                            'device_user_id': sys_uid,
                             'full_name': name,
                             'branch': 'Dagupan Main',
                         })
@@ -152,7 +176,8 @@ def sync_device_data(supabase: Client) -> int:
         sync_time = datetime.now(timezone.utc).isoformat()
 
         for att in attendances:
-            uid = str(att.user_id)
+            raw_uid = str(att.user_id)
+            uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
             naive_dt = att.timestamp
             if isinstance(naive_dt, str):
                 from dateutil import parser as dp

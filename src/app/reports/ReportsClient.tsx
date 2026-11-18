@@ -153,8 +153,8 @@ export function ReportsClient({
     } catch {}
     setToast({
       message: mode === 'normalized'
-        ? '✨ Standard Normalized Shift Policy active (anti-overtime exaggeration)!'
-        : '⏱️ Exact Biometrics active (real-time raw punches).',
+        ? '✨ Corporate Standard Shift Policy activated.'
+        : '⏱️ Exact Biometrics activated (raw unadjusted timekeeping).',
       type: 'success',
     })
   }
@@ -2152,11 +2152,11 @@ export function ReportsClient({
           <p className="text-xs text-slate-300 leading-relaxed">
             {calcMode === 'normalized' ? (
               <span>
-                <strong>Standard Shift Policy:</strong> Morning arrival (8:00–9:05 AM) normalizes to <strong>9:00 AM</strong> · Post-shift departure (6:00–6:30 PM) normalizes to <strong>6:00 PM</strong> to eliminate casual punch delays and anti-overtime exaggeration · Authorized OT calculated in completed 30-min blocks.
+                <strong>Corporate Standard Shift Policy:</strong> Core working hours are standardized from 09:00 AM to 06:00 PM. Incorporates an authorized morning grace window (08:00–09:05 AM) and reconciles routine egress intervals (06:01–06:30 PM) to ensure equitable, audit-ready payroll. Authorized overtime beyond 06:30 PM is recognized in structured 30-minute intervals.
               </span>
             ) : (
               <span>
-                <strong>Raw Biometric Stream:</strong> Displays exact physical hardware punches to the exact minute as captured by the FingerTec TA500 terminal.
+                <strong>Raw Biometric Timekeeping:</strong> Computes attendance and shift hours strictly from unadjusted physical time punches recorded by the FingerTec TA500 terminal for forensic timekeeping audits and biometric punch verification.
               </span>
             )}
           </p>

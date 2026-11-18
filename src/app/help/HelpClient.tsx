@@ -606,25 +606,25 @@ export function HelpClient() {
                 </div>
 
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Applies standard company shift rules (9:00 AM – 6:00 PM) to eliminate accidental clock-out delays and prevent exaggerated overtime while preserving genuine overtime work.
+                  Applies corporate shift policies (09:00 AM – 06:00 PM) to reconcile routine egress variations and prevent incidental overtime inflation while fully honoring authentic, authorized overtime work.
                 </p>
 
                 <div className="space-y-2 pt-2 border-t border-indigo-200/60 text-xs text-slate-700">
                   <div className="flex items-start gap-2">
                     <Check className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span><strong>Morning Buffer (8:00 AM – 9:05 AM):</strong> Standardized to <strong>9:00 AM</strong>. Early arrival does not grant false early OT, and 5-min grace avoids unfair tardiness.</span>
+                    <span><strong>Morning Grace Period (8:00 AM – 9:05 AM):</strong> Standardized to <strong>9:00 AM</strong>. Routine early arrival does not generate unwarranted pre-shift overtime, while the 5-minute grace window prevents unfair tardiness penalties.</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span><strong>Departure Buffer (6:01 PM – 6:30 PM):</strong> Standardized to <strong>6:00 PM</strong>. Eliminates casual line delays and packing up from inflating payroll.</span>
+                    <span><strong>Post-Shift Egress Interval (6:01 PM – 6:30 PM):</strong> Reconciled to <strong>6:00 PM</strong>. Eliminates casual departure delays, line waiting, and packing up from inflating payroll liabilities.</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span><strong>Genuine Overtime (&gt; 6:30 PM):</strong> Credited in clean 30-minute blocks (e.g., 6:30 PM = 0.5h OT, 7:00 PM = 1.0h OT, 11:00 PM = 5.0h OT).</span>
+                    <span><strong>Authorized Overtime (&gt; 6:30 PM):</strong> Recognized in structured 30-minute intervals (e.g., 6:30 PM = 0.5h OT, 7:00 PM = 1.0h OT, 11:00 PM = 5.0h OT).</span>
                   </div>
                   <div className="flex items-start gap-2">
                     <Check className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span><strong>Best for:</strong> Official payroll disbursement, clean manager reporting, and eliminating payroll disputes.</span>
+                    <span><strong>Best for:</strong> Official payroll disbursement, executive management reviews, and eliminating timekeeping disputes.</span>
                   </div>
                 </div>
               </div>
