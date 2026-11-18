@@ -286,6 +286,20 @@ body {
   animation: conduitSmoothFlow 2.8s linear infinite;
 }
 
+@keyframes conduitSmoothFlowVert {
+  0% {
+    background-position: 50% 0%;
+  }
+  100% {
+    background-position: 50% 200%;
+  }
+}
+
+.animate-smooth-conduit-v {
+  background-size: 100% 200%;
+  animation: conduitSmoothFlowVert 2.8s linear infinite;
+}
+
 .animate-smooth-packet {
   animation: smoothPacketSlide 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
