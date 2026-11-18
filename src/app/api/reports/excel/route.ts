@@ -158,19 +158,19 @@ export async function GET(request: NextRequest) {
     workbook.created = new Date()
 
     // ── Color palette ──────────────────────────────────────────
-    const NAVY       = '1E293B'
-    const BLUE_HDR   = '0284C7'
-    const SLATE_HDR  = '475569'
-    const GREEN_HDR  = '047857'
-    const LIGHT_ROW  = 'F1F5F9'
-    const TOTAL_BG   = 'E2E8F0'
+    const NAVY = '1E293B'
+    const BLUE_HDR = '0284C7'
+    const SLATE_HDR = '475569'
+    const GREEN_HDR = '047857'
+    const LIGHT_ROW = 'F1F5F9'
+    const TOTAL_BG = 'E2E8F0'
     const BORDER_CLR = 'CBD5E1'
 
     const thinBorder: Partial<ExcelJS.Borders> = {
-      top:    { style: 'thin', color: { argb: BORDER_CLR } },
-      left:   { style: 'thin', color: { argb: BORDER_CLR } },
+      top: { style: 'thin', color: { argb: BORDER_CLR } },
+      left: { style: 'thin', color: { argb: BORDER_CLR } },
       bottom: { style: 'thin', color: { argb: BORDER_CLR } },
-      right:  { style: 'thin', color: { argb: BORDER_CLR } },
+      right: { style: 'thin', color: { argb: BORDER_CLR } },
     }
 
     const modeLabel =
@@ -346,10 +346,10 @@ export async function GET(request: NextRequest) {
       cell.font = { name: 'Calibri', size: 10, bold: true }
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }
       cell.border = {
-        top:    { style: 'medium', color: { argb: '64748B' } },
+        top: { style: 'medium', color: { argb: '64748B' } },
         bottom: { style: 'double', color: { argb: '0F172A' } },
-        left:   { style: 'thin',   color: { argb: BORDER_CLR } },
-        right:  { style: 'thin',   color: { argb: BORDER_CLR } },
+        left: { style: 'thin', color: { argb: BORDER_CLR } },
+        right: { style: 'thin', color: { argb: BORDER_CLR } },
       }
 
       if (col === 1) {
@@ -558,13 +558,13 @@ export async function GET(request: NextRequest) {
     })
 
     const refRows = [
-      ['Regular Workday',                      '100%  (1.00×)', '125%  (1.25×)', 'Labor Code Art. 87'],
-      ['Scheduled Rest Day',                   '130%  (1.30×)', '169%  (1.69×)', 'Labor Code Art. 93'],
-      ['Special Non-Working Holiday',          '130%  (1.30×)', '169%  (1.69×)', 'Labor Code Art. 93'],
-      ['Special Holiday on Rest Day',          '150%  (1.50×)', '195%  (1.95×)', 'Labor Code Art. 93'],
-      ['Regular Holiday',                      '200%  (2.00×)', '260%  (2.60×)', 'Labor Code Art. 94'],
-      ['Regular Holiday on Rest Day',          '260%  (2.60×)', '338%  (3.38×)', 'Labor Code Art. 94'],
-      ['Night Shift Differential (10PM–6AM)',  '+10% of hourly', '+10% on OT rate when OT is worked', 'Labor Code Art. 86'],
+      ['Regular Workday', '100%  (1.00×)', '125%  (1.25×)', 'Labor Code Art. 87'],
+      ['Scheduled Rest Day', '130%  (1.30×)', '169%  (1.69×)', 'Labor Code Art. 93'],
+      ['Special Non-Working Holiday', '130%  (1.30×)', '169%  (1.69×)', 'Labor Code Art. 93'],
+      ['Special Holiday on Rest Day', '150%  (1.50×)', '195%  (1.95×)', 'Labor Code Art. 93'],
+      ['Regular Holiday', '200%  (2.00×)', '260%  (2.60×)', 'Labor Code Art. 94'],
+      ['Regular Holiday on Rest Day', '260%  (2.60×)', '338%  (3.38×)', 'Labor Code Art. 94'],
+      ['Night Shift Differential (10PM–6AM)', '+10% of hourly', '+10% on OT rate when OT is worked', 'Labor Code Art. 86'],
     ]
 
     refRows.forEach((r, i) => {
@@ -619,13 +619,13 @@ export async function GET(request: NextRequest) {
     })
 
     const guideRows = [
-      ['Time-In Handling',   'Exact punch time (e.g. 8:20 AM)', 'Clamp 8:00–9:05 AM → 9:00 AM'],
-      ['Time-Out Handling',  'Exact punch time (e.g. 6:22 PM)', 'Clamp 6:00–6:30 PM → 6:00 PM'],
-      ['OT Calculation',     'Every minute beyond 8 hrs counted', 'OT only in completed 30-min blocks after 6:30 PM'],
-      ['Gross Pay Impact',   'Higher — reflects all raw OT minutes', 'Lower — eliminates casual linger OT'],
-      ['Best Used For',      'Accurate legal compliance audits', 'Standard payroll, clean payslips'],
-      ['Data Source',        'Raw biometric attendance_logs table', 'Normalized via shift policy rules'],
-      ['This File Mode',     calcMode === 'exact' ? '✅ ACTIVE' : '—', calcMode === 'normalized' ? '✅ ACTIVE' : '—'],
+      ['Time-In Handling', 'Exact punch time (e.g. 8:20 AM)', 'Clamp 8:00–9:05 AM → 9:00 AM'],
+      ['Time-Out Handling', 'Exact punch time (e.g. 6:22 PM)', 'Clamp 6:00–6:30 PM → 6:00 PM'],
+      ['OT Calculation', 'Every minute beyond 8 hrs counted', 'OT only in completed 30-min blocks after 6:30 PM'],
+      ['Gross Pay Impact', 'Higher — reflects all raw OT minutes', 'Lower — eliminates casual linger OT'],
+      ['Best Used For', 'Accurate legal compliance audits', 'Standard payroll, clean payslips'],
+      ['Data Source', 'Raw biometric attendance_logs table', 'Normalized via shift policy rules'],
+      ['This File Mode', calcMode === 'exact' ? '✅ ACTIVE' : '—', calcMode === 'normalized' ? '✅ ACTIVE' : '—'],
     ]
 
     guideRows.forEach((r, i) => {

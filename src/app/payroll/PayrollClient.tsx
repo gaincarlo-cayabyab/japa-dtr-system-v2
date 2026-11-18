@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { EmployeePayrollSummary, DailyPayrollRecord, PayrollPayment } from '@/types/database'
 import { CalculationMode } from '@/lib/payroll'
@@ -99,18 +99,33 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const [calcMode, setCalcMode] = useState<CalculationMode>('exact')
   const [waiveDeductions, setWaiveDeductions] = useState<boolean>(false)
 
+  // Stable refs to prevent stale closure in background intervals and realtime subscriptions
+  const calcModeRef = useRef<CalculationMode>(calcMode)
+  calcModeRef.current = calcMode
+
+  const startDateRef = useRef(startDate)
+  startDateRef.current = startDate
+
+  const endDateRef = useRef(endDate)
+  endDateRef.current = endDate
+
+  const branchFilterRef = useRef(branchFilter)
+  branchFilterRef.current = branchFilter
+
   // Restore saved calculation mode preference
   useEffect(() => {
     try {
       const savedMode = localStorage.getItem('japa_calculation_mode') as CalculationMode
       if (savedMode === 'exact' || savedMode === 'normalized') {
         setCalcMode(savedMode)
+        calcModeRef.current = savedMode
       }
     } catch {}
   }, [])
 
   const handleToggleCalcMode = (mode: CalculationMode) => {
     setCalcMode(mode)
+    calcModeRef.current = mode
     try {
       localStorage.setItem('japa_calculation_mode', mode)
     } catch {}
@@ -212,17 +227,21 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   const fetchPayrollAndPayments = async (silent: boolean = false, overrideCalcMode?: CalculationMode) => {
     if (!silent) setLoading(true)
     try {
-      const modeToUse = overrideCalcMode || calcMode
+      const modeToUse = overrideCalcMode || calcModeRef.current
+      const currentStart = startDateRef.current
+      const currentEnd = endDateRef.current
+      const currentBranch = branchFilterRef.current
+
       const params = new URLSearchParams({
-        start_date: startDate,
-        end_date: endDate,
+        start_date: currentStart,
+        end_date: currentEnd,
         calc_mode: modeToUse,
       })
-      if (branchFilter) params.append('branch', branchFilter)
+      if (currentBranch) params.append('branch', currentBranch)
 
       const [payrollRes, paymentsRes] = await Promise.all([
         fetch(`/api/payroll/compute?${params.toString()}`),
-        fetch(`/api/payroll/payments?period_start=${startDate}&period_end=${endDate}`),
+        fetch(`/api/payroll/payments?period_start=${currentStart}&period_end=${currentEnd}`),
       ])
 
       const payrollJson = await payrollRes.json()
@@ -274,7 +293,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
       supabase.removeChannel(channel)
       clearInterval(interval)
     }
-  }, [startDate, endDate, branchFilter])
+  }, [startDate, endDate, branchFilter, calcMode])
 
   // Payment Map lookup
   const paymentsMap = useMemo(() => {
