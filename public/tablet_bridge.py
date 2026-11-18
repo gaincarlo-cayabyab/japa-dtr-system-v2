@@ -90,9 +90,9 @@ def save_device_ip(ip: str) -> None:
 
 ZK_IP         = load_saved_ip()
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
-# 15s timeout: fast enough to detect dead sockets, long enough for slow LAN
-ZK_TIMEOUT    = 15
-POLL_INTERVAL = 10   # read_sizes() heartbeat every 10s
+# 4s timeout: fast enough to detect offline/powered off TA500 in seconds
+ZK_TIMEOUT    = 4
+POLL_INTERVAL = 8    # read_sizes() heartbeat every 8s
 TZ            = pytz.timezone('Asia/Manila')
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'https://blmthmojjnonbmwitzmc.supabase.co')
@@ -476,16 +476,17 @@ def connect_device(ip: Optional[str] = None) -> Optional[object]:
     global ZK_IP
     target_ip = ip or ZK_IP
 
-    # Try TCP first (normal)
+    # Try TCP first (normal), then UDP fallback
     for use_udp in (False, True):
         zk = None
+        timeout = 4 if not use_udp else 3
         try:
-            zk = ZK(target_ip, port=ZK_PORT, timeout=ZK_TIMEOUT,
+            zk = ZK(target_ip, port=ZK_PORT, timeout=timeout,
                     password=0, force_udp=use_udp, ommit_ping=True)
             conn = zk.connect()
             if conn:
                 if use_udp:
-                    logger.info(f'🟡 TA500 connected via UDP fallback (TCP busy). Fully operational.')
+                    logger.info('🟡 TA500 connected via UDP fallback (TCP busy). Fully operational.')
                 return conn
         except Exception as e_tcp:
             safe_disconnect(zk)
@@ -677,21 +678,27 @@ def main():
         # ── 2. Connect to TA500 (Persistent Open TCP Socket, UDP fallback) ──
         conn = connect_device()
         if not conn:
-            update_live_heartbeat(False, 0)
+            # TA500 is offline or powered off -> tell cloud immediately that TA500 is down
+            last_recs = known_record_count if 'known_record_count' in locals() else 0
+            update_live_heartbeat(False, last_recs)
             ta500_fail_count += 1
-            # Short retries for first 3 attempts (hardware socket clears in 15-90s)
-            # then steady 30s to avoid hammering the TA500 TCP stack
             if ta500_fail_count <= 3:
-                cooldown = 15
+                cooldown = 8
             else:
-                cooldown = 30
-            logger.warning(f'TA500 LAN busy/reconnecting (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
+                cooldown = 15
+            logger.warning(f'TA500 LAN offline/unreachable (attempt #{ta500_fail_count}). Retrying in {cooldown}s...')
             if ta500_fail_count == 3:
                 subnet, local_ip = get_local_subnet()
                 logger.info(f'💡 Network Status: Device IP is {local_ip}. Target device is {ZK_IP}.')
-                logger.info('   1. Connect Tablet to your MAIN ROUTER Wi-Fi (for stable internet).')
-                logger.info('   2. If TA500 shows Errno 104, turn TA500 OFF and back ON once to reset its socket.')
-            time.sleep(cooldown)
+                logger.info('   1. Verify TA500 is plugged in and power switch is ON.')
+                logger.info('   2. Verify Cat6 LAN cable link LED is lit on TA500 and Wi-Fi repeater.')
+
+            # Keep sending bridge heartbeat every 3s during cooldown so portal knows BRIDGE is 100% active but TA500 is down!
+            elapsed_cd = 0
+            while elapsed_cd < cooldown:
+                time.sleep(min(3, cooldown - elapsed_cd))
+                elapsed_cd += 3
+                update_live_heartbeat(False, last_recs)
             continue
 
         ta500_fail_count = 0
@@ -756,9 +763,6 @@ def main():
             while True:
                 now = time.time()
 
-                # Broadcast live cloud heartbeat so portal detects real-time health
-                update_live_heartbeat(True, known_record_count)
-
                 # Flush pending offline punches
                 if _pending_upload_queue:
                     flush_upload_queue(seen)
@@ -800,17 +804,21 @@ def main():
                     conn.read_sizes()
                     current_count = conn.records
                     read_sizes_fail_streak = 0
+                    # TA500 confirmed online! Broadcast live healthy heartbeat to cloud
+                    update_live_heartbeat(True, current_count)
                 except Exception as e_rs:
                     err_str = str(e_rs).lower()
                     read_sizes_fail_streak += 1
-                    # Transient packet errors — skip this cycle, stay connected
+                    # TA500 failed to respond -> IMMEDIATELY broadcast offline status to cloud!
+                    update_live_heartbeat(False, known_record_count)
+                    # Transient packet errors — short 2s breather
                     if any(x in err_str for x in ['nonetype', 'bytes', 'invalid', 'timed out', 'timeout']) \
-                            and read_sizes_fail_streak <= 3:
-                        logger.warning(f'⚠️ TA500 heartbeat blip ({read_sizes_fail_streak}/3): {e_rs}. Skipping cycle...')
-                        time.sleep(POLL_INTERVAL)
+                            and read_sizes_fail_streak <= 2:
+                        logger.warning(f'⚠️ TA500 heartbeat blip ({read_sizes_fail_streak}/2): {e_rs}. Retrying...')
+                        time.sleep(2)
                         continue
                     # Hard network errors or repeated failures → reconnect
-                    logger.warning(f'⚠️ TA500 heartbeat failed ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
+                    logger.warning(f'⚠️ TA500 connection lost ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
                     raise
 
                 if current_count > known_record_count:

@@ -231,27 +231,62 @@ body {
   }
 }
 
-.animate-pipe-flow {
-  animation: pipeFlowHoriz 0.85s linear infinite;
+@keyframes conduitSmoothFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
+  }
 }
 
-.animate-pipe-flow-slow {
+@keyframes smoothPacketSlide {
+  0% {
+    left: -20%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 105%;
+    opacity: 0;
+  }
+}
+
+.animate-pipe-flow {
   animation: pipeFlowHoriz 2.2s linear infinite;
 }
 
-.animate-pipe-flow-v {
-  animation: pipeFlowVert 0.85s linear infinite;
+.animate-pipe-flow-slow {
+  animation: pipeFlowHoriz 3.8s linear infinite;
 }
 
-.animate-pipe-flow-v-slow {
+.animate-pipe-flow-v {
   animation: pipeFlowVert 2.2s linear infinite;
 }
 
+.animate-pipe-flow-v-slow {
+  animation: pipeFlowVert 3.8s linear infinite;
+}
+
 .animate-packet-pulse {
-  animation: packetPulse 1.4s ease-in-out infinite;
+  animation: packetPulse 2.4s ease-in-out infinite;
 }
 
 .animate-packet-pulse-v {
-  animation: packetPulseVert 1.4s ease-in-out infinite;
+  animation: packetPulseVert 2.4s ease-in-out infinite;
+}
+
+.animate-smooth-conduit {
+  background-size: 200% 100%;
+  animation: conduitSmoothFlow 2.8s linear infinite;
+}
+
+.animate-smooth-packet {
+  animation: smoothPacketSlide 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 

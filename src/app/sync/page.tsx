@@ -39,8 +39,8 @@ export default async function SyncPage() {
   const bridgeHeartbeat = metaMap['bridge_heartbeat'] || 0
   const ta500Status = metaMap['ta500_status'] || 0
   const ta500LastSeen = metaMap['ta500_last_seen'] || 0
-  const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 35)
-  const ta500Online = bridgeOnline && ta500Status === 1 && (nowSec - ta500LastSeen <= 45)
+  const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 45)
+  const ta500Online = bridgeOnline && ta500Status === 1 && (nowSec - ta500LastSeen <= 25)
   const heartbeatAgeSec = bridgeHeartbeat > 0 ? Math.max(0, nowSec - bridgeHeartbeat) : 9999
 
   return (

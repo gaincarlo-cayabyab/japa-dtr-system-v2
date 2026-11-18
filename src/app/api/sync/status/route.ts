@@ -44,11 +44,11 @@ export async function GET() {
     const ta500LastSeen = metaMap['ta500_last_seen'] || 0
     const ta500Records = metaMap['ta500_records'] || 0
 
-    // Bridge is alive if heartbeat arrived within last 35 seconds
-    const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 35)
+    // Bridge is alive if heartbeat arrived within last 45 seconds
+    const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 45)
 
-    // TA500 is alive if bridge is alive AND device status was 1 within last 45 seconds
-    const ta500Online = bridgeOnline && ta500Status === 1 && (nowSec - ta500LastSeen <= 45)
+    // TA500 is alive if bridge is alive AND device status is 1 AND last seen within last 25 seconds
+    const ta500Online = bridgeOnline && ta500Status === 1 && (nowSec - ta500LastSeen <= 25)
 
     const heartbeatAgeSec = bridgeHeartbeat > 0 ? Math.max(0, nowSec - bridgeHeartbeat) : 9999
 
