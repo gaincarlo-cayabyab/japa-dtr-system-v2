@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
+
+function getNextWorkDate(workDate: string): string {
+  const [y, m, d] = workDate.split('-').map(Number)
+  const nextDateObj = new Date(Date.UTC(y, m - 1, d + 1))
+  return nextDateObj.toISOString().slice(0, 10)
+}
 
 function parseTimeToTimestamp(timeStr: string, workDate: string, nextDate: string): string {
   if (timeStr.includes('T')) return timeStr
@@ -56,7 +61,7 @@ export async function PUT(request: NextRequest) {
       has_in_time = true,
       has_out_time = true,
       action,
-      attendance_status,
+      attendance_status = 'present',
       notes,
     } = body
 
@@ -68,10 +73,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Operational shift window: 04:00 AM of work_date to 03:59:59 AM of next day
-    const nextDateObj = new Date(`${work_date}T00:00:00+08:00`)
-    nextDateObj.setDate(nextDateObj.getDate() + 1)
-    const nextDate = nextDateObj.toISOString().slice(0, 10)
-
+    const nextDate = getNextWorkDate(work_date)
     const windowStart = `${work_date}T04:00:00+08:00`
     const windowEnd = `${nextDate}T03:59:59+08:00`
 
@@ -133,10 +135,23 @@ export async function PUT(request: NextRequest) {
       }
     } else {
       // ── STATUS IS PRESENT ──
+      const inTime = first_check_in && has_in_time ? parseTimeToTimestamp(first_check_in, work_date, nextDate) : null
+      const outTime = last_check_out && has_out_time ? parseTimeToTimestamp(last_check_out, work_date, nextDate) : null
+
+      // Validate: if both inTime and outTime are set, outTime must be after inTime
+      if (inTime && outTime) {
+        const inMs = new Date(inTime).getTime()
+        const outMs = new Date(outTime).getTime()
+        if (outMs <= inMs) {
+          return NextResponse.json(
+            { error: 'Time Out must be later than Time In. For night shifts past midnight, use a midnight preset (e.g. 12:00 AM or 1:00 AM).' },
+            { status: 400 }
+          )
+        }
+      }
 
       // 1. Time In handling
-      if (first_check_in && has_in_time) {
-        const inTime = parseTimeToTimestamp(first_check_in, work_date, nextDate)
+      if (inTime) {
         const firstPunch = punches[0]
         if (firstPunch) {
           await supabase
@@ -168,9 +183,7 @@ export async function PUT(request: NextRequest) {
       const currentPunches = updatedPunches || []
 
       // 2. Time Out handling
-      if (last_check_out && has_out_time) {
-        const outTime = parseTimeToTimestamp(last_check_out, work_date, nextDate)
-
+      if (outTime) {
         if (currentPunches.length > 1) {
           const lastPunch = currentPunches[currentPunches.length - 1]
           await supabase
@@ -200,10 +213,57 @@ export async function PUT(request: NextRequest) {
       .eq('work_date', work_date)
       .maybeSingle()
 
+    // If daily_dtr view hasn't propagated or returns null, construct fallback object
+    let finalDtr = updatedDtr
+    if (!finalDtr && attendance_status === 'present' && (has_in_time || has_out_time)) {
+      const { data: latestPunches } = await supabase
+        .from('attendance_logs')
+        .select('punch_time')
+        .eq('device_user_id', String(device_user_id))
+        .gte('punch_time', windowStart)
+        .lte('punch_time', windowEnd)
+        .order('punch_time', { ascending: true })
+
+      if (latestPunches && latestPunches.length > 0) {
+        const { data: emp } = await supabase
+          .from('employees')
+          .select('id, full_name, branch')
+          .eq('device_user_id', String(device_user_id))
+          .maybeSingle()
+
+        const firstIn = latestPunches[0].punch_time
+        const lastOut = latestPunches.length > 1 ? latestPunches[latestPunches.length - 1].punch_time : null
+
+        let hoursWorked = 0
+        let otHours = 0
+        if (firstIn && lastOut) {
+          const inDt = new Date(firstIn)
+          const outDt = new Date(lastOut)
+          const diffHrs = Math.max(0, (outDt.getTime() - inDt.getTime()) / (1000 * 60 * 60))
+          hoursWorked = Math.max(0, Math.round((diffHrs > 5 ? diffHrs - 1 : diffHrs) * 10) / 10)
+          otHours = Math.max(0, Math.round(Math.max(0, hoursWorked - 8) * 10) / 10)
+        }
+
+        finalDtr = {
+          employee_id: emp?.id || String(device_user_id),
+          device_user_id: String(device_user_id),
+          full_name: emp?.full_name || 'Staff Member',
+          branch: emp?.branch || 'Dagupan Main',
+          work_date,
+          first_check_in: firstIn,
+          last_check_out: lastOut,
+          total_punches: latestPunches.length,
+          hours_worked: hoursWorked,
+          overtime_hours: otHours,
+          shift_status: lastOut ? 'Completed' : 'On Duty',
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Shift updated successfully.',
-      updatedDtr,
+      updatedDtr: finalDtr,
     })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to update shift'
@@ -233,10 +293,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'device_user_id and work_date are required' }, { status: 400 })
     }
 
-    const nextDateObj = new Date(`${work_date}T00:00:00+08:00`)
-    nextDateObj.setDate(nextDateObj.getDate() + 1)
-    const nextDate = nextDateObj.toISOString().slice(0, 10)
-
+    const nextDate = getNextWorkDate(work_date)
     const windowStart = `${work_date}T04:00:00+08:00`
     const windowEnd = `${nextDate}T03:59:59+08:00`
 

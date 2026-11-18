@@ -749,7 +749,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   const openEditShift = (row: DailyDtr, existingNote?: ShiftNote) => {
     setEditRow(row)
     const note = existingNote || shiftNotes[`${row.device_user_id}_${row.work_date}`]
-    const defaultStatus = note?.attendance_status || (row.first_check_in ? 'present' : 'absent')
+    const defaultStatus = note?.attendance_status || (row.first_check_in ? 'present' : (note ? 'absent' : 'present'))
     setEditAttendanceStatus(defaultStatus)
     setEditNotes(note?.notes || note?.ot_reason || '')
 
@@ -761,7 +761,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
         setEditInTime('09:00')
       }
     } else {
-      setHasInTime(false)
+      setHasInTime(true)
       setEditInTime('09:00')
     }
 
@@ -773,7 +773,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
         setEditOutTime('18:00')
       }
     } else {
-      setHasOutTime(false)
+      setHasOutTime(Boolean(row.last_check_out))
       setEditOutTime('18:00')
     }
 
@@ -814,8 +814,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
           work_date: editRow.work_date,
           first_check_in: editAttendanceStatus === 'present' && hasInTime ? editInTime : null,
           last_check_out: editAttendanceStatus === 'present' && hasOutTime ? editOutTime : null,
-          has_in_time: hasInTime,
-          has_out_time: hasOutTime,
+          has_in_time: editAttendanceStatus === 'present' && hasInTime,
+          has_out_time: editAttendanceStatus === 'present' && hasOutTime,
           attendance_status: editAttendanceStatus,
           notes: editNotes,
         }),
@@ -851,8 +851,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
             return next
           }
           return [...prev, json.updatedDtr]
-        } else if (editAttendanceStatus !== 'present') {
-          // If marked absent/leave, clear punches
+        } else {
+          // If updatedDtr is null (cleared punches / marked absent or leave), remove from data
           if (idx >= 0) {
             const next = [...prev]
             next.splice(idx, 1)
@@ -861,6 +861,9 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
         }
         return prev
       })
+
+      // Background re-sync shift notes
+      fetchShiftNotes([editRow.work_date])
 
       // Persist active date so the view remains on this exact date
       try {
@@ -2603,7 +2606,14 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                       <button
                         key={s.value}
                         type="button"
-                        onClick={() => setEditAttendanceStatus(s.value as any)}
+                        onClick={() => {
+                          setEditAttendanceStatus(s.value as any)
+                          if (s.value === 'present') {
+                            setHasInTime(true)
+                            if (!editInTime) setEditInTime('09:00')
+                            if (!editOutTime) setEditOutTime('18:00')
+                          }
+                        }}
                         className={`p-2.5 rounded-xl border text-xs font-bold transition-all text-center flex flex-col items-center justify-center gap-1 ${
                           isSelected
                             ? s.activeBg
@@ -2635,10 +2645,10 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                           onChange={(e) => setHasInTime(e.target.checked)}
                           className="rounded border-slate-300 text-blue-600"
                         />
-                        Include
+                        {hasInTime ? 'Included' : 'Exclude'}
                       </label>
                     </div>
-                    {hasInTime && (
+                    {hasInTime ? (
                       <div>
                         <input
                           type="time"
@@ -2672,6 +2682,20 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                           ))}
                         </div>
                       </div>
+                    ) : (
+                      <div className="p-2 rounded-xl border border-dashed border-slate-300 bg-white/70 flex items-center justify-between">
+                        <span className="text-xs text-slate-500 font-medium">Time In excluded</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setHasInTime(true)
+                            setEditInTime('09:00')
+                          }}
+                          className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors"
+                        >
+                          + Set Time In (9:00 AM)
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -2689,17 +2713,17 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                           onChange={(e) => setHasOutTime(e.target.checked)}
                           className="rounded border-slate-300 text-blue-600"
                         />
-                        Include
+                        {hasOutTime ? 'Included' : 'Not Clocked Out Yet'}
                       </label>
                     </div>
-                    {hasOutTime && (
+                    {hasOutTime ? (
                       <div>
                         <input
                           type="time"
                           required
                           value={editOutTime}
                           onChange={(e) => setEditOutTime(e.target.value)}
-                          className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full border border-slate-200 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-rose-500"
                         />
                         {/* 1-Click Time Out Presets */}
                         <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -2731,8 +2755,42 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                         </div>
                         <p className="text-[10px] text-slate-500 mt-2 flex items-center gap-1">
                           <Info className="w-3 h-3 text-slate-400 flex-shrink-0" />
-                          <span>Note: 00:00 = 12:00 AM (Midnight into next day). Punches past midnight are credited to this shift automatically.</span>
+                          <span>Note: 00:00 = 12:00 AM (Midnight). Punches past midnight are credited to this shift automatically.</span>
                         </p>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl border border-dashed border-slate-300 bg-white/70 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                        <span className="text-xs text-slate-500 font-medium">Currently On Duty (No clock out recorded)</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Set Time Out:</span>
+                          {[
+                            { label: '5 PM', val: '17:00' },
+                            { label: '6 PM', val: '18:00' },
+                            { label: '7 PM', val: '19:00' },
+                          ].map((p) => (
+                            <button
+                              key={p.val}
+                              type="button"
+                              onClick={() => {
+                                setHasOutTime(true)
+                                setEditOutTime(p.val)
+                              }}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors shadow-2xs font-semibold"
+                            >
+                              + {p.label}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHasOutTime(true)
+                              setEditOutTime('18:00')
+                            }}
+                            className="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition-colors"
+                          >
+                            + Custom
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
