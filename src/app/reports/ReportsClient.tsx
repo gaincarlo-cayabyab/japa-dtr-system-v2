@@ -1452,25 +1452,25 @@ export function ReportsClient({
                                     +{rec.overtime_hours.toFixed(1)}h
                                   </span>
                                 )}
+                                {canAddEditDelete && (
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditShift(rec, note)}
+                                    className="p-0.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
+                                    title="Edit shift"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
                               </div>
                               {(note?.notes || note?.ot_reason) && (
                                 <p className="text-[9px] text-amber-700 font-semibold truncate max-w-[110px]" title={note.notes || note.ot_reason}>
                                   💬 {note.notes || note.ot_reason}
                                 </p>
                               )}
-                              {canAddEditDelete && (
-                                <button
-                                  type="button"
-                                  onClick={() => openEditShift(rec, note)}
-                                  className="opacity-70 group-hover:opacity-100 absolute top-1 right-1 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
-                                  title="Edit shift"
-                                >
-                                  <Edit2 className="w-2.5 h-2.5" />
-                                </button>
-                              )}
                             </div>
                           ) : note?.attendance_status === 'leave' ? (
-                            <div className="relative">
+                            <div className="flex items-center justify-center gap-1">
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-teal-800 bg-teal-50 border border-teal-200" title={note.notes}>
                                 🌴 Leave
                               </span>
@@ -1478,7 +1478,7 @@ export function ReportsClient({
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-70 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
+                                  className="p-0.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
                                   title="Edit status"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1486,7 +1486,7 @@ export function ReportsClient({
                               )}
                             </div>
                           ) : note?.attendance_status === 'sick_leave' ? (
-                            <div className="relative">
+                            <div className="flex items-center justify-center gap-1">
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-violet-800 bg-violet-50 border border-violet-200" title={note.notes}>
                                 🩺 Sick
                               </span>
@@ -1494,7 +1494,7 @@ export function ReportsClient({
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-70 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
+                                  className="p-0.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
                                   title="Edit status"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1502,7 +1502,7 @@ export function ReportsClient({
                               )}
                             </div>
                           ) : note?.attendance_status === 'absent' ? (
-                            <div className="relative">
+                            <div className="flex items-center justify-center gap-1">
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200" title={note.notes}>
                                 ❌ Absent
                               </span>
@@ -1510,7 +1510,7 @@ export function ReportsClient({
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-70 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
+                                  className="p-0.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
                                   title="Edit status"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1518,7 +1518,7 @@ export function ReportsClient({
                               )}
                             </div>
                           ) : isRestDay ? (
-                            <div className="relative">
+                            <div className="flex items-center justify-center gap-1">
                               <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100">
                                 Rest Day
                               </span>
@@ -1526,7 +1526,7 @@ export function ReportsClient({
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-50 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
+                                  className="p-0.5 rounded hover:bg-blue-100 text-slate-400 hover:text-blue-600 transition-colors"
                                   title="Log Rest Day Shift"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1534,13 +1534,13 @@ export function ReportsClient({
                               )}
                             </div>
                           ) : (
-                            <div className="relative">
+                            <div className="flex items-center justify-center gap-1">
                               <span className="text-slate-300 font-mono text-xs">—</span>
                               {canAddEditDelete && (
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-60 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
+                                  className="p-0.5 rounded hover:bg-blue-100 text-slate-300 hover:text-blue-600 transition-colors"
                                   title="Add punch or mark absent/leave"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
