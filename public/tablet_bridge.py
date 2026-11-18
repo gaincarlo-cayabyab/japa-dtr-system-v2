@@ -612,10 +612,10 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v15.2')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v15.3')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Bulletproof 24/7 | Dual-Mode TCP+UDP | 18 Verified Enrolled UIDs')
-    print(f'   Startup   : <1s Instant Launch | Safe Auto-Recovery')
+    print(f'   Mode      : Bulletproof 24/7 | Dual-Mode TCP+UDP | 60s Direct Flash Audit')
+    print(f'   Stability : 10m Proactive Session Rejuvenation | Anti-Double Tap Shield')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -701,17 +701,29 @@ def main():
 
         last_cloud_check = time.time()
         last_heartbeat = 0
+        last_audit_time = time.time()
+        session_start_time = time.time()
         read_sizes_fail_streak = 0
 
+        # High-reliability intervals
+        AUDIT_INTERVAL = 60          # Direct flash memory audit every 60s (never miss a punch even if read_sizes freezes)
+        MAX_SESSION_DURATION = 600    # Gracefully rejuvenate connection every 10 mins to prevent socket staleness
+
         try:
-            # ── 4. Main Loop: read_sizes() heartbeat, get_attendance() on change ──
+            # ── 4. Main Loop: read_sizes() heartbeat + 60s direct flash audit ──
             while True:
+                now = time.time()
+
                 # Flush pending offline punches
                 if _pending_upload_queue:
                     flush_upload_queue(seen)
 
+                # Graceful socket rejuvenation (every 10 minutes)
+                if now - session_start_time >= MAX_SESSION_DURATION:
+                    logger.info(f'🔄 Periodic Socket Rejuvenation (10m): Refreshing TA500 session for 100% continuous reliability...')
+                    break  # Triggers safe disconnect, 3s breather, and fresh reconnect
+
                 # Check cloud portal commands every ~20 seconds
-                now = time.time()
                 if now - last_cloud_check >= 20:
                     last_cloud_check = now
                     meta = fetch_cloud_meta()
@@ -738,7 +750,7 @@ def main():
                             logger.error(f'Error syncing users: {e}')
                         acknowledge_command('sync_employees')
 
-                # ── KEY: Ultra-fast read_sizes() heartbeat (0.05-1.5s) ──────
+                # ── KEY 1: Ultra-fast read_sizes() heartbeat (0.05-1.5s) ──────
                 try:
                     conn.read_sizes()
                     current_count = conn.records
@@ -758,12 +770,13 @@ def main():
 
                 if current_count > known_record_count:
                     delta = current_count - known_record_count
-                    logger.info(f'🆕 {delta} new punch(es) detected on TA500! Fetching records...')
+                    logger.info(f'🆕 {delta} new punch(es) detected via counter! Fetching records...')
                     try:
                         atts = safe_fetch_attendance(conn)
                         atts = atts or []
                         new_punches = process_punches_batch(atts, seen)
                         known_record_count = current_count
+                        last_audit_time = now
                         if new_punches > 0:
                             logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
                             flush_upload_queue(seen)
@@ -785,6 +798,7 @@ def main():
                                 atts = safe_fetch_attendance(conn) or []
                                 new_punches = process_punches_batch(atts, seen)
                                 known_record_count = current_count
+                                last_audit_time = now
                                 if new_punches > 0:
                                     logger.info(f'✅ UDP fallback success! Uploading {new_punches} punch(es)...')
                                     flush_upload_queue(seen)
@@ -800,9 +814,24 @@ def main():
                             break
                 else:
                     known_record_count = current_count
-                    if now - last_heartbeat >= 30:
-                        last_heartbeat = now
-                        logger.info(f'🟢 TA500 Active ({ZK_IP}) — {known_record_count} records | Sensor ready for punches...')
+
+                # ── KEY 2: Direct Flash Memory Audit (every 60s) ──────────────
+                # Solves the 1-hour freeze where TA500 firmware stops incrementing read_sizes()
+                if now - last_audit_time >= AUDIT_INTERVAL:
+                    last_audit_time = now
+                    try:
+                        atts = safe_fetch_attendance(conn) or []
+                        audit_punches = process_punches_batch(atts, seen)
+                        if audit_punches > 0:
+                            logger.info(f'🎯 Direct Audit: {audit_punches} new punch(es) caught from TA500 flash memory!')
+                            flush_upload_queue(seen)
+                            known_record_count = len(atts)
+                    except Exception as e_audit:
+                        logger.warning(f'Direct audit notice: {e_audit}')
+
+                if now - last_heartbeat >= 30:
+                    last_heartbeat = now
+                    logger.info(f'🟢 TA500 Active ({ZK_IP}) — {known_record_count} records | Sensor ready for punches...')
 
                 if conn is None:
                     break
@@ -815,8 +844,8 @@ def main():
             logger.warning(f'⚠️ TA500 stream notice: {err}. Auto-reconnecting...')
         finally:
             safe_disconnect(conn)
-            # Short wait before reconnect — TA500 socket clears in ~15s
-            time.sleep(5)
+            # Short wait before reconnect — TA500 socket clears in ~3s
+            time.sleep(3)
 
 
 if __name__ == '__main__':
