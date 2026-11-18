@@ -42,7 +42,7 @@ export function AppFooter() {
                   JAPA GLOBAL TRADING
                 </span>
                 <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
-                  DTR Portal v2.5 — Bridge v15.2
+                  DTR Portal v2.5 — Bridge v15.3
                 </span>
               </div>
               <p className="text-xs text-slate-500 mt-1 max-w-md">
@@ -83,7 +83,7 @@ export function AppFooter() {
               FingerTec TA500 Biometric Terminal (192.168.0.58)
             </span>
             <span className="text-slate-300">·</span>
-            <span className="text-slate-500">Bridge Engine v15.2</span>
+            <span className="text-slate-500">Bridge Engine v15.3</span>
             <span className="text-slate-300">·</span>
             <span className="flex items-center gap-1 text-emerald-600 font-bold">
               <ShieldCheck className="w-3.5 h-3.5" />

@@ -548,7 +548,7 @@ export function SyncClient({
               {/* ════════════ NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) ════════════ */}
               <div
                 onClick={() => setSelectedNode('ta500')}
-                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex-1 min-w-0 flex flex-col justify-between ${
+                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
                   selectedNode === 'ta500'
                     ? 'ring-2 ring-blue-500 shadow-xl border-blue-400 bg-white'
                     : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
@@ -772,7 +772,7 @@ export function SyncClient({
               {/* ════════════ NODE 2: WI-FI REPEATER (AP BRIDGE) ════════════ */}
               <div
                 onClick={() => setSelectedNode('repeater')}
-                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex-1 min-w-0 flex flex-col justify-between ${
+                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
                   selectedNode === 'repeater'
                     ? 'ring-2 ring-purple-500 shadow-xl border-purple-400 bg-white'
                     : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
@@ -1036,7 +1036,7 @@ export function SyncClient({
               {/* ════════════ NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE ENGINE) ════════════ */}
               <div
                 onClick={() => setSelectedNode('tablet')}
-                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex-1 min-w-0 flex flex-col justify-between ${
+                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
                   selectedNode === 'tablet'
                     ? 'ring-2 ring-amber-500 shadow-xl border-amber-400 bg-white'
                     : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
@@ -1068,8 +1068,12 @@ export function SyncClient({
                       </div>
                     )}
                   </div>
+                  {/* Bottom docking cap that touches the WAN beam */}
+                  <div className={`w-6 h-1.5 border-x-2 border-b-2 rounded-b-xs shrink-0 ${
+                    isBridgeDown ? 'bg-rose-200 border-rose-500' : 'bg-indigo-200 border-indigo-500'
+                  }`} />
                   {/* Attached high-contrast side badge */}
-                  <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-[8px] font-mono font-black uppercase px-2.5 py-0.5 rounded-full border shadow-md whitespace-nowrap z-30 ${
+                  <span className={`absolute left-6 top-1/2 -translate-y-1/2 text-[9px] font-mono font-black uppercase px-2.5 py-1 rounded-full border shadow-md whitespace-nowrap z-30 ${
                     isBridgeDown ? 'bg-rose-600 text-white border-rose-700 animate-pulse' : 'bg-indigo-600 text-white border-indigo-700'
                   }`}>
                     ▼ Local Ingestion Stream (HTTPS / TLS 1.3)

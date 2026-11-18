@@ -624,7 +624,7 @@ def load_cloud_seen_hashes(device_record_count: int) -> Set[str]:
 
 
 # ─── Startup IP Discovery ─────────────────────────────────────────────────────
-def discover_or_exit() -> None:
+def discover_ta500() -> None:
     """Auto-discovers TA500 on the Wi-Fi subnet if the default IP doesn't respond."""
     global ZK_IP
     test_conn = connect_device(ZK_IP)
@@ -632,24 +632,18 @@ def discover_or_exit() -> None:
         safe_disconnect(test_conn)
         return
 
-    logger.warning(f'TA500 not found at {ZK_IP}. Starting subnet scan...')
+    logger.warning(f'TA500 not responding at {ZK_IP}. Checking subnet...')
     found_ip = scan_for_ta500()
     if found_ip:
         ZK_IP = found_ip
         logger.info(f'✅ TA500 auto-discovered at {ZK_IP}! Saving for future use.')
     else:
-        logger.error('TA500 not found on this Wi-Fi network.')
-        print('=' * 55)
-        print('   TA500 NOT FOUND — TROUBLESHOOTING STEPS:')
-        print('   1. Check Wi-Fi: Tablet and TA500 on same router.')
-        print('   2. Check TA500 LAN cable (green light on port).')
-        print('   3. Confirm TA500 IP in Comm → Ethernet menu.')
-        print('   4. Turn the TA500 OFF and back ON to reset its Wi-Fi chip.')
-        sys.exit(0)
+        logger.warning(f'TA500 currently offline / unreachable at {ZK_IP}.')
+        logger.info('   Bridge daemon will remain ACTIVE and await hardware power-on.')
 
 
 def main():
-    discover_or_exit()
+    discover_ta500()
 
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
@@ -665,6 +659,8 @@ def main():
 
     refresh_employee_cache()
     init_recent_punches()
+    # Immediately signal to cloud portal that bridge daemon is running
+    update_live_heartbeat(False, 0)
     logger.info('Tablet bridge active. Press Ctrl+C to stop.')
 
     # ── Reconnect tracking ─────────────────────────────────────────────────

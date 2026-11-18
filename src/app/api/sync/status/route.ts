@@ -97,7 +97,7 @@ export async function GET() {
       tablet_bridge: {
         device: 'Samsung Galaxy Tab A9+ (SM-X210)',
         os: 'Android 14 / Termux',
-        engine_version: 'Bridge Engine v15.2',
+        engine_version: 'Bridge Engine v15.3',
         poll_interval_sec: 60,
         anti_double_tap_min: 5,
       },
