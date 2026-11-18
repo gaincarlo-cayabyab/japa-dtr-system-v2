@@ -20,40 +20,61 @@ function formatTime(ts: string | null) {
 }
 
 /**
- * Auto-fit column widths based on actual cell content.
- * Scans every row and returns the max character-width per column,
- * with a minimum of `minWidth` and a cap of `maxWidth`.
+ * Auto-fits worksheet column widths strictly based on table data and headers,
+ * completely ignoring merged header banners or title rows that span multiple columns.
+ *
+ * @param sheet The ExcelJS worksheet
+ * @param startRow The first row containing actual column headers
+ * @param endRow The last row of table data (e.g. totals row)
+ * @param padding Extra character margin for readability (default 2)
+ * @param minWidth Minimum column width (default 5)
  */
 function autoFitColumns(
   sheet: ExcelJS.Worksheet,
-  minWidth = 10,
-  maxWidth = 50
+  startRow = 4,
+  endRow?: number,
+  padding = 2,
+  minWidth = 5
 ): void {
   const colWidths: number[] = []
+  const maxRow = endRow || sheet.rowCount
 
-  sheet.eachRow((row) => {
+  for (let r = startRow; r <= maxRow; r++) {
+    const row = sheet.getRow(r)
     row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      // NEVER size columns based on merged banner cells
+      if (cell.isMerged) return
+
       let cellText = ''
       if (cell.value === null || cell.value === undefined) {
         cellText = ''
       } else if (typeof cell.value === 'object' && 'formula' in (cell.value as object)) {
-        // formula cell — use a reasonable guess
-        cellText = '###########'
+        // Standard formula total estimate for currency/hours
+        cellText = '₱999,999.00'
+      } else if (typeof cell.value === 'number') {
+        if (cell.numFmt && cell.numFmt.includes('₱')) {
+          cellText = '₱' + cell.value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        } else if (cell.numFmt && cell.numFmt.includes('.0')) {
+          cellText = cell.value.toFixed(2)
+        } else {
+          cellText = String(cell.value)
+        }
       } else {
         cellText = String(cell.value)
       }
+
       const len = cellText.length
       const colIdx = colNumber - 1
       if (!colWidths[colIdx] || colWidths[colIdx] < len) {
         colWidths[colIdx] = len
       }
     })
-  })
+  }
 
   sheet.columns.forEach((col, idx) => {
-    const dataWidth = colWidths[idx] || minWidth
-    // Add a small padding factor (1.2x) + 2 chars buffer
-    col.width = Math.min(maxWidth, Math.max(minWidth, Math.ceil(dataWidth * 1.15) + 2))
+    const contentLen = colWidths[idx] || 0
+    // Perfectly tight width: content length + compact margin, no bloated space
+    col.width = Math.max(minWidth, contentLen + padding)
   })
 }
 
@@ -386,8 +407,8 @@ export async function GET(request: NextRequest) {
     // — Initialize columns (required before autoFit) ———————————
     payrollSheet.columns = salaryHeaders.map(() => ({ width: 10 }))
 
-    // — Auto-fit all columns ————————————————————————————————————
-    autoFitColumns(payrollSheet, 10, 52)
+    // — Auto-fit all columns tightly to content ————————————————
+    autoFitColumns(payrollSheet, 4, dataEnd + 1, 2, 5)
 
     // ============================================================
     // TAB 2 — DTR SHEET (DOLE FORM 48)
@@ -520,9 +541,9 @@ export async function GET(request: NextRequest) {
       })
     })
 
-    // — Initialize columns then auto-fit ———————————————————————
+    // — Initialize columns then auto-fit tightly to content —————
     dtrSheet.columns = dtrHeaders.map(() => ({ width: 10 }))
-    autoFitColumns(dtrSheet, 10, 46)
+    autoFitColumns(dtrSheet, 4, 4 + recordIndex, 2, 5)
 
     // ============================================================
     // TAB 3 — DOLE MULTIPLIERS & LEGAL REFERENCE
@@ -586,7 +607,7 @@ export async function GET(request: NextRequest) {
     })
 
     refSheet.columns = refHeaders.map(() => ({ width: 10 }))
-    autoFitColumns(refSheet, 14, 50)
+    autoFitColumns(refSheet, 3, 3 + refRows.length, 2, 8)
 
     // ============================================================
     // TAB 4 — CALCULATION MODE GUIDE
@@ -647,7 +668,7 @@ export async function GET(request: NextRequest) {
     })
 
     guideSheet.columns = guideHeaders.map(() => ({ width: 10 }))
-    autoFitColumns(guideSheet, 18, 52)
+    autoFitColumns(guideSheet, 3, 3 + guideRows.length, 2, 8)
 
     // ── Generate buffer ────────────────────────────────────────
     const buffer = await workbook.xlsx.writeBuffer()
