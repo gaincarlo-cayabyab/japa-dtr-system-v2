@@ -77,31 +77,30 @@ export async function PUT(request: NextRequest) {
     const windowStart = `${work_date}T04:00:00+08:00`
     const windowEnd = `${nextDate}T03:59:59+08:00`
 
-    // Fetch existing punches for this employee in this window
-    const { data: existingPunches, error: fetchErr } = await supabase
-      .from('attendance_logs')
-      .select('id, punch_time, status')
-      .eq('device_user_id', String(device_user_id))
-      .gte('punch_time', windowStart)
-      .lte('punch_time', windowEnd)
-      .order('punch_time', { ascending: true })
-
-    if (fetchErr) throw fetchErr
-    const punches = existingPunches || []
-
     // ACTION: DELETE ENTIRE SHIFT / RESET
     if (action === 'delete_all') {
-      if (punches.length > 0) {
-        await supabase
-          .from('attendance_logs')
-          .delete()
-          .in('id', punches.map((p) => p.id))
+      const { error: delErr } = await supabase
+        .from('attendance_logs')
+        .delete()
+        .eq('device_user_id', String(device_user_id))
+        .gte('punch_time', windowStart)
+        .lte('punch_time', windowEnd)
+
+      if (delErr) {
+        console.error('Error deleting attendance logs:', delErr)
+        throw delErr
       }
-      await supabase
+
+      const { error: noteDelErr } = await supabase
         .from('shift_notes')
         .delete()
         .eq('device_user_id', String(device_user_id))
         .eq('work_date', work_date)
+
+      if (noteDelErr) {
+        console.error('Error deleting shift note:', noteDelErr)
+        throw noteDelErr
+      }
 
       return NextResponse.json({
         success: true,
@@ -112,7 +111,7 @@ export async function PUT(request: NextRequest) {
 
     // Save attendance status & notes in shift_notes
     if (attendance_status !== undefined || notes !== undefined) {
-      await supabase.from('shift_notes').upsert(
+      const { error: upsertErr } = await supabase.from('shift_notes').upsert(
         {
           device_user_id: String(device_user_id),
           work_date,
@@ -123,16 +122,32 @@ export async function PUT(request: NextRequest) {
         },
         { onConflict: 'device_user_id,work_date' }
       )
+
+      if (upsertErr) {
+        console.error('Error upserting shift notes:', upsertErr)
+        throw upsertErr
+      }
     }
 
-    // If marked absent, vacation leave, or sick leave -> remove any punches so hours drop to 0
+    // Cleanly delete all existing punches for this employee in this shift window first.
+    // This guarantees:
+    // 1. No PostgreSQL 23505 duplicate key violations when updating punches.
+    // 2. No leftover intermediate punches distorting daily_dtr min/max calculations.
+    const { error: clearErr } = await supabase
+      .from('attendance_logs')
+      .delete()
+      .eq('device_user_id', String(device_user_id))
+      .gte('punch_time', windowStart)
+      .lte('punch_time', windowEnd)
+
+    if (clearErr) {
+      console.error('Error clearing old punches for shift edit:', clearErr)
+      throw clearErr
+    }
+
+    // If marked absent, vacation leave, or sick leave -> punches are cleared, hours are 0.
     if (attendance_status && attendance_status !== 'present') {
-      if (punches.length > 0) {
-        await supabase
-          .from('attendance_logs')
-          .delete()
-          .in('id', punches.map((p) => p.id))
-      }
+      // Nothing more to insert
     } else {
       // ── STATUS IS PRESENT ──
       const inTime = first_check_in && has_in_time ? parseTimeToTimestamp(first_check_in, work_date, nextDate) : null
@@ -150,58 +165,30 @@ export async function PUT(request: NextRequest) {
         }
       }
 
-      // 1. Time In handling
+      const toInsert: { device_user_id: string; punch_time: string; status: number; synced_at: string }[] = []
       if (inTime) {
-        const firstPunch = punches[0]
-        if (firstPunch) {
-          await supabase
-            .from('attendance_logs')
-            .update({ punch_time: inTime, status: 0 })
-            .eq('id', firstPunch.id)
-        } else {
-          await supabase.from('attendance_logs').insert({
-            device_user_id: String(device_user_id),
-            punch_time: inTime,
-            status: 0,
-            synced_at: new Date().toISOString(),
-          })
-        }
-      } else if (!has_in_time && punches.length > 0) {
-        // User explicitly unchecked or deleted Time In
-        await supabase.from('attendance_logs').delete().eq('id', punches[0].id)
+        toInsert.push({
+          device_user_id: String(device_user_id),
+          punch_time: inTime,
+          status: 0,
+          synced_at: new Date().toISOString(),
+        })
+      }
+      if (outTime) {
+        toInsert.push({
+          device_user_id: String(device_user_id),
+          punch_time: outTime,
+          status: 1,
+          synced_at: new Date().toISOString(),
+        })
       }
 
-      // Re-fetch remaining punches after Time In modification
-      const { data: updatedPunches } = await supabase
-        .from('attendance_logs')
-        .select('id, punch_time, status')
-        .eq('device_user_id', String(device_user_id))
-        .gte('punch_time', windowStart)
-        .lte('punch_time', windowEnd)
-        .order('punch_time', { ascending: true })
-
-      const currentPunches = updatedPunches || []
-
-      // 2. Time Out handling
-      if (outTime) {
-        if (currentPunches.length > 1) {
-          const lastPunch = currentPunches[currentPunches.length - 1]
-          await supabase
-            .from('attendance_logs')
-            .update({ punch_time: outTime, status: 1 })
-            .eq('id', lastPunch.id)
-        } else {
-          await supabase.from('attendance_logs').insert({
-            device_user_id: String(device_user_id),
-            punch_time: outTime,
-            status: 1,
-            synced_at: new Date().toISOString(),
-          })
+      if (toInsert.length > 0) {
+        const { error: insErr } = await supabase.from('attendance_logs').insert(toInsert)
+        if (insErr) {
+          console.error('Error inserting edited punches:', insErr)
+          throw insErr
         }
-      } else if (!has_out_time && currentPunches.length > 1) {
-        // User explicitly unchecked Time Out (delete last punch, leaving only Time In)
-        const lastPunch = currentPunches[currentPunches.length - 1]
-        await supabase.from('attendance_logs').delete().eq('id', lastPunch.id)
       }
     }
 
@@ -298,19 +285,23 @@ export async function DELETE(request: NextRequest) {
     const windowEnd = `${nextDate}T03:59:59+08:00`
 
     // Delete attendance logs
-    await supabase
+    const { error: logErr } = await supabase
       .from('attendance_logs')
       .delete()
       .eq('device_user_id', String(device_user_id))
       .gte('punch_time', windowStart)
       .lte('punch_time', windowEnd)
 
+    if (logErr) throw logErr
+
     // Delete shift notes
-    await supabase
+    const { error: noteErr } = await supabase
       .from('shift_notes')
       .delete()
       .eq('device_user_id', String(device_user_id))
       .eq('work_date', work_date)
+
+    if (noteErr) throw noteErr
 
     return NextResponse.json({ success: true, message: 'Shift deleted successfully.' })
   } catch (err: unknown) {
