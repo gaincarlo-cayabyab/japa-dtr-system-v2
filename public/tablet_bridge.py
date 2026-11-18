@@ -154,6 +154,25 @@ _HEADERS_INSERT = {
 }
 
 # ─── TA500 Hardware Biometric ID to System Employee ID Mapping ────────────────
+# Maps physical FingerTec TA500 enrolled UID -> JAPA DTR System Employee ID
+# Verified against live physical TA500 hardware memory (17 enrolled employees):
+#   UID  1: Gain     -> CAYABYAB, GAIN CARLO G. (#24)
+#   UID  2: Pearly   -> DE VERA, PEARLY B. (#4)
+#   UID  3: Melanie  -> TIU, MELANIE P. (#17)
+#   UID  4: Janine   -> GALVAN, JANINE KYLE (#9)
+#   UID  5: Jamaica  -> SORIANO, JAMAICA (#11)
+#   UID  6: Lyca     -> ESTACIO, LYCA (#7)
+#   UID  7: Dennis   -> ARDIENTE, DENNIS P. (#1)
+#   UID  8: Ivan     -> DE VERA, IVAN (#5)
+#   UID  9: Jepoy    -> BANIQUED, JEFFREY D. (#2)
+#   UID 10: Jerwin   -> DEE, JERWIN B. (#6)
+#   UID 11: Carlo    -> CAOILE, CARLO C. (#3)
+#   UID 12: Larry    -> ESTACIO, LARRY L. (#8)
+#   UID 13: Randolf  -> GALZOTE, RANDOLF J. (#14)
+#   UID 14: Rowena   -> ROMERO, ROWENA (#13)
+#   UID 15: Asky     -> SENTENILLAR, ASKY (#19)
+#   UID 16: Juvell   -> LUNA, JUVELL (#15)
+#   UID 17: Henry    -> TIOZON, HENRY M. (#16)
 TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '1':  '24',  # Gain Carlo Cayabyab
     '2':  '4',   # Pearly B. De Vera
@@ -169,6 +188,9 @@ TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '12': '8',   # Larry L. Estacio
     '13': '14',  # Randolf J. Galzote
     '14': '13',  # Rowena Romero
+    '15': '19',  # Asky Sentenillar
+    '16': '15',  # Juvell Luna
+    '17': '16',  # Henry M. Tiozon
 }
 
 _employee_cache: Dict[str, str] = {}
@@ -464,6 +486,20 @@ def flush_upload_queue(seen: Set[str]) -> bool:
     return False
 
 
+def safe_fetch_attendance(conn, max_retries: int = 3) -> list:
+    """Retries get_attendance() for transient pyzk NoneType packet blips."""
+    for attempt in range(max_retries):
+        try:
+            records = conn.get_attendance()
+            if records is not None:
+                return records
+        except Exception:
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(1)
+    return []
+
+
 def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
     """Processes historical or offline punches fetched during catch-up."""
     global _pending_upload_queue, _last_device_punch
@@ -574,10 +610,10 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v15')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v15.1')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Bulletproof 24/7 | Dual-Mode TCP+UDP | Graceful')
-    print(f'   Startup   : <1s Instant Launch | No Unnecessary Disconnects')
+    print(f'   Mode      : Bulletproof 24/7 | Dual-Mode TCP+UDP | 17 Verified Enrolled UIDs')
+    print(f'   Startup   : <1s Instant Launch | Safe Auto-Recovery')
     print('=' * 60)
 
     seen = load_seen_set()
@@ -644,7 +680,7 @@ def main():
                     unseen_count = known_record_count - len(seen)
                     logger.info(f'🔄 Catch-up: {unseen_count} unsynced punch(es) on device. Fetching...')
                     try:
-                        atts = conn.get_attendance()
+                        atts = safe_fetch_attendance(conn)
                         atts = atts or []
                         caught_up = process_punches_batch(atts, seen)
                         if caught_up > 0:
@@ -722,7 +758,7 @@ def main():
                     delta = current_count - known_record_count
                     logger.info(f'🆕 {delta} new punch(es) detected on TA500! Fetching records...')
                     try:
-                        atts = conn.get_attendance()
+                        atts = safe_fetch_attendance(conn)
                         atts = atts or []
                         new_punches = process_punches_batch(atts, seen)
                         known_record_count = current_count
@@ -744,7 +780,7 @@ def main():
                                     conn.enable_device()
                                 except Exception:
                                     pass
-                                atts = conn.get_attendance() or []
+                                atts = safe_fetch_attendance(conn) or []
                                 new_punches = process_punches_batch(atts, seen)
                                 known_record_count = current_count
                                 if new_punches > 0:
