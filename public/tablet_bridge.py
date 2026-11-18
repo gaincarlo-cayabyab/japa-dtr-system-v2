@@ -173,6 +173,7 @@ _HEADERS_INSERT = {
 #   UID 15: Asky     -> SENTENILLAR, ASKY (#19)
 #   UID 16: Juvell   -> LUNA, JUVELL (#15)
 #   UID 17: Henry    -> TIOZON, HENRY M. (#16)
+#   UID 18: Robert   -> LUNA, ROBERT (#18)
 TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '1':  '24',  # Gain Carlo Cayabyab
     '2':  '4',   # Pearly B. De Vera
@@ -191,6 +192,7 @@ TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '15': '19',  # Asky Sentenillar
     '16': '15',  # Juvell Luna
     '17': '16',  # Henry M. Tiozon
+    '18': '18',  # Robert Luna
 }
 
 _employee_cache: Dict[str, str] = {}
@@ -610,9 +612,9 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
     print('=' * 60)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v15.1')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8) v15.2')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Bulletproof 24/7 | Dual-Mode TCP+UDP | 17 Verified Enrolled UIDs')
+    print(f'   Mode      : Bulletproof 24/7 | Dual-Mode TCP+UDP | 18 Verified Enrolled UIDs')
     print(f'   Startup   : <1s Instant Launch | Safe Auto-Recovery')
     print('=' * 60)
 
