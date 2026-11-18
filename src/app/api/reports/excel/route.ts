@@ -19,6 +19,44 @@ function formatTime(ts: string | null) {
   }
 }
 
+/**
+ * Auto-fit column widths based on actual cell content.
+ * Scans every row and returns the max character-width per column,
+ * with a minimum of `minWidth` and a cap of `maxWidth`.
+ */
+function autoFitColumns(
+  sheet: ExcelJS.Worksheet,
+  minWidth = 10,
+  maxWidth = 50
+): void {
+  const colWidths: number[] = []
+
+  sheet.eachRow((row) => {
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      let cellText = ''
+      if (cell.value === null || cell.value === undefined) {
+        cellText = ''
+      } else if (typeof cell.value === 'object' && 'formula' in (cell.value as object)) {
+        // formula cell — use a reasonable guess
+        cellText = '###########'
+      } else {
+        cellText = String(cell.value)
+      }
+      const len = cellText.length
+      const colIdx = colNumber - 1
+      if (!colWidths[colIdx] || colWidths[colIdx] < len) {
+        colWidths[colIdx] = len
+      }
+    })
+  })
+
+  sheet.columns.forEach((col, idx) => {
+    const dataWidth = colWidths[idx] || minWidth
+    // Add a small padding factor (1.2x) + 2 chars buffer
+    col.width = Math.min(maxWidth, Math.max(minWidth, Math.ceil(dataWidth * 1.15) + 2))
+  })
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -35,7 +73,7 @@ export async function GET(request: NextRequest) {
     const branch = searchParams.get('branch')
     const calcMode = (searchParams.get('calc_mode') || 'exact') as 'exact' | 'normalized'
 
-    // 1. Fetch settings
+    // ── 1. Fetch settings ──────────────────────────────────────
     const { data: settingsData } = await supabase
       .from('payroll_settings')
       .select('*')
@@ -57,20 +95,18 @@ export async function GET(request: NextRequest) {
     }
     const settings: PayrollSettings = settingsData || defaultSettings
 
-    // 2. Fetch employees ordered A to Z
+    // ── 2. Fetch employees ordered A → Z ───────────────────────
     let empQuery = supabase
       .from('employees')
       .select('*')
       .order('full_name', { ascending: true })
 
-    if (branch) {
-      empQuery = empQuery.eq('branch', branch)
-    }
+    if (branch) empQuery = empQuery.eq('branch', branch)
 
     const { data: employees, error: empError } = await empQuery
     if (empError) throw empError
 
-    // 3. Fetch compensation
+    // ── 3. Fetch compensation ──────────────────────────────────
     const { data: compList } = await supabase
       .from('employee_compensation')
       .select('*')
@@ -78,20 +114,18 @@ export async function GET(request: NextRequest) {
     const compMap = new Map<string, EmployeeCompensation>()
     compList?.forEach((c) => compMap.set(c.device_user_id, c))
 
-    // 4. Fetch daily DTR
+    // ── 4. Fetch daily DTR ─────────────────────────────────────
     let dtrQuery = supabase
       .from('daily_dtr')
       .select('*')
       .gte('work_date', startDate)
       .lte('work_date', endDate)
 
-    if (branch) {
-      dtrQuery = dtrQuery.eq('branch', branch)
-    }
+    if (branch) dtrQuery = dtrQuery.eq('branch', branch)
 
     const { data: dtrList } = await dtrQuery
 
-    // 5. Compute payroll summaries
+    // ── 5. Compute payroll summaries ───────────────────────────
     const summaries = (employees as Employee[]).map((emp) => {
       const comp = compMap.get(emp.device_user_id) || {
         id: 'temp',
@@ -117,81 +151,118 @@ export async function GET(request: NextRequest) {
       )
     })
 
-    // 6. Build Excel Workbook
+    // ── 6. Build Excel Workbook ────────────────────────────────
     const workbook = new ExcelJS.Workbook()
     workbook.creator = 'JAPA DTR System'
     workbook.lastModifiedBy = 'JAPA Enterprise Portal'
     workbook.created = new Date()
 
-    const NAVY = '1E293B'
-    const BLUE_HEADER = '0284C7'
-    const LIGHT_ROW = 'F8FAFC'
-    const BORDER_COLOR = 'E2E8F0'
+    // ── Color palette ──────────────────────────────────────────
+    const NAVY       = '1E293B'
+    const BLUE_HDR   = '0284C7'
+    const SLATE_HDR  = '475569'
+    const GREEN_HDR  = '047857'
+    const LIGHT_ROW  = 'F1F5F9'
+    const TOTAL_BG   = 'E2E8F0'
+    const BORDER_CLR = 'CBD5E1'
 
-    const thinBorder = {
-      top: { style: 'thin' as const, color: { argb: BORDER_COLOR } },
-      left: { style: 'thin' as const, color: { argb: BORDER_COLOR } },
-      bottom: { style: 'thin' as const, color: { argb: BORDER_COLOR } },
-      right: { style: 'thin' as const, color: { argb: BORDER_COLOR } },
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top:    { style: 'thin', color: { argb: BORDER_CLR } },
+      left:   { style: 'thin', color: { argb: BORDER_CLR } },
+      bottom: { style: 'thin', color: { argb: BORDER_CLR } },
+      right:  { style: 'thin', color: { argb: BORDER_CLR } },
     }
 
-    // ==========================================
-    // TAB 1: SALARY SHEET (PAYROLL SUMMARY)
-    // ==========================================
+    const modeLabel =
+      calcMode === 'normalized'
+        ? 'Standard Normalized — Shift Policy'
+        : 'Exact Biometrics — Raw Real-Time'
+
+    const generatedAt = format(new Date(), 'MMMM d, yyyy  h:mm aa')
+
+    // ============================================================
+    // TAB 1 — SALARY SHEET (PAYROLL SUMMARY)
+    // ============================================================
     const payrollSheet = workbook.addWorksheet('Salary Sheet (Payroll)', {
-      views: [{ showGridLines: true }],
+      views: [
+        {
+          state: 'frozen',
+          xSplit: 0,
+          ySplit: 4,          // freeze rows 1-4 (title + subtitle + blank + header)
+          topLeftCell: 'A5',
+          activeCell: 'A5',
+          showGridLines: true,
+        },
+      ],
+      pageSetup: {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        paperSize: 9,         // A4
+        margins: {
+          left: 0.4, right: 0.4,
+          top: 0.5, bottom: 0.5,
+          header: 0.3, footer: 0.3,
+        },
+      },
     })
 
-    // Title Block
+    // — Row 1: Main Title ——————————————————————————————————————
     payrollSheet.mergeCells('A1:Q1')
     const titleCell = payrollSheet.getCell('A1')
-    titleCell.value = 'JAPA ENTERPRISE — PAYROLL & SALARY SUMMARY'
-    titleCell.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFF' } }
+    titleCell.value = 'JAPA GLOBAL TRADING  ·  PAYROLL & SALARY SUMMARY'
+    titleCell.font = { name: 'Calibri', size: 15, bold: true, color: { argb: 'FFFFFF' } }
     titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } }
     titleCell.alignment = { vertical: 'middle', horizontal: 'center' }
-    payrollSheet.getRow(1).height = 32
+    payrollSheet.getRow(1).height = 36
 
+    // — Row 2: Sub-title ———————————————————————————————————————
     payrollSheet.mergeCells('A2:Q2')
-    const subTitleCell = payrollSheet.getCell('A2')
-    const modeLabel = calcMode === 'normalized' ? 'Standard Normalized (Shift Policy)' : 'Exact Biometrics (Raw Real-Time)'
-    subTitleCell.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Calculation Mode: ${modeLabel}   |   Generated: ${format(new Date(), 'PPpp')}`
-    subTitleCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } }
-    subTitleCell.alignment = { vertical: 'middle', horizontal: 'center' }
-    payrollSheet.getRow(2).height = 20
+    const subCell = payrollSheet.getCell('A2')
+    subCell.value =
+      `Period: ${startDate}  to  ${endDate}   ·   Branch: ${branch || 'All Branches'}   ·   ` +
+      `Calculation Mode: ${modeLabel}   ·   Generated: ${generatedAt}`
+    subCell.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '334155' } }
+    subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F8FAFC' } }
+    subCell.alignment = { vertical: 'middle', horizontal: 'center' }
+    payrollSheet.getRow(2).height = 22
 
-    payrollSheet.addRow([]) // blank row 3
+    // — Row 3: blank spacer ————————————————————————————————————
+    payrollSheet.addRow([])
+    payrollSheet.getRow(3).height = 6
 
-    // Headers
+    // — Row 4: Column Headers ——————————————————————————————————
     const salaryHeaders = [
       'Employee Name',
-      'Device ID',
+      'ID',
       'Branch',
       'Position',
-      'Daily Rate',
-      'Hourly Rate',
+      'Daily Rate (₱)',
+      'Hourly Rate (₱)',
       'Days Worked',
-      'Reg Hours',
-      'Regular Pay',
+      'Regular Hrs',
+      'Regular Pay (₱)',
       'OT Hours',
-      'OT Pay',
+      'OT Pay (₱)',
       'Night Diff Hrs',
-      'Night Diff Pay',
-      'Holiday Pay',
-      'Tardiness (m)',
-      'Tardiness Ded.',
-      'Gross Salary',
+      'Night Diff Pay (₱)',
+      'Holiday Pay (₱)',
+      'Tardiness (min)',
+      'Tardiness Ded. (₱)',
+      'GROSS SALARY (₱)',
     ]
 
     const headerRow = payrollSheet.addRow(salaryHeaders)
-    headerRow.height = 28
+    headerRow.height = 30
     headerRow.eachCell((cell) => {
       cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFF' } }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLUE_HEADER } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BLUE_HDR } }
       cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
       cell.border = thinBorder
     })
 
-    // Data Rows
+    // — Rows 5+: Data ——————————————————————————————————————————
     summaries.forEach((emp, index) => {
       const isAlt = index % 2 === 1
       const row = payrollSheet.addRow([
@@ -215,125 +286,157 @@ export async function GET(request: NextRequest) {
       ])
       row.height = 22
 
-      row.eachCell((cell, colNumber) => {
+      row.eachCell((cell, col) => {
         cell.font = { name: 'Calibri', size: 10 }
         cell.border = thinBorder
-        if (isAlt) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } }
-        }
+        if (isAlt) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } }
 
-        // Alignments & Number Formats
-        if (colNumber === 1 || colNumber === 3 || colNumber === 4) {
+        if (col === 1) {
+          // Employee Name — left-aligned, slightly bold
           cell.alignment = { vertical: 'middle', horizontal: 'left' }
-        } else if (colNumber === 2) {
+          cell.font = { name: 'Calibri', size: 10, bold: true }
+        } else if (col === 2) {
           cell.alignment = { vertical: 'middle', horizontal: 'center' }
-        } else if (colNumber === 7 || colNumber === 15) {
+        } else if (col === 3 || col === 4) {
+          cell.alignment = { vertical: 'middle', horizontal: 'left' }
+        } else if (col === 7 || col === 15) {
+          // Days worked, tardiness minutes — integer
           cell.alignment = { vertical: 'middle', horizontal: 'center' }
           cell.numFmt = '#,##0'
-        } else if (colNumber === 8 || colNumber === 10 || colNumber === 12) {
+        } else if (col === 8 || col === 10 || col === 12) {
+          // Hour columns — 1 decimal
           cell.alignment = { vertical: 'middle', horizontal: 'right' }
-          cell.numFmt = '#,##0.0'
+          cell.numFmt = '#,##0.00'
         } else {
-          // Currency columns
+          // All peso columns
           cell.alignment = { vertical: 'middle', horizontal: 'right' }
           cell.numFmt = '₱#,##0.00'
         }
 
-        // Highlight Gross Salary
-        if (colNumber === 17) {
-          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '047857' } }
+        // Gross Salary: bold green
+        if (col === 17) {
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '065F46' } }
+          cell.fill = {
+            type: 'pattern', pattern: 'solid',
+            fgColor: { argb: isAlt ? 'D1FAE5' : 'ECFDF5' },
+          }
         }
       })
     })
 
-    // Totals Row
-    const startDataRow = 5
-    const endDataRow = startDataRow + summaries.length - 1
+    // — Totals Row ——————————————————————————————————————————————
+    const dataStart = 5
+    const dataEnd = dataStart + summaries.length - 1
     const totalRow = payrollSheet.addRow([
-      'TOTALS',
-      '',
-      '',
-      '',
-      '',
-      '',
-      { formula: `SUM(G${startDataRow}:G${endDataRow})` },
-      { formula: `SUM(H${startDataRow}:H${endDataRow})` },
-      { formula: `SUM(I${startDataRow}:I${endDataRow})` },
-      { formula: `SUM(J${startDataRow}:J${endDataRow})` },
-      { formula: `SUM(K${startDataRow}:K${endDataRow})` },
-      { formula: `SUM(L${startDataRow}:L${endDataRow})` },
-      { formula: `SUM(M${startDataRow}:M${endDataRow})` },
-      { formula: `SUM(N${startDataRow}:N${endDataRow})` },
-      { formula: `SUM(O${startDataRow}:O${endDataRow})` },
-      { formula: `SUM(P${startDataRow}:P${endDataRow})` },
-      { formula: `SUM(Q${startDataRow}:Q${endDataRow})` },
+      'GRAND TOTAL', '', '', '', '', '',
+      { formula: `SUM(G${dataStart}:G${dataEnd})` },
+      { formula: `SUM(H${dataStart}:H${dataEnd})` },
+      { formula: `SUM(I${dataStart}:I${dataEnd})` },
+      { formula: `SUM(J${dataStart}:J${dataEnd})` },
+      { formula: `SUM(K${dataStart}:K${dataEnd})` },
+      { formula: `SUM(L${dataStart}:L${dataEnd})` },
+      { formula: `SUM(M${dataStart}:M${dataEnd})` },
+      { formula: `SUM(N${dataStart}:N${dataEnd})` },
+      { formula: `SUM(O${dataStart}:O${dataEnd})` },
+      { formula: `SUM(P${dataStart}:P${dataEnd})` },
+      { formula: `SUM(Q${dataStart}:Q${dataEnd})` },
     ])
-    totalRow.height = 26
-    totalRow.eachCell((cell, colNumber) => {
+    totalRow.height = 28
+    totalRow.eachCell((cell, col) => {
       cell.font = { name: 'Calibri', size: 10, bold: true }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'E2E8F0' } }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TOTAL_BG } }
       cell.border = {
-        top: { style: 'thin', color: { argb: '94A3B8' } },
+        top:    { style: 'medium', color: { argb: '64748B' } },
         bottom: { style: 'double', color: { argb: '0F172A' } },
-        left: { style: 'thin', color: { argb: BORDER_COLOR } },
-        right: { style: 'thin', color: { argb: BORDER_COLOR } },
+        left:   { style: 'thin',   color: { argb: BORDER_CLR } },
+        right:  { style: 'thin',   color: { argb: BORDER_CLR } },
       }
-      if (colNumber === 7 || colNumber === 15) {
+
+      if (col === 1) {
+        cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      } else if (col === 7 || col === 15) {
         cell.numFmt = '#,##0'
         cell.alignment = { vertical: 'middle', horizontal: 'center' }
-      } else if (colNumber === 8 || colNumber === 10 || colNumber === 12) {
-        cell.numFmt = '#,##0.0'
+      } else if (col === 8 || col === 10 || col === 12) {
+        cell.numFmt = '#,##0.00'
         cell.alignment = { vertical: 'middle', horizontal: 'right' }
-      } else if (colNumber >= 9) {
+      } else if (col >= 9) {
         cell.numFmt = '₱#,##0.00'
         cell.alignment = { vertical: 'middle', horizontal: 'right' }
       }
+
+      if (col === 17) {
+        cell.font = { name: 'Calibri', size: 11, bold: true, color: { argb: '065F46' } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'A7F3D0' } }
+      }
     })
 
-    // Set auto column widths
-    payrollSheet.columns = [
-      { width: 22 }, // Name
-      { width: 12 }, // ID
-      { width: 16 }, // Branch
-      { width: 16 }, // Position
-      { width: 13 }, // Daily Rate
-      { width: 13 }, // Hourly Rate
-      { width: 13 }, // Days Worked
-      { width: 12 }, // Reg Hrs
-      { width: 15 }, // Reg Pay
-      { width: 11 }, // OT Hrs
-      { width: 14 }, // OT Pay
-      { width: 14 }, // Night Diff Hrs
-      { width: 15 }, // Night Diff Pay
-      { width: 14 }, // Holiday Pay
-      { width: 14 }, // Tardiness Mins
-      { width: 15 }, // Tardiness Ded
-      { width: 18 }, // Gross Salary
-    ]
+    // — Mode note at bottom ————————————————————————————————————
+    const noteRowNum = dataEnd + 2
+    payrollSheet.mergeCells(`A${noteRowNum}:Q${noteRowNum}`)
+    const noteCell = payrollSheet.getCell(`A${noteRowNum}`)
+    noteCell.value =
+      calcMode === 'normalized'
+        ? '⚠  Standard Normalized Mode: Arrivals 8:00–9:05 AM → 9:00 AM · Departures 6:00–6:30 PM → 6:00 PM · Authorized OT credited in completed 30-min blocks.'
+        : '📌  Exact Biometrics Mode: All hours computed directly from raw biometric punch timestamps. No time normalization applied.'
+    noteCell.font = { name: 'Calibri', size: 9, italic: true, color: { argb: '64748B' } }
+    noteCell.alignment = { vertical: 'middle', horizontal: 'left' }
+    payrollSheet.getRow(noteRowNum).height = 18
 
-    // ==========================================
-    // TAB 2: DTR SHEET (DOLE FORM 48)
-    // ==========================================
+    // — Initialize columns (required before autoFit) ———————————
+    payrollSheet.columns = salaryHeaders.map(() => ({ width: 10 }))
+
+    // — Auto-fit all columns ————————————————————————————————————
+    autoFitColumns(payrollSheet, 10, 52)
+
+    // ============================================================
+    // TAB 2 — DTR SHEET (DOLE FORM 48)
+    // ============================================================
     const dtrSheet = workbook.addWorksheet('DTR Sheet (Form 48)', {
-      views: [{ showGridLines: true }],
+      views: [
+        {
+          state: 'frozen',
+          xSplit: 0,
+          ySplit: 4,
+          topLeftCell: 'A5',
+          activeCell: 'A5',
+          showGridLines: true,
+        },
+      ],
+      pageSetup: {
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        paperSize: 9,
+        margins: {
+          left: 0.4, right: 0.4,
+          top: 0.5, bottom: 0.5,
+          header: 0.3, footer: 0.3,
+        },
+      },
     })
 
     dtrSheet.mergeCells('A1:L1')
     const dtrTitle = dtrSheet.getCell('A1')
-    dtrTitle.value = 'JAPA ENTERPRISE — DAILY TIME RECORD (SMART OVERNIGHT ATTENDANCE)'
+    dtrTitle.value = 'JAPA GLOBAL TRADING  ·  DAILY TIME RECORD — DOLE FORM 48 (Smart Overnight Cut-off)'
     dtrTitle.font = { name: 'Calibri', size: 14, bold: true, color: { argb: 'FFFFFF' } }
     dtrTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } }
     dtrTitle.alignment = { vertical: 'middle', horizontal: 'center' }
-    dtrSheet.getRow(1).height = 32
+    dtrSheet.getRow(1).height = 34
 
     dtrSheet.mergeCells('A2:L2')
     const dtrSub = dtrSheet.getCell('A2')
-    dtrSub.value = `Period: ${startDate} to ${endDate}   |   Branch: ${branch || 'All Branches'}   |   Mode: ${modeLabel}   |   Smart 4:00 AM Operational Cutoff Applied`
-    dtrSub.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '475569' } }
+    dtrSub.value =
+      `Period: ${startDate}  to  ${endDate}   ·   Branch: ${branch || 'All Branches'}   ·   ` +
+      `Mode: ${modeLabel}   ·   Smart 4:00 AM Operational Cutoff Applied   ·   Generated: ${generatedAt}`
+    dtrSub.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '334155' } }
+    dtrSub.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F8FAFC' } }
     dtrSub.alignment = { vertical: 'middle', horizontal: 'center' }
-    dtrSheet.getRow(2).height = 20
+    dtrSheet.getRow(2).height = 22
 
     dtrSheet.addRow([])
+    dtrSheet.getRow(3).height = 6
 
     const dtrHeaders = [
       'Employee Name',
@@ -344,22 +447,21 @@ export async function GET(request: NextRequest) {
       'Time In',
       'Time Out',
       'Hours Worked',
-      'Regular Hours',
-      'Overtime Hours',
-      'Night Diff Hours',
+      'Regular Hrs',
+      'OT Hours',
+      'Night Diff Hrs',
       'Shift Status',
     ]
 
     const dtrHeaderRow = dtrSheet.addRow(dtrHeaders)
-    dtrHeaderRow.height = 28
+    dtrHeaderRow.height = 30
     dtrHeaderRow.eachCell((cell) => {
       cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFF' } }
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '475569' } }
-      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SLATE_HDR } }
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
       cell.border = thinBorder
     })
 
-    // Add daily records
     let recordIndex = 0
     summaries.forEach((emp) => {
       emp.records.forEach((rec) => {
@@ -380,96 +482,178 @@ export async function GET(request: NextRequest) {
           rec.shift_status,
         ])
         row.height = 20
-        row.eachCell((cell, colNumber) => {
+
+        row.eachCell((cell, col) => {
           cell.font = { name: 'Calibri', size: 10 }
           cell.border = thinBorder
-          if (isAlt) {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } }
-          }
-          if (colNumber <= 3) {
+          if (isAlt) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } }
+
+          if (col === 1) {
             cell.alignment = { vertical: 'middle', horizontal: 'left' }
-          } else if (colNumber === 4 || colNumber === 5 || colNumber === 6 || colNumber === 7 || colNumber === 12) {
+            cell.font = { name: 'Calibri', size: 10, bold: true }
+          } else if (col <= 3) {
+            cell.alignment = { vertical: 'middle', horizontal: 'left' }
+          } else if (col === 4 || col === 5 || col === 6 || col === 7 || col === 12) {
             cell.alignment = { vertical: 'middle', horizontal: 'center' }
           } else {
             cell.alignment = { vertical: 'middle', horizontal: 'right' }
-            cell.numFmt = '#,##0.0'
+            cell.numFmt = '#,##0.00'
+          }
+
+          // Colour-code shift status
+          if (col === 12) {
+            const status = String(rec.shift_status || '').toLowerCase()
+            if (status === 'completed') {
+              cell.font = { name: 'Calibri', size: 10, color: { argb: '065F46' } }
+            } else if (status === 'on duty') {
+              cell.font = { name: 'Calibri', size: 10, color: { argb: '1D4ED8' } }
+            } else if (status === 'absent') {
+              cell.font = { name: 'Calibri', size: 10, color: { argb: '991B1B' } }
+            }
+          }
+
+          // Highlight OT hours if > 0
+          if (col === 10 && Number(rec.overtime_hours) > 0) {
+            cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '7C3AED' } }
           }
         })
       })
     })
 
-    dtrSheet.columns = [
-      { width: 22 },
-      { width: 12 },
-      { width: 16 },
-      { width: 14 },
-      { width: 24 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-      { width: 14 },
-      { width: 16 },
-      { width: 14 },
-    ]
+    // — Initialize columns then auto-fit ———————————————————————
+    dtrSheet.columns = dtrHeaders.map(() => ({ width: 10 }))
+    autoFitColumns(dtrSheet, 10, 46)
 
-    // ==========================================
-    // TAB 3: DOLE MULTIPLIERS & LEGAL REFERENCE
-    // ==========================================
-    const refSheet = workbook.addWorksheet('DOLE Multipliers & Rules')
-    refSheet.views = [{ showGridLines: true }]
+    // ============================================================
+    // TAB 3 — DOLE MULTIPLIERS & LEGAL REFERENCE
+    // ============================================================
+    const refSheet = workbook.addWorksheet('DOLE Rates & Legal Reference', {
+      views: [{ showGridLines: true }],
+    })
 
     refSheet.mergeCells('A1:D1')
     const refTitle = refSheet.getCell('A1')
-    refTitle.value = 'PHILIPPINE DOLE STATUTORY OVERTIME & HOLIDAY RATES'
-    refTitle.font = { name: 'Calibri', size: 12, bold: true, color: { argb: 'FFFFFF' } }
+    refTitle.value = 'PHILIPPINE DOLE — STATUTORY OVERTIME & HOLIDAY MULTIPLIERS'
+    refTitle.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFF' } }
     refTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } }
     refTitle.alignment = { vertical: 'middle', horizontal: 'center' }
-    refSheet.getRow(1).height = 28
+    refSheet.getRow(1).height = 32
 
     refSheet.addRow([])
+    refSheet.getRow(2).height = 6
 
-    const refHeaders = ['Workday Classification', 'Regular Rate (1st 8 hrs)', 'Overtime Rate (>8 hrs)', 'Legal Basis / Notes']
+    const refHeaders = [
+      'Workday Classification',
+      'Regular Rate (1st 8 hrs)',
+      'Overtime Rate (>8 hrs)',
+      'Legal Basis / Notes',
+    ]
     const rHeaderRow = refSheet.addRow(refHeaders)
-    rHeaderRow.height = 24
+    rHeaderRow.height = 26
     rHeaderRow.eachCell((cell) => {
       cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFF' } }
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: '059669' } }
-      cell.alignment = { vertical: 'middle', horizontal: 'center' }
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
       cell.border = thinBorder
     })
 
     const refRows = [
-      ['Regular Workday', '100% (1.00x)', '125% (1.25x)', 'Art. 87 Labor Code'],
-      ['Scheduled Rest Day', '130% (1.30x)', '169% (1.69x)', 'Art. 93 Labor Code'],
-      ['Special Non-Working Holiday', '130% (1.30x)', '169% (1.69x)', 'Art. 93 Labor Code'],
-      ['Special Holiday on Rest Day', '150% (1.50x)', '195% (1.95x)', 'Art. 93 Labor Code'],
-      ['Regular Holiday', '200% (2.00x)', '260% (2.60x)', 'Art. 94 Labor Code'],
-      ['Regular Holiday on Rest Day', '260% (2.60x)', '338% (3.38x)', 'Art. 94 Labor Code'],
-      ['Night Shift Differential (10PM - 6AM)', '+10% of hourly rate', '+10% on OT rate if worked OT', 'Art. 86 Labor Code'],
+      ['Regular Workday',                      '100%  (1.00×)', '125%  (1.25×)', 'Labor Code Art. 87'],
+      ['Scheduled Rest Day',                   '130%  (1.30×)', '169%  (1.69×)', 'Labor Code Art. 93'],
+      ['Special Non-Working Holiday',          '130%  (1.30×)', '169%  (1.69×)', 'Labor Code Art. 93'],
+      ['Special Holiday on Rest Day',          '150%  (1.50×)', '195%  (1.95×)', 'Labor Code Art. 93'],
+      ['Regular Holiday',                      '200%  (2.00×)', '260%  (2.60×)', 'Labor Code Art. 94'],
+      ['Regular Holiday on Rest Day',          '260%  (2.60×)', '338%  (3.38×)', 'Labor Code Art. 94'],
+      ['Night Shift Differential (10PM–6AM)',  '+10% of hourly', '+10% on OT rate when OT is worked', 'Labor Code Art. 86'],
     ]
 
-    refRows.forEach((r) => {
+    refRows.forEach((r, i) => {
       const row = refSheet.addRow(r)
+      row.height = 22
+      if (i % 2 === 1) {
+        row.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } }
+        })
+      }
+      row.eachCell((cell, col) => {
+        cell.font = { name: 'Calibri', size: 10 }
+        cell.border = thinBorder
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: col === 1 || col === 4 ? 'left' : 'center',
+        }
+      })
+    })
+
+    refSheet.columns = refHeaders.map(() => ({ width: 10 }))
+    autoFitColumns(refSheet, 14, 50)
+
+    // ============================================================
+    // TAB 4 — CALCULATION MODE GUIDE
+    // ============================================================
+    const guideSheet = workbook.addWorksheet('Calculation Mode Guide', {
+      views: [{ showGridLines: false }],
+    })
+
+    guideSheet.mergeCells('A1:C1')
+    const guideTitle = guideSheet.getCell('A1')
+    guideTitle.value = 'PAYROLL CALCULATION MODE — QUICK REFERENCE GUIDE'
+    guideTitle.font = { name: 'Calibri', size: 13, bold: true, color: { argb: 'FFFFFF' } }
+    guideTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: NAVY } }
+    guideTitle.alignment = { vertical: 'middle', horizontal: 'center' }
+    guideSheet.getRow(1).height = 32
+
+    guideSheet.addRow([])
+
+    const guideHeaders = ['Attribute', 'Exact Biometrics', 'Standard Normalized']
+    const gHeaderRow = guideSheet.addRow(guideHeaders)
+    gHeaderRow.height = 26
+    gHeaderRow.eachCell((cell, col) => {
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FFFFFF' } }
+      cell.fill = {
+        type: 'pattern', pattern: 'solid',
+        fgColor: { argb: col === 1 ? SLATE_HDR : col === 2 ? '0284C7' : '059669' },
+      }
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+      cell.border = thinBorder
+    })
+
+    const guideRows = [
+      ['Time-In Handling',   'Exact punch time (e.g. 8:20 AM)', 'Clamp 8:00–9:05 AM → 9:00 AM'],
+      ['Time-Out Handling',  'Exact punch time (e.g. 6:22 PM)', 'Clamp 6:00–6:30 PM → 6:00 PM'],
+      ['OT Calculation',     'Every minute beyond 8 hrs counted', 'OT only in completed 30-min blocks after 6:30 PM'],
+      ['Gross Pay Impact',   'Higher — reflects all raw OT minutes', 'Lower — eliminates casual linger OT'],
+      ['Best Used For',      'Accurate legal compliance audits', 'Standard payroll, clean payslips'],
+      ['Data Source',        'Raw biometric attendance_logs table', 'Normalized via shift policy rules'],
+      ['This File Mode',     calcMode === 'exact' ? '✅ ACTIVE' : '—', calcMode === 'normalized' ? '✅ ACTIVE' : '—'],
+    ]
+
+    guideRows.forEach((r, i) => {
+      const row = guideSheet.addRow(r)
       row.height = 22
       row.eachCell((cell, col) => {
         cell.font = { name: 'Calibri', size: 10 }
         cell.border = thinBorder
-        cell.alignment = { vertical: 'middle', horizontal: col === 1 || col === 4 ? 'left' : 'center' }
+        cell.alignment = { vertical: 'middle', horizontal: col === 1 ? 'left' : 'center', wrapText: true }
+        if (i % 2 === 1) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT_ROW } }
+        }
+        if (col === 1) cell.font = { name: 'Calibri', size: 10, bold: true }
+        if (r[col - 1] === '✅ ACTIVE') {
+          cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: '065F46' } }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'D1FAE5' } }
+        }
       })
     })
 
-    refSheet.columns = [
-      { width: 34 },
-      { width: 22 },
-      { width: 22 },
-      { width: 30 },
-    ]
+    guideSheet.columns = guideHeaders.map(() => ({ width: 10 }))
+    autoFitColumns(guideSheet, 18, 52)
 
-    // Generate buffer
+    // ── Generate buffer ────────────────────────────────────────
     const buffer = await workbook.xlsx.writeBuffer()
 
-    const filename = `JAPA_Payroll_DTR_${startDate}_to_${endDate}.xlsx`
+    const modeTag = calcMode === 'normalized' ? 'Normalized' : 'Exact'
+    const filename = `JAPA_Payroll_${modeTag}_${startDate}_to_${endDate}.xlsx`
 
     return new NextResponse(buffer, {
       status: 200,
