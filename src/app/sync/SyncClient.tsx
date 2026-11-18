@@ -24,6 +24,14 @@ import {
   ArrowRight,
   Info,
   Check,
+  ShieldCheck,
+  Lock,
+  Sparkles,
+  Cpu,
+  HardDrive,
+  Layers,
+  ChevronRight,
+  Eye,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import type { AttendanceLog } from '@/types/database'
@@ -58,9 +66,9 @@ export function SyncClient({
   initialRecentLogs,
 }: SyncClientProps) {
   const [scenario, setScenario] = useState<NetworkScenario>('healthy')
-  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+  const [selectedNode, setSelectedNode] = useState<string>('ta500')
   const [testingPing, setTestingPing] = useState(false)
-  const [liveLatency, setLiveLatency] = useState<number>(45)
+  const [liveLatency, setLiveLatency] = useState<number>(42)
   const [totalRecords, setTotalRecords] = useState(initialTotalRecords)
   const [lastSync, setLastSync] = useState(initialLastSync)
   const [recentLogs, setRecentLogs] = useState<AttendanceLog[]>(initialRecentLogs)
@@ -110,6 +118,152 @@ export function SyncClient({
   const isBridgeDown = scenario === 'bridge_offline'
   const isCloudDown = scenario === 'cloud_error'
 
+  // Selected node detailed specs metadata
+  const nodeDetails: Record<
+    string,
+    {
+      name: string
+      subtitle: string
+      type: string
+      ip: string
+      port: string
+      protocol: string
+      statusBadge: string
+      statusColor: string
+      specs: { label: string; value: string }[]
+      diagnosticTitle: string
+      diagnosticText: string
+    }
+  > = {
+    ta500: {
+      name: 'FingerTec TA500 Biometric Terminal',
+      subtitle: 'Hardware Optical Time Attendance Terminal (Stand-Alone)',
+      type: 'Physical Edge Biometric Sensor',
+      ip: '192.168.0.58 (Static)',
+      port: '4370 (UDP)',
+      protocol: 'ZKTeco Standalone Push/Pull SDK',
+      statusBadge: isLanBroken ? 'DISCONNECTED (NO CARRIER)' : 'READY & LOGGING',
+      statusColor: isLanBroken ? 'rose' : 'emerald',
+      specs: [
+        { label: 'Firmware Engine', value: 'Ver 6.60 (Build 2024)' },
+        { label: 'Sensor Technology', value: '500 DPI Optical Prism Sensor' },
+        { label: 'Onboard Buffer', value: '100,000 Flash Punch Memory' },
+        { label: 'Physical Interface', value: '10/100 Mbps RJ45 Auto-MDIX' },
+        { label: 'Default Gateway', value: '192.168.0.1' },
+        { label: 'Subnet Mask', value: '255.255.255.0' },
+      ],
+      diagnosticTitle: isLanBroken
+        ? 'Physical Ethernet Disconnection'
+        : 'Terminal Operating Normally',
+      diagnosticText: isLanBroken
+        ? 'The Cat6 cable connecting the TA500 to the Wi-Fi Repeater is disconnected or severed. Verify RJ45 clip integrity and confirm the Link LED is lit on the rear port.'
+        : 'The terminal is actively capturing optical biometric scans and serving punch logs to the Samsung Tab A9+ bridge daemon on UDP 4370.',
+    },
+    repeater: {
+      name: 'Wi-Fi Repeater & AP Ethernet Bridge',
+      subtitle: 'Wireless-to-Ethernet Transparent Layer 2 Bridge',
+      type: 'Local Wireless Network Interconnect',
+      ip: '192.168.0.254 (AP Mode)',
+      port: 'Bridge Layer 2 (802.11n)',
+      protocol: 'IEEE 802.11b/g/n (2.4 GHz)',
+      statusBadge: isWifiBroken
+        ? 'WLAN DISCONNECTED'
+        : isLanBroken
+        ? 'LAN PORT UNLINKED'
+        : 'BRIDGE OPERATIONAL',
+      statusColor: isWifiBroken || isLanBroken ? 'rose' : 'purple',
+      specs: [
+        { label: 'Wi-Fi Band', value: '2.4 GHz Single-Band (Channel 6)' },
+        { label: 'Wireless Security', value: 'WPA2-PSK (AES)' },
+        { label: 'Ethernet Ports', value: '1x 100M Fast Ethernet RJ45' },
+        { label: 'Antenna Config', value: 'Dual 2x2 MIMO 5dBi Omni' },
+        { label: 'Bridge Mode', value: 'Client Infrastructure AP' },
+        { label: 'Signal Quality', value: isWifiBroken ? '0 dBm (Lost)' : isSlow ? '-82 dBm (Weak)' : '-52 dBm (Strong)' },
+      ],
+      diagnosticTitle: isWifiBroken
+        ? 'Wireless Link Dropped'
+        : isSlow
+        ? 'High Wireless Interference Detected'
+        : 'Repeater Bridge Active',
+      diagnosticText: isWifiBroken
+        ? 'The repeater has lost Wi-Fi association with the office router. Re-seat the wall plug power adapter and check the WPS / Wi-Fi indicator LED.'
+        : isSlow
+        ? 'Elevated latency detected over the 2.4 GHz air interface. Check for channel congestion or physical obstructions between the repeater and tablet.'
+        : 'The repeater transparently bridges the TA500 Ethernet port to the office Wi-Fi network without requiring physical Ethernet cabling through walls.',
+    },
+    tablet: {
+      name: 'Samsung Galaxy Tab A9+ (Sync Bridge Host)',
+      subtitle: 'Dedicated Android Bridge Hardware Running Termux Python Engine',
+      type: 'Edge Ingestion & Anti-Double Tap Gateway',
+      ip: '192.168.0.112 (WLAN Static Lease)',
+      port: 'Loopback / HTTPS Uplink',
+      protocol: 'Python 3.11 · bridge.py v15.2',
+      statusBadge: isBridgeDown ? 'DAEMON TERMINATED' : 'ACTIVE POLLING (60s)',
+      statusColor: isBridgeDown ? 'rose' : 'amber',
+      specs: [
+        { label: 'Platform & OS', value: 'Android 14 (One UI 6.0) · Termux' },
+        { label: 'Processor', value: 'Qualcomm Snapdragon 695 5G' },
+        { label: 'Polling Cadence', value: 'Every 60 seconds (Non-blocking)' },
+        { label: 'Anti-Double Window', value: '5-Minute Debounce Filter' },
+        { label: 'Ingestion Mode', value: 'Upsert with Composite Key Uniqueness' },
+        { label: 'Failover Buffer', value: 'SQLite Local Shadow Queue' },
+      ],
+      diagnosticTitle: isBridgeDown
+        ? 'Python Sync Daemon Offline'
+        : 'Bridge Engine Running v15.2',
+      diagnosticText: isBridgeDown
+        ? 'The bridge process has been terminated. Open Termux on the tablet and type "python sync-bridge/bridge.py" to restart automatic synchronization.'
+        : 'The bridge engine queries the TA500 every 60s, strips duplicated double-taps within 5 minutes, normalizes punch direction, and securely ships records to Supabase.',
+    },
+    supabase: {
+      name: 'Supabase Cloud Database (Singapore)',
+      subtitle: 'Managed PostgreSQL 15 Enterprise Cluster',
+      type: 'Production Relational Cloud Database',
+      ip: 'aws-0-ap-southeast-1.pooler.supabase.com',
+      port: '5432 / 6543 (SSL Enforced)',
+      protocol: 'PostgreSQL Wire Protocol + Realtime WS',
+      statusBadge: isCloudDown ? 'GATEWAY TIMEOUT (504)' : 'CONNECTED · SYNCHRONIZED',
+      statusColor: isCloudDown ? 'rose' : 'emerald',
+      specs: [
+        { label: 'Cloud Region', value: 'AWS Singapore (ap-southeast-1)' },
+        { label: 'Database Engine', value: 'PostgreSQL 15.6 with pgvector' },
+        { label: 'Total Punches Stored', value: `${totalRecords.toLocaleString()} Verified Records` },
+        { label: 'Roundtrip Latency', value: isCloudDown ? 'Timeout' : `${liveLatency} ms` },
+        { label: 'Replication Stream', value: 'Supabase Realtime (CDC WebSockets)' },
+        { label: 'Row Level Security', value: 'Enabled with Service Role Bypass' },
+      ],
+      diagnosticTitle: isCloudDown
+        ? 'Cloud Database Uplink Failure'
+        : 'Database Healthy & Ingesting',
+      diagnosticText: isCloudDown
+        ? 'Internet uplink to Singapore cloud region is severed. All physical biometric punches remain preserved inside the TA500 hardware buffer and will backfill once online.'
+        : 'The Supabase database cluster is receiving real-time biometric streams and instantly notifying connected browser clients via WebSocket subscriptions.',
+    },
+    vercel: {
+      name: 'JAPA DTR Enterprise Portal (Vercel Edge)',
+      subtitle: 'Next.js 14 Production Web Application',
+      type: 'Global Edge Application Tier',
+      ip: 'japa-dtr-system.vercel.app',
+      port: '443 (HTTPS / TLS 1.3)',
+      protocol: 'HTTP/2 + Edge Middleware',
+      statusBadge: 'ONLINE · PRODUCTION',
+      statusColor: 'indigo',
+      specs: [
+        { label: 'Edge Platform', value: 'Vercel Global Edge Network' },
+        { label: 'Framework Engine', value: 'Next.js 14.2 (App Router)' },
+        { label: 'Lead Architect', value: 'Gain Carlo Cayabyab' },
+        { label: 'Security Transport', value: 'TLS 1.3 / HSTS 31536000' },
+        { label: 'Calculation Policy', value: 'Dual Mode: Exact vs Standard Normalized' },
+        { label: 'Build Status', value: 'Production Deployed (Clean)' },
+      ],
+      diagnosticTitle: 'Web Portal Operational',
+      diagnosticText:
+        'The web application delivers real-time attendance dashboards, biometric punch audits, DOLE-compliant payroll calculations, and Excel exports to authorized administrators.',
+    },
+  }
+
+  const activeDetail = nodeDetails[selectedNode] || nodeDetails.ta500
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* ── Top Header ─────────────────────────────────────────────── */}
@@ -121,10 +275,10 @@ export function SyncClient({
             </div>
             <div>
               <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                Sync Bridge Infrastructure & Telemetry Monitor
+                Sync Bridge Infrastructure &amp; Telemetry Monitor
               </h1>
               <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-                Physical biometric network topology & real-time synchronization pipeline
+                Physical biometric network topology &amp; real-time synchronization pipeline
               </p>
             </div>
           </div>
@@ -147,112 +301,121 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* ── Scenario / Simulation Selector ─────────────────────────── */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-4 rounded-2xl border border-slate-700 text-white shadow-md">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-500/30 text-blue-300 border border-blue-400/30">
-              Interactive Hardware & Network Diagnostics
+      {/* ── Scenario / Simulation Selector (Light Theme) ────────────── */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">
+              <Sparkles className="w-3 h-3 text-blue-600" />
+              Interactive Hardware &amp; Network Simulation
             </span>
-            <span className="text-xs text-slate-400 hidden sm:inline">
-              Select any state below to inspect visual wire & connectivity behavior:
+            <span className="text-xs text-slate-500 hidden sm:inline font-medium">
+              Click any state below to simulate live hardware and wire fault reactions:
             </span>
           </div>
-          <div className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          <div className="text-[11px] font-mono font-bold text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isHealthy
+                  ? 'bg-emerald-500 animate-ping'
+                  : isSlow
+                  ? 'bg-amber-500 animate-ping'
+                  : 'bg-rose-500 animate-ping'
+              }`}
+            />
             <span>Active Pipeline: {scenario.toUpperCase()}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
           <button
             type="button"
             onClick={() => setScenario('healthy')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+            className={`px-3 py-2.5 rounded-xl text-xs font-bold flex flex-col items-center gap-1.5 transition-all border ${
               scenario === 'healthy'
-                ? 'bg-emerald-600 text-white border-emerald-400 shadow-md shadow-emerald-600/30 ring-2 ring-emerald-400/50'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border-slate-700'
+                ? 'bg-emerald-500 text-white border-emerald-600 shadow-md shadow-emerald-500/20 ring-2 ring-emerald-300'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
             }`}
           >
-            <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+            <CheckCircle2 className={`w-4 h-4 ${scenario === 'healthy' ? 'text-white' : 'text-emerald-600'}`} />
             <span>🟢 All Healthy</span>
           </button>
 
           <button
             type="button"
             onClick={() => setScenario('slow_network')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+            className={`px-3 py-2.5 rounded-xl text-xs font-bold flex flex-col items-center gap-1.5 transition-all border ${
               scenario === 'slow_network'
-                ? 'bg-amber-600 text-white border-amber-400 shadow-md shadow-amber-600/30 ring-2 ring-amber-400/50'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border-slate-700'
+                ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/20 ring-2 ring-amber-300'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
             }`}
           >
-            <AlertTriangle className="w-4 h-4 text-amber-300" />
+            <AlertTriangle className={`w-4 h-4 ${scenario === 'slow_network' ? 'text-white' : 'text-amber-600'}`} />
             <span>🟡 High Latency</span>
           </button>
 
           <button
             type="button"
             onClick={() => setScenario('lan_unplugged')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+            className={`px-3 py-2.5 rounded-xl text-xs font-bold flex flex-col items-center gap-1.5 transition-all border ${
               scenario === 'lan_unplugged'
-                ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30 ring-2 ring-rose-400/50'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border-slate-700'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 ring-2 ring-rose-300'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
             }`}
           >
-            <Cable className="w-4 h-4 text-rose-300" />
+            <Cable className={`w-4 h-4 ${scenario === 'lan_unplugged' ? 'text-white' : 'text-rose-600'}`} />
             <span>🔴 LAN Unplugged</span>
           </button>
 
           <button
             type="button"
             onClick={() => setScenario('wifi_disconnected')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+            className={`px-3 py-2.5 rounded-xl text-xs font-bold flex flex-col items-center gap-1.5 transition-all border ${
               scenario === 'wifi_disconnected'
-                ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30 ring-2 ring-rose-400/50'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border-slate-700'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 ring-2 ring-rose-300'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
             }`}
           >
-            <WifiOff className="w-4 h-4 text-rose-300" />
+            <WifiOff className={`w-4 h-4 ${scenario === 'wifi_disconnected' ? 'text-white' : 'text-rose-600'}`} />
             <span>🔴 Wi-Fi Drop</span>
           </button>
 
           <button
             type="button"
             onClick={() => setScenario('bridge_offline')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+            className={`px-3 py-2.5 rounded-xl text-xs font-bold flex flex-col items-center gap-1.5 transition-all border ${
               scenario === 'bridge_offline'
-                ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30 ring-2 ring-rose-400/50'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border-slate-700'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 ring-2 ring-rose-300'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
             }`}
           >
-            <Tablet className="w-4 h-4 text-rose-300" />
+            <Tablet className={`w-4 h-4 ${scenario === 'bridge_offline' ? 'text-white' : 'text-rose-600'}`} />
             <span>🔴 Bridge Offline</span>
           </button>
 
           <button
             type="button"
             onClick={() => setScenario('cloud_error')}
-            className={`px-3 py-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 transition-all border ${
+            className={`px-3 py-2.5 rounded-xl text-xs font-bold flex flex-col items-center gap-1.5 transition-all border ${
               scenario === 'cloud_error'
-                ? 'bg-rose-600 text-white border-rose-400 shadow-md shadow-rose-600/30 ring-2 ring-rose-400/50'
-                : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 border-slate-700'
+                ? 'bg-rose-600 text-white border-rose-700 shadow-md shadow-rose-600/20 ring-2 ring-rose-300'
+                : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
             }`}
           >
-            <Cloud className="w-4 h-4 text-rose-300" />
+            <Cloud className={`w-4 h-4 ${scenario === 'cloud_error' ? 'text-white' : 'text-rose-600'}`} />
             <span>🔴 Cloud/WAN Out</span>
           </button>
         </div>
       </div>
 
-      {/* ── Active Status Banner ─────────────────────────────────────── */}
+      {/* ── Active Status Alert Banner ─────────────────────────────────── */}
       <div
-        className={`p-4 rounded-2xl border transition-all flex items-start gap-3 ${
+        className={`p-4 rounded-2xl border transition-all flex items-start gap-3 shadow-sm ${
           isHealthy
-            ? 'bg-emerald-50/80 border-emerald-200 text-emerald-900'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
             : isSlow
-            ? 'bg-amber-50/80 border-amber-200 text-amber-900'
-            : 'bg-rose-50/80 border-rose-200 text-rose-900'
+            ? 'bg-amber-50 border-amber-200 text-amber-950'
+            : 'bg-rose-50 border-rose-200 text-rose-950'
         }`}
       >
         <div className="mt-0.5">
@@ -266,335 +429,677 @@ export function SyncClient({
         </div>
         <div className="flex-1">
           <h2 className="text-sm font-black uppercase tracking-wider">
-            {isHealthy && 'Operational · All Pipeline Stages Healthy & Synchronized'}
-            {isSlow && 'Performance Alert · High Jitter / Slow Packet Propagation Detected'}
-            {isLanBroken && 'Hardware Fault · RJ45 Ethernet Cable Disconnected from TA500 or Repeater'}
-            {isWifiBroken && 'Wireless Link Severed · Wi-Fi Repeater / Extender Disconnected from Office WLAN'}
-            {isBridgeDown && 'Software Inactive · Python Bridge Engine Terminated on Samsung Galaxy Tab A9+'}
-            {isCloudDown && 'WAN Outage · Internet Uplink Down or Supabase Cloud Gateway Unreachable'}
+            {isHealthy && 'Operational · All Biometric Nodes Synchronized'}
+            {isSlow && 'Performance Advisory · Elevated Latency / Wireless Jitter Detected'}
+            {isLanBroken && 'Hardware Fault · RJ45 Ethernet Disconnected from FingerTec TA500'}
+            {isWifiBroken && 'Wireless Link Severed · Wi-Fi Repeater Lost 2.4 GHz Association'}
+            {isBridgeDown && 'Daemon Inactive · Termux Python Sync Engine Stopped on Tablet'}
+            {isCloudDown && 'WAN Outage · Supabase Singapore Cloud Database Unreachable'}
           </h2>
-          <p className="text-xs mt-0.5 leading-relaxed opacity-90">
+          <p className="text-xs mt-0.5 leading-relaxed opacity-90 font-medium">
             {isHealthy &&
-              `FingerTec TA500 (192.168.0.58) communicates smoothly over Ethernet through the Wi-Fi Repeater to the Samsung Galaxy Tab A9+ bridge daemon. Latest round-trip latency: ${liveLatency}ms.`}
+              `FingerTec TA500 (192.168.0.58) communicates cleanly over physical Cat6 Ethernet through the Wi-Fi Repeater to the Samsung Tab A9+ bridge daemon. Latest roundtrip latency: ${liveLatency}ms.`}
             {isSlow &&
-              'Biometric punch requests are experiencing elevated roundtrip response times (~480ms). Check for Wi-Fi interference on 2.4 GHz channel or background downloading on the local network.'}
+              'Biometric query packet roundtrip is elevated (~480ms). Check for 2.4 GHz Wi-Fi channel congestion or physical obstructions between the repeater and tablet.'}
             {isLanBroken &&
-              'The physical Cat6 RJ45 cable between the FingerTec TA500 LAN port and the Wi-Fi Repeater is unplugged, loose, or severed. Biometrics terminal cannot transmit raw punch logs.'}
+              'The physical Cat6 RJ45 patch cable between the FingerTec TA500 LAN port and the Wi-Fi Repeater is unplugged, loose, or severed. Re-insert the cable firmly.'}
             {isWifiBroken &&
-              'The Wi-Fi repeater has lost wireless connection to the office Wi-Fi router (SSID: JAPA_OFFICE_WLAN). Check repeater power socket and Wi-Fi signal indicator.'}
+              'The Wi-Fi Repeater has lost connection to the office Wi-Fi router. Verify the wall socket power LED and ensure the repeater is within range.'}
             {isBridgeDown &&
-              'The background synchronization daemon (bridge.py v15.2) has stopped on the Samsung Galaxy Tab A9+. Open Termux and run: python sync-bridge/bridge.py to revive automatic polling.'}
+              'The synchronization daemon (bridge.py v15.2) has terminated on the Samsung Tab A9+. Open Termux and execute: "python sync-bridge/bridge.py".'}
             {isCloudDown &&
-              'Local tablet is unable to resolve or reach the Supabase Cloud database in Singapore. New biometric punches will buffer safely in TA500 onboard flash memory until internet connectivity resumes.'}
+              'Local tablet cannot reach Supabase in Singapore. New biometric punches remain securely buffered in TA500 onboard flash memory and will sync upon reconnection.'}
           </p>
         </div>
       </div>
 
-      {/* ── Visual Topology Architecture Diagram (Animated) ─────────── */}
-      <div className="bg-slate-950 p-6 rounded-3xl border border-slate-800 shadow-xl overflow-hidden relative">
-        {/* Background circuit grid */}
-        <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
+      {/* ── Visual Topology Architecture Diagram (Light Theme 3D/2D Visual) ──────── */}
+      <div
+        className="rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden relative"
+        style={{
+          background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 45%, #f1f5f9 100%)',
+        }}
+      >
+        {/* Subtle technical grid pattern */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle, #cbd5e1 1px, transparent 1px), linear-gradient(to right, #f1f5f9 1px, transparent 1px)',
+            backgroundSize: '24px 24px, 48px 48px',
+          }}
+        />
 
-        <div className="relative z-10">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-6">
+        {/* Top vibrant gradient accent line */}
+        <div
+          className="h-1.5 w-full"
+          style={{
+            background: 'linear-gradient(90deg, #2563eb, #8b5cf6, #06b6d4, #10b981, #f59e0b, #3b82f6)',
+          }}
+        />
+
+        <div className="relative z-10 p-5 sm:p-7">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
             <div>
-              <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-blue-400">
-                PHYSICAL & LOGICAL TOPOLOGY DIAGRAM
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full mb-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+                Physical Hardware &amp; Logical Topology
               </span>
-              <h2 className="text-lg font-black text-white">
+              <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
                 Live Biometric Data Propagation Path
               </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Click any device below to inspect live hardware specs, network ports &amp; diagnostic telemetry
+              </p>
             </div>
-            <div className="text-xs text-slate-400 font-mono flex items-center gap-3">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-1 bg-emerald-400 rounded-full" /> Normal Wire Flow
+            <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+              <span className="flex items-center gap-1.5 text-emerald-700">
+                <span className="w-3 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Normal Wire Flow
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-1 bg-amber-400 rounded-full" /> Latency / Slow
+              <span className="flex items-center gap-1.5 text-amber-700">
+                <span className="w-3 h-1.5 rounded-full bg-amber-500" />
+                High Latency
               </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2.5 h-1 bg-rose-500 rounded-full" /> Severed / Fault
+              <span className="flex items-center gap-1.5 text-rose-700">
+                <span className="w-3 h-1.5 rounded-full bg-rose-500" />
+                Fault / Severed
               </span>
             </div>
           </div>
 
-          {/* Node Cards and Connector Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 lg:gap-6 relative items-center">
-            {/* ── NODE 1: TA500 Biometric Machine ─────────────────────── */}
-            <div
-              onClick={() => setSelectedNode('ta500')}
-              className={`cursor-pointer rounded-2xl p-4 transition-all relative border ${
-                isLanBroken
-                  ? 'bg-rose-950/40 border-rose-500/80 shadow-lg shadow-rose-900/30'
-                  : 'bg-slate-900/90 border-slate-700/80 hover:border-blue-500 shadow-md'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="p-2 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
-                  <Fingerprint className="w-6 h-6" />
-                </span>
-                <span
-                  className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
-                    isLanBroken
-                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                  }`}
-                >
-                  {isLanBroken ? 'NO CARRIER' : 'READY'}
-                </span>
-              </div>
-              <h3 className="text-sm font-black text-white">FingerTec TA500</h3>
-              <p className="text-[11px] text-slate-400 font-mono">192.168.0.58:4370</p>
-              <div className="mt-3 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between items-center">
-                <span>Port: RJ45 LAN</span>
-                <span className="font-mono text-emerald-400">UDP/ZKTeco</span>
-              </div>
-              {/* Pulsing indicator */}
-              <div className="absolute -top-1.5 -right-1.5">
-                <span className="relative flex h-3 w-3">
-                  <span
-                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                      isLanBroken ? 'bg-rose-400' : 'bg-emerald-400'
-                    }`}
-                  />
-                  <span
-                    className={`relative inline-flex rounded-full h-3 w-3 ${
-                      isLanBroken ? 'bg-rose-500' : 'bg-emerald-500'
-                    }`}
-                  />
-                </span>
-              </div>
-            </div>
+          {/* ── 3D PHYSICAL HARDWARE DIAGRAM ROW (LOCAL EDGE TIER) ───────── */}
+          <div className="relative mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 relative items-stretch">
 
-            {/* ── WIRE 1 / CONNECTOR: TA500 -> REPEATER ──────────────── */}
-            <div className="hidden md:flex flex-col items-center justify-center relative px-1">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
-                <Cable className="w-3 h-3 text-blue-400" /> Cat6 Wire
-              </span>
-              <div className="w-full h-3 bg-slate-900 rounded-full relative overflow-hidden border border-slate-800">
-                {isLanBroken ? (
-                  <div className="w-full h-full bg-rose-500/30 flex items-center justify-center text-[8px] font-black text-rose-400">
-                    SEVERED ✕
+              {/* ════════════ NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) ════════════ */}
+              <div
+                onClick={() => setSelectedNode('ta500')}
+                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
+                  selectedNode === 'ta500'
+                    ? 'ring-2 ring-blue-500 shadow-xl border-blue-400 bg-white'
+                    : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
+                }`}
+                style={{
+                  boxShadow:
+                    selectedNode === 'ta500'
+                      ? '0 12px 30px -5px rgba(37,99,235,0.20), 0 4px 10px rgba(0,0,0,0.05)'
+                      : '0 8px 24px -5px rgba(0,0,0,0.06)',
+                }}
+              >
+                {/* 3D Hardware Device Casing Mockup */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                      DEVICE #1 · BIOMETRIC TERMINAL
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
+                        isLanBroken
+                          ? 'bg-rose-50 text-rose-600 border-rose-200 animate-pulse'
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}
+                    >
+                      {isLanBroken ? '✕ LAN UNPLUGGED' : '● READY (UDP 4370)'}
+                    </span>
                   </div>
-                ) : (
-                  <div
-                    className={`h-full w-full ${
-                      isSlow
-                        ? 'bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 animate-flow-dash-slow'
-                        : 'bg-gradient-to-r from-emerald-500 via-cyan-400 to-emerald-500 animate-flow-dash'
-                    }`}
-                    style={{
-                      backgroundSize: '24px 24px',
-                      backgroundImage:
-                        'linear-gradient(45deg, rgba(255, 255, 255, 0.4) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0.4) 75%, transparent 75%, transparent)',
-                    }}
-                  />
-                )}
-              </div>
-              <span className="text-[9px] font-mono text-slate-500 mt-1">100 Mbps Duplex</span>
-            </div>
 
-            {/* ── NODE 2: Wi-Fi Repeater / Extender ─────────────────────── */}
-            <div
-              onClick={() => setSelectedNode('repeater')}
-              className={`cursor-pointer rounded-2xl p-4 transition-all relative border ${
-                isWifiBroken || isLanBroken
-                  ? 'bg-rose-950/40 border-rose-500/80 shadow-lg shadow-rose-900/30'
-                  : 'bg-slate-900/90 border-slate-700/80 hover:border-blue-500 shadow-md'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="p-2 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30">
-                  <Radio className="w-6 h-6" />
-                </span>
-                <span
-                  className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
-                    isWifiBroken
-                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                  }`}
-                >
-                  {isWifiBroken ? 'DISCONNECTED' : 'BRIDGE ON'}
-                </span>
-              </div>
-              <h3 className="text-sm font-black text-white">Wi-Fi Repeater</h3>
-              <p className="text-[11px] text-slate-400 font-mono">192.168.0.254 (AP Bridge)</p>
-              <div className="mt-3 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between items-center">
-                <span>LAN ➔ Wi-Fi</span>
-                <span className="font-mono text-purple-400">2.4 GHz 802.11n</span>
-              </div>
-            </div>
+                  {/* Visual 3D Chassis Representation */}
+                  <div className="bg-gradient-to-b from-slate-900 to-slate-800 rounded-xl p-3 border-2 border-slate-700 text-white shadow-inner relative overflow-hidden mb-3">
+                    {/* Screen Section */}
+                    <div className="bg-slate-950 rounded-lg p-2.5 border border-cyan-500/30 font-mono text-[11px] mb-2.5 relative">
+                      <div className="flex items-center justify-between text-[9px] text-cyan-400 border-b border-slate-800 pb-1 mb-1.5">
+                        <span className="font-bold">TA500 TFT 2.8&quot;</span>
+                        <span>{liveTime || '15:00:00'}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                        <span className="font-bold text-white">
+                          {isLanBroken ? 'NO LAN CARRIER' : 'SCAN FINGER / CARD'}
+                        </span>
+                      </div>
+                      <div className="text-[9px] text-slate-400 mt-1 flex justify-between">
+                        <span>IP: 192.168.0.58</span>
+                        <span className="text-cyan-300">UDP: 4370</span>
+                      </div>
+                    </div>
 
-            {/* ── WIRE 2 / CONNECTOR: REPEATER -> TABLET (WIFI WAVES) ── */}
-            <div className="hidden md:flex flex-col items-center justify-center relative px-1">
-              <span className="text-[9px] font-mono font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
-                {isWifiBroken ? (
-                  <WifiOff className="w-3 h-3 text-rose-400" />
-                ) : (
-                  <Wifi className="w-3 h-3 text-cyan-400 animate-pulse" />
-                )}
-                WLAN Waves
-              </span>
-              <div className="w-full h-3 bg-slate-900 rounded-full relative overflow-hidden border border-slate-800">
-                {isWifiBroken ? (
-                  <div className="w-full h-full bg-rose-500/30 flex items-center justify-center text-[8px] font-black text-rose-400">
-                    NO SIGNAL ✕
+                    {/* Sensor & Keypad Row */}
+                    <div className="flex items-center justify-between gap-3 pt-1">
+                      {/* Optical Fingerprint Scanner Prism with Laser Scan Beam */}
+                      <div className="relative w-14 h-16 rounded-lg bg-emerald-950/80 border-2 border-emerald-500/60 flex items-center justify-center overflow-hidden shadow-inner">
+                        <Fingerprint className="w-9 h-9 text-emerald-400 opacity-70" />
+                        {/* Animated Laser Beam */}
+                        <div
+                          className="absolute left-0 right-0 h-0.5 bg-emerald-300 shadow-[0_0_8px_#34d399] animate-laser-scan"
+                        />
+                      </div>
+
+                      {/* Silicone Keypad Matrix Representation */}
+                      <div className="grid grid-cols-3 gap-1 flex-1">
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => (
+                          <div
+                            key={k}
+                            className="h-3.5 bg-slate-700/80 rounded-sm flex items-center justify-center text-[8px] font-mono text-slate-300"
+                          >
+                            {k}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* RJ45 Port Cutaway on Bottom Left */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-700/80 flex items-center justify-between text-[9px] font-mono">
+                      <span className="text-slate-400 flex items-center gap-1">
+                        <Cable className="w-3 h-3 text-blue-400" />
+                        RJ45 LAN Socket
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-slate-400">LEDs:</span>
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isLanBroken ? 'bg-slate-600' : 'bg-emerald-400 shadow-[0_0_6px_#10b981]'
+                          }`}
+                          title="Link LED"
+                        />
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            isLanBroken ? 'bg-slate-600' : 'bg-amber-400 animate-pulse'
+                          }`}
+                          title="Activity LED"
+                        />
+                      </div>
+                    </div>
                   </div>
-                ) : (
-                  <div
-                    className={`h-full w-full ${
-                      isSlow
-                        ? 'bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 animate-flow-dash-slow'
-                        : 'bg-gradient-to-r from-cyan-400 via-blue-400 to-cyan-400 animate-flow-dash'
-                    }`}
-                    style={{
-                      backgroundSize: '24px 24px',
-                      backgroundImage:
-                        'linear-gradient(45deg, rgba(255, 255, 255, 0.4) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0.4) 75%, transparent 75%, transparent)',
-                    }}
-                  />
-                )}
-              </div>
-              <span className="text-[9px] font-mono text-slate-500 mt-1">
-                {isSlow ? 'High Jitter (~480ms)' : '72 Mbps Wireless'}
-              </span>
-            </div>
 
-            {/* ── NODE 3: Samsung Galaxy Tab A9+ (Local Bridge Engine) ─── */}
-            <div
-              onClick={() => setSelectedNode('tablet')}
-              className={`cursor-pointer rounded-2xl p-4 transition-all relative border ${
-                isBridgeDown
-                  ? 'bg-rose-950/40 border-rose-500/80 shadow-lg shadow-rose-900/30'
-                  : 'bg-slate-900/90 border-slate-700/80 hover:border-blue-500 shadow-md'
-              }`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="p-2 rounded-xl bg-amber-600/20 text-amber-400 border border-amber-500/30">
-                  <Tablet className="w-6 h-6" />
-                </span>
-                <span
-                  className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
-                    isBridgeDown
-                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">FingerTec TA500</h3>
+                    <p className="text-xs text-slate-500 font-medium">Stand-alone Biometric Timekeeper</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">192.168.0.58</span>
+                  <span className="text-[10px] font-bold text-blue-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    Inspect Specs <ChevronRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+
+              {/* ════════════ CONNECTOR 1: CAT6 ETHERNET & REPEATER ════════════ */}
+              <div
+                onClick={() => setSelectedNode('repeater')}
+                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
+                  selectedNode === 'repeater'
+                    ? 'ring-2 ring-purple-500 shadow-xl border-purple-400 bg-white'
+                    : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
+                }`}
+                style={{
+                  boxShadow:
+                    selectedNode === 'repeater'
+                      ? '0 12px 30px -5px rgba(139,92,246,0.20), 0 4px 10px rgba(0,0,0,0.05)'
+                      : '0 8px 24px -5px rgba(0,0,0,0.06)',
+                }}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                      DEVICE #2 · ETHERNET &amp; WI-FI REPEATER
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
+                        isWifiBroken || isLanBroken
+                          ? 'bg-rose-50 text-rose-600 border-rose-200'
+                          : 'bg-purple-50 text-purple-700 border-purple-200'
+                      }`}
+                    >
+                      {isWifiBroken
+                        ? '✕ NO WI-FI'
+                        : isLanBroken
+                        ? '✕ NO LAN INPUT'
+                        : '● BRIDGE ON (AP)'}
+                    </span>
+                  </div>
+
+                  {/* 3D Cat6 Cable Inflow Graphic */}
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-3">
+                    <div className="flex items-center justify-between text-[10px] font-mono font-bold mb-1.5">
+                      <span className="text-slate-600 flex items-center gap-1">
+                        <Cable className="w-3.5 h-3.5 text-blue-600" />
+                        Cat6 RJ45 Input Cable
+                      </span>
+                      <span
+                        className={
+                          isLanBroken
+                            ? 'text-rose-600 font-black'
+                            : isSlow
+                            ? 'text-amber-600'
+                            : 'text-emerald-600'
+                        }
+                      >
+                        {isLanBroken ? 'UNPLUGGED ✕' : '100 Mbps Duplex'}
+                      </span>
+                    </div>
+
+                    {/* Molded Animated Cable Track */}
+                    <div className="w-full h-3 rounded-full bg-slate-200 overflow-hidden relative border border-slate-300">
+                      {isLanBroken ? (
+                        <div className="w-full h-full bg-rose-200 flex items-center justify-center text-[8px] font-black text-rose-700">
+                          RJ45 CABLE DISCONNECTED
+                        </div>
+                      ) : (
+                        <div
+                          className={`h-full w-full ${
+                            isSlow
+                              ? 'bg-gradient-to-r from-amber-400 via-amber-200 to-amber-500 animate-flow-dash-slow'
+                              : 'bg-gradient-to-r from-blue-500 via-cyan-400 to-emerald-500 animate-flow-dash'
+                          }`}
+                          style={{
+                            backgroundSize: '24px 24px',
+                            backgroundImage:
+                              'linear-gradient(45deg, rgba(255, 255, 255, 0.45) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0.45) 75%, transparent 75%, transparent)',
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3D Repeater Hardware Chassis with Twin Antennas */}
+                  <div className="bg-gradient-to-b from-slate-100 to-white rounded-xl p-3 border-2 border-slate-300 shadow-sm relative">
+                    {/* Twin Antennas */}
+                    <div className="flex justify-between px-4 -mt-6 mb-1">
+                      <div className="w-1.5 h-6 bg-slate-400 rounded-t-sm shadow" />
+                      <div className="w-1.5 h-6 bg-slate-400 rounded-t-sm shadow" />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-purple-100 text-purple-700 border border-purple-200">
+                          {isWifiBroken ? (
+                            <WifiOff className="w-5 h-5 text-rose-600" />
+                          ) : (
+                            <Radio className="w-5 h-5 animate-pulse" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs font-black text-slate-800">AP Bridge Unit</div>
+                          <div className="text-[10px] text-slate-500 font-mono">192.168.0.254</div>
+                        </div>
+                      </div>
+
+                      {/* Signal LED Meter */}
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[9px] font-mono text-slate-500 font-bold">2.4 GHz</span>
+                        <div className="flex items-end gap-0.5 h-4">
+                          <span
+                            className={`w-1 rounded-sm ${
+                              isWifiBroken
+                                ? 'h-1.5 bg-slate-300'
+                                : 'h-1.5 bg-emerald-500'
+                            }`}
+                          />
+                          <span
+                            className={`w-1 rounded-sm ${
+                              isWifiBroken
+                                ? 'h-2 bg-slate-300'
+                                : isSlow
+                                ? 'h-2 bg-amber-400'
+                                : 'h-2 bg-emerald-500'
+                            }`}
+                          />
+                          <span
+                            className={`w-1 rounded-sm ${
+                              isWifiBroken || isSlow
+                                ? 'h-3 bg-slate-300'
+                                : 'h-3 bg-emerald-500'
+                            }`}
+                          />
+                          <span
+                            className={`w-1 rounded-sm ${
+                              isWifiBroken || isSlow
+                                ? 'h-4 bg-slate-300'
+                                : 'h-4 bg-emerald-500'
+                            }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <h3 className="text-sm font-black text-slate-900">Wi-Fi Repeater</h3>
+                    <p className="text-xs text-slate-500 font-medium">Physical LAN to Wireless AP Bridge</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">802.11n · 2.4 GHz</span>
+                  <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    Inspect Specs <ChevronRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+
+              {/* ════════════ NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE ENGINE) ════════════ */}
+              <div
+                onClick={() => setSelectedNode('tablet')}
+                className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
+                  selectedNode === 'tablet'
+                    ? 'ring-2 ring-amber-500 shadow-xl border-amber-400 bg-white'
+                    : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
+                }`}
+                style={{
+                  boxShadow:
+                    selectedNode === 'tablet'
+                      ? '0 12px 30px -5px rgba(245,158,11,0.20), 0 4px 10px rgba(0,0,0,0.05)'
+                      : '0 8px 24px -5px rgba(0,0,0,0.06)',
+                }}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                      DEVICE #3 · LOCAL BRIDGE HOST
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
+                        isBridgeDown
+                          ? 'bg-rose-50 text-rose-600 border-rose-200'
+                          : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}
+                    >
+                      {isBridgeDown ? '✕ DAEMON STOPPED' : '● BRIDGE v15.2 ACTIVE'}
+                    </span>
+                  </div>
+
+                  {/* 3D Tablet Frame with Termux Terminal Screen */}
+                  <div className="bg-gradient-to-b from-slate-300 via-slate-200 to-slate-400 rounded-xl p-2 border-2 border-slate-400 shadow-sm mb-3">
+                    {/* Camera pinhole */}
+                    <div className="flex justify-center mb-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-800" />
+                    </div>
+
+                    {/* Dark Terminal Screen running bridge.py */}
+                    <div className="bg-slate-950 rounded-lg p-2.5 font-mono text-[10px] text-slate-200 border border-slate-800 leading-relaxed shadow-inner">
+                      <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1 mb-1.5 text-[9px]">
+                        <span className="flex items-center gap-1 text-amber-400 font-bold">
+                          <Terminal className="w-3 h-3" /> Termux · python bridge.py
+                        </span>
+                        <span>60s Cycle</span>
+                      </div>
+                      {isBridgeDown ? (
+                        <div className="text-rose-400 font-bold py-1">
+                          [CRITICAL] Process terminated (SIGTERM)
+                          <br />
+                          Daemon stopped. No polling active.
+                        </div>
+                      ) : (
+                        <div>
+                          <div className="text-emerald-400">
+                            [INFO] Polling 192.168.0.58:4370... OK
+                          </div>
+                          <div className="text-cyan-300">
+                            [FETCH] 23 punches synchronized
+                          </div>
+                          <div className="text-slate-400 text-[9px]">
+                            [SHIELD] 5m Anti-Double Tap: Active
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="text-sm font-black text-slate-900">Samsung Galaxy Tab A9+</h3>
+                    <p className="text-xs text-slate-500 font-medium">Local Python Synchronization Bridge Daemon</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">Termux · Python 3.11</span>
+                  <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    Inspect Specs <ChevronRight className="w-3 h-3" />
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── CLOUD UPLINK BEAM (HIGH-SPEED WAN PIPELINE) ─────────────── */}
+          <div className="my-6 relative">
+            <div className="flex items-center justify-center">
+              <div className="w-full border-t border-dashed border-slate-300 relative flex items-center justify-center">
+                <div
+                  className={`px-4 py-1.5 rounded-full text-xs font-mono font-bold flex items-center gap-2 border shadow-sm ${
+                    isCloudDown
+                      ? 'bg-rose-50 border-rose-300 text-rose-700'
+                      : 'bg-white border-blue-200 text-blue-700'
                   }`}
                 >
-                  {isBridgeDown ? 'STOPPED' : 'SYNC v15.2'}
-                </span>
-              </div>
-              <h3 className="text-sm font-black text-white">Samsung Tab A9+</h3>
-              <p className="text-[11px] text-slate-400 font-mono">Termux Python Daemon</p>
-              <div className="mt-3 pt-2 border-t border-slate-800 text-[10px] text-slate-400 flex justify-between items-center">
-                <span>Poll: 60s Cycle</span>
-                <span className="font-mono text-amber-400">Anti-Double: 5m</span>
+                  <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-500' : 'text-blue-500'}`} />
+                  <span>INTERNET WAN UPLINK ➔ SINGAPORE CLOUD REGION</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                  <span
+                    className={`font-black ${
+                      isCloudDown ? 'text-rose-600' : isSlow ? 'text-amber-600' : 'text-emerald-600'
+                    }`}
+                  >
+                    {isCloudDown ? 'LINK DOWN' : `${liveLatency} ms RTT`}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Cloud Uplink Beam */}
-          <div className="my-6 flex items-center justify-center">
-            <div className="w-full border-t border-dashed border-slate-800 relative flex items-center justify-center">
-              <span className="bg-slate-950 px-4 py-1 text-xs font-mono font-bold text-slate-400 flex items-center gap-2 border border-slate-800 rounded-full">
-                <Globe className="w-3.5 h-3.5 text-blue-400" />
-                <span>INTERNET WAN UPLINK ➔ SINGAPORE CLOUD REGION</span>
-                <ArrowRight className="w-3.5 h-3.5 text-slate-500" />
-              </span>
-            </div>
-          </div>
+          {/* ── 3D CLOUD & APPLICATION TIER (SUPABASE + VERCEL) ───────── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-          {/* Lower Row: Cloud DB & Enterprise Portal */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-            {/* ── NODE 4: Supabase Cloud Database ────────────────────── */}
+            {/* ════════════ NODE 4: SUPABASE CLOUD DATABASE (3D CYLINDERS) ════════════ */}
             <div
               onClick={() => setSelectedNode('supabase')}
-              className={`cursor-pointer rounded-2xl p-4 transition-all relative border ${
-                isCloudDown
-                  ? 'bg-rose-950/40 border-rose-500/80 shadow-lg shadow-rose-900/30'
-                  : 'bg-slate-900/90 border-slate-700/80 hover:border-blue-500 shadow-md'
+              className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
+                selectedNode === 'supabase'
+                  ? 'ring-2 ring-emerald-500 shadow-xl border-emerald-400 bg-white'
+                  : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
               }`}
+              style={{
+                boxShadow:
+                  selectedNode === 'supabase'
+                    ? '0 12px 30px -5px rgba(16,185,129,0.20), 0 4px 10px rgba(0,0,0,0.05)'
+                    : '0 8px 24px -5px rgba(0,0,0,0.06)',
+              }}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">
-                    <Database className="w-6 h-6" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+                      <Database className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">Supabase Cloud Database</h3>
+                      <p className="text-[11px] text-slate-500 font-mono">PostgreSQL 15 · Singapore</p>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border ${
+                      isCloudDown
+                        ? 'bg-rose-50 text-rose-600 border-rose-200'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    }`}
+                  >
+                    {isCloudDown ? '✕ TIMEOUT' : '● CLOUD READY'}
                   </span>
-                  <div>
-                    <h3 className="text-sm font-black text-white">Supabase Cloud Database</h3>
-                    <p className="text-[11px] text-slate-400 font-mono">PostgreSQL 15 (Singapore ap-southeast-1)</p>
+                </div>
+
+                {/* 3D Isometric Storage Rings Representation */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 flex items-center justify-around">
+                  <div className="flex flex-col items-center">
+                    <div className="relative w-12 h-10 flex flex-col items-center justify-center">
+                      <div className="w-10 h-3 rounded-full bg-emerald-500/80 border border-emerald-400 shadow-sm" />
+                      <div className="w-10 h-3 rounded-full bg-emerald-600/80 border border-emerald-500 shadow-sm -mt-1" />
+                      <div className="w-10 h-3 rounded-full bg-emerald-700/80 border border-emerald-600 shadow-sm -mt-1" />
+                    </div>
+                    <span className="text-[9px] font-mono font-bold text-slate-500 mt-1">Postgres 15</span>
+                  </div>
+
+                  <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Total Punches</div>
+                    <div className="text-base font-black text-slate-900 font-mono">
+                      {totalRecords.toLocaleString()}
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Ping RTT</div>
+                    <div
+                      className={`text-base font-black font-mono ${
+                        isCloudDown
+                          ? 'text-rose-600'
+                          : isSlow
+                          ? 'text-amber-600'
+                          : 'text-emerald-600'
+                      }`}
+                    >
+                      {isCloudDown ? 'Timeout' : `${liveLatency} ms`}
+                    </div>
                   </div>
                 </div>
-                <span
-                  className={`text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border ${
-                    isCloudDown
-                      ? 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                      : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
-                  }`}
-                >
-                  {isCloudDown ? 'DISCONNECTED' : 'CLOUD READY'}
-                </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800 text-center">
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">Total Punches</div>
-                  <div className="text-sm font-black text-white font-mono">{totalRecords.toLocaleString()}</div>
-                </div>
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">Roundtrip Ping</div>
-                  <div className={`text-sm font-black font-mono ${isSlow ? 'text-amber-400' : 'text-emerald-400'}`}>
-                    {isCloudDown ? 'Timeout' : `${liveLatency} ms`}
-                  </div>
-                </div>
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">Live Channel</div>
-                  <div className="text-sm font-black text-cyan-400 font-mono">WebSocket</div>
-                </div>
+
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-[11px] font-mono text-slate-500 font-bold">WebSocket Realtime CDC</span>
+                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  Inspect Specs <ChevronRight className="w-3 h-3" />
+                </span>
               </div>
             </div>
 
-            {/* ── NODE 5: JAPA DTR Enterprise Portal ─────────────────── */}
+            {/* ════════════ NODE 5: JAPA DTR ENTERPRISE PORTAL (VERCEL) ════════════ */}
             <div
               onClick={() => setSelectedNode('vercel')}
-              className="cursor-pointer rounded-2xl p-4 transition-all relative border bg-slate-900/90 border-slate-700/80 hover:border-blue-500 shadow-md"
+              className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
+                selectedNode === 'vercel'
+                  ? 'ring-2 ring-indigo-500 shadow-xl border-indigo-400 bg-white'
+                  : 'bg-white/95 hover:bg-white hover:shadow-lg border-slate-200/90'
+              }`}
+              style={{
+                boxShadow:
+                  selectedNode === 'vercel'
+                    ? '0 12px 30px -5px rgba(99,102,241,0.20), 0 4px 10px rgba(0,0,0,0.05)'
+                    : '0 8px 24px -5px rgba(0,0,0,0.06)',
+              }}
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2.5">
-                  <span className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
-                    <Globe className="w-6 h-6" />
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200">
+                      <Globe className="w-5 h-5" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">JAPA DTR Enterprise Portal</h3>
+                      <p className="text-[11px] text-slate-500 font-mono">Vercel Global Edge Network</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
+                    ● ONLINE · LIVE
                   </span>
-                  <div>
-                    <h3 className="text-sm font-black text-white">JAPA DTR Enterprise Portal</h3>
-                    <p className="text-[11px] text-slate-400 font-mono">Vercel Global Edge Network</p>
+                </div>
+
+                {/* 3D Edge Server Card Metrics */}
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 flex items-center justify-around">
+                  <div className="flex flex-col items-center">
+                    <div className="w-10 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                      ▲
+                    </div>
+                    <span className="text-[9px] font-mono font-bold text-slate-500 mt-1">Vercel Edge</span>
+                  </div>
+
+                  <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Security</div>
+                    <div className="text-sm font-black text-emerald-700 font-mono flex items-center gap-1 justify-center">
+                      <Lock className="w-3 h-3 text-emerald-600" /> TLS 1.3
+                    </div>
+                  </div>
+
+                  <div className="text-center">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase">Framework</div>
+                    <div className="text-sm font-black text-indigo-700 font-mono">Next.js 14</div>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border bg-blue-500/20 text-blue-300 border-blue-500/40">
-                  ONLINE · LIVE
+              </div>
+
+              <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="text-[11px] font-mono text-slate-500 font-bold">Edge SSR + API Routes</span>
+                <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  Inspect Specs <ChevronRight className="w-3 h-3" />
                 </span>
               </div>
-              <div className="grid grid-cols-3 gap-2 mt-4 pt-3 border-t border-slate-800 text-center">
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">Active Portal</div>
-                  <div className="text-sm font-black text-white">Production</div>
+            </div>
+          </div>
+
+          {/* ── SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR ───────── */}
+          <div className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                    Selected Node Inspector
+                  </span>
+                  <h3 className="text-base font-black text-slate-900">{activeDetail.name}</h3>
                 </div>
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">SSL Security</div>
-                  <div className="text-sm font-black text-emerald-400">TLS 1.3</div>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">{activeDetail.subtitle}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span
+                  className={`text-xs font-mono font-bold px-3 py-1 rounded-xl border ${
+                    activeDetail.statusColor === 'emerald'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : activeDetail.statusColor === 'amber'
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : activeDetail.statusColor === 'purple'
+                      ? 'bg-purple-50 text-purple-700 border-purple-200'
+                      : activeDetail.statusColor === 'indigo'
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                      : 'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}
+                >
+                  {activeDetail.statusBadge}
+                </span>
+              </div>
+            </div>
+
+            {/* Technical Specifications Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-4">
+              {activeDetail.specs.map((s, idx) => (
+                <div key={idx} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">
+                    {s.label}
+                  </div>
+                  <div className="text-xs font-black text-slate-800 font-mono mt-0.5 truncate">
+                    {s.value}
+                  </div>
                 </div>
-                <div className="bg-slate-950/60 p-2 rounded-xl">
-                  <div className="text-[10px] text-slate-500 font-medium uppercase">Engine</div>
-                  <div className="text-sm font-black text-blue-400">Next.js 14</div>
-                </div>
+              ))}
+            </div>
+
+            {/* Diagnostic Action Box */}
+            <div className="p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 text-xs text-slate-700 flex items-start gap-2.5">
+              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-black text-blue-900">{activeDetail.diagnosticTitle}: </span>
+                <span className="text-blue-950 font-medium">{activeDetail.diagnosticText}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Troubleshooting & Component Details Inspector ─────────── */}
+      {/* ── Troubleshooting & Component Details Reference ─────────── */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-600" />
-          <span>Hardware & Infrastructure Reference Guide</span>
+          <span>Hardware &amp; Infrastructure Reference Guide</span>
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-600">
           <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
@@ -603,7 +1108,9 @@ export function SyncClient({
               1. FingerTec TA500 Biometric Terminal
             </h4>
             <p>
-              Connected via physical RJ45 Ethernet to the Wi-Fi Repeater. Configured with static IP <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">192.168.0.58</code> on UDP Port <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">4370</code>.
+              Connected via physical RJ45 Ethernet to the Wi-Fi Repeater. Configured with static IP{' '}
+              <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">192.168.0.58</code> on
+              UDP Port <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">4370</code>.
             </p>
             <p className="text-[11px] text-slate-500">
               💡 If unreachable: check if the LAN cable link light is blinking on both the TA500 and the repeater.
@@ -616,7 +1123,9 @@ export function SyncClient({
               2. Wi-Fi Repeater (Ethernet Bridge)
             </h4>
             <p>
-              Bridges the TA500 Ethernet cable to the office 2.4 GHz wireless network (<code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">192.168.0.254</code>). Allows the biometric terminal to reside anywhere without running cables across the office.
+              Bridges the TA500 Ethernet cable to the office 2.4 GHz wireless network (
+              <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">192.168.0.254</code>).
+              Allows the biometric terminal to reside anywhere without running cables across the office.
             </p>
             <p className="text-[11px] text-slate-500">
               💡 If disconnected: verify the power LED and ensure the repeater is within good range of the Wi-Fi router.
@@ -629,10 +1138,15 @@ export function SyncClient({
               3. Samsung Galaxy Tab A9+ (Bridge Engine)
             </h4>
             <p>
-              Dedicated local tablet running Python Bridge Engine v15.2 via Termux. Polls the TA500 every 60 seconds, enforces the 5-minute anti-double tap shield, and pushes clean punches to Supabase.
+              Dedicated local tablet running Python Bridge Engine v15.2 via Termux. Polls the TA500 every 60
+              seconds, enforces the 5-minute anti-double tap shield, and pushes clean punches to Supabase.
             </p>
             <p className="text-[11px] text-slate-500">
-              💡 If stopped: open Termux on the tablet and type <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">python sync-bridge/bridge.py</code>.
+              💡 If stopped: open Termux on the tablet and type{' '}
+              <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">
+                python sync-bridge/bridge.py
+              </code>
+              .
             </p>
           </div>
         </div>
@@ -677,12 +1191,8 @@ export function SyncClient({
               <tbody className="divide-y divide-slate-100 font-mono">
                 {recentLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-4 py-2.5 font-bold text-slate-800">
-                      #{log.device_user_id}
-                    </td>
-                    <td className="px-4 py-2.5 text-slate-700 font-semibold">
-                      {formatTs(log.punch_time)}
-                    </td>
+                    <td className="px-4 py-2.5 font-bold text-slate-800">#{log.device_user_id}</td>
+                    <td className="px-4 py-2.5 text-slate-700 font-semibold">{formatTs(log.punch_time)}</td>
                     <td className="px-4 py-2.5">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${
@@ -692,9 +1202,7 @@ export function SyncClient({
                         {PUNCH_STATUS[log.status] ?? `Status ${log.status}`}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-slate-500 text-[11px]">
-                      {formatTs(log.synced_at)}
-                    </td>
+                    <td className="px-4 py-2.5 text-slate-500 text-[11px]">{formatTs(log.synced_at)}</td>
                   </tr>
                 ))}
               </tbody>
