@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('sync_meta').upsert([
         { key: `edit_req_${username}`, value: 1 },
         { key: `edit_req_time_${username}`, value: nowSec },
-      ])
+      ], { onConflict: 'key' })
       return NextResponse.json({
         success: true,
         message: '1-Hour Edit Access request submitted to IT Administrator.',
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('sync_meta').upsert([
         { key: `edit_req_${targetUsername}`, value: 0 },
         { key: `edit_grant_${targetUsername}`, value: grantExpiry },
-      ])
+      ], { onConflict: 'key' })
 
       return NextResponse.json({
         success: true,
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
       await supabase.from('sync_meta').upsert([
         { key: `edit_req_${targetUsername}`, value: 0 },
         { key: `edit_grant_${targetUsername}`, value: 0 },
-      ])
+      ], { onConflict: 'key' })
 
       return NextResponse.json({
         success: true,

@@ -47,6 +47,8 @@ interface ReportsClientProps {
   initialData: DailyDtr[]
   branches: string[]
   employees?: EmployeeInfo[]
+  initialUser?: { role: string; username: string; displayName?: string; canEdit?: boolean } | null
+  initialCanEdit?: boolean
 }
 
 interface ShiftNote {
@@ -105,7 +107,13 @@ function getWeekRange(dateStr: string): { start: string; end: string } {
   }
 }
 
-export function ReportsClient({ initialData, branches, employees = [] }: ReportsClientProps) {
+export function ReportsClient({
+  initialData,
+  branches,
+  employees = [],
+  initialUser = null,
+  initialCanEdit = false,
+}: ReportsClientProps) {
   const [data, setData] = useState<DailyDtr[]>(initialData)
 
   // Default to today's current date (not hardcoded Nov 2)
@@ -208,8 +216,8 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
   }
 
   // Current logged in user check (IT Admin, JAPA Manager & 1-Hour Approved Editors)
-  const [currentUser, setCurrentUser] = useState<{ role: string; username: string; canEdit?: boolean } | null>(null)
-  const [hasEditGrant, setHasEditGrant] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ role: string; username: string; displayName?: string; canEdit?: boolean } | null>(initialUser)
+  const [hasEditGrant, setHasEditGrant] = useState(initialCanEdit)
 
   const refreshUserAccess = useCallback(async () => {
     try {
@@ -237,7 +245,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
           const data = await res.json()
           if (currentUser?.username && data.activeGrants?.[currentUser.username]?.active) {
             setHasEditGrant(true)
-          } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
+          } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager' && currentUser?.username !== 'admin' && currentUser?.username !== 'japa_manager') {
             setHasEditGrant(false)
           }
         }
@@ -249,7 +257,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
       const grants = e.detail?.activeGrants
       if (currentUser?.username && grants?.[currentUser.username]?.active) {
         setHasEditGrant(true)
-      } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager') {
+      } else if (currentUser?.role !== 'super_admin' && currentUser?.role !== 'manager' && currentUser?.username !== 'admin' && currentUser?.username !== 'japa_manager') {
         setHasEditGrant(false)
       }
     }
@@ -263,7 +271,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
 
   const isSuperAdmin = currentUser?.role === 'super_admin' || currentUser?.username === 'admin'
   const isManager = currentUser?.role === 'manager' || currentUser?.username === 'japa_manager'
-  const canAddEditDelete = isSuperAdmin || isManager || hasEditGrant || Boolean(currentUser?.canEdit)
+  const canAddEditDelete = isSuperAdmin || isManager || hasEditGrant || Boolean(currentUser?.canEdit) || initialCanEdit
 
   // OT Reason Modal state
   const [shiftNotes, setShiftNotes] = useState<Record<string, ShiftNote>>({})
@@ -1418,7 +1426,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                                 <button
                                   type="button"
                                   onClick={() => openEditShift(rec, note)}
-                                  className="opacity-0 group-hover:opacity-100 absolute top-1 right-1 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
+                                  className="opacity-70 group-hover:opacity-100 absolute top-1 right-1 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
                                   title="Edit shift"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1434,7 +1442,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-0 group-hover:opacity-100 absolute top-0 right-0 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
+                                  className="opacity-70 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
                                   title="Edit status"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1450,7 +1458,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-0 group-hover:opacity-100 absolute top-0 right-0 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
+                                  className="opacity-70 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
                                   title="Edit status"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1466,7 +1474,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-0 group-hover:opacity-100 absolute top-0 right-0 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
+                                  className="opacity-70 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
                                   title="Edit status"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />
@@ -1474,9 +1482,21 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                               )}
                             </div>
                           ) : isRestDay ? (
-                            <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100">
-                              Rest Day
-                            </span>
+                            <div className="relative">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold text-slate-400 bg-slate-100">
+                                Rest Day
+                              </span>
+                              {canAddEditDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => openEditForEmployee(emp, day.dateStr)}
+                                  className="opacity-50 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
+                                  title="Log Rest Day Shift"
+                                >
+                                  <Edit2 className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
                           ) : (
                             <div className="relative">
                               <span className="text-slate-300 font-mono text-xs">—</span>
@@ -1484,7 +1504,7 @@ export function ReportsClient({ initialData, branches, employees = [] }: Reports
                                 <button
                                   type="button"
                                   onClick={() => openEditForEmployee(emp, day.dateStr)}
-                                  className="opacity-0 group-hover:opacity-100 absolute top-0 right-0 p-0.5 rounded hover:bg-blue-100 text-blue-600 transition-opacity"
+                                  className="opacity-60 group-hover:opacity-100 absolute top-0 right-0 p-1 rounded-md bg-white/80 hover:bg-blue-100 text-blue-600 shadow-2xs border border-blue-200/60 transition-all"
                                   title="Add punch or mark absent/leave"
                                 >
                                   <Edit2 className="w-2.5 h-2.5" />

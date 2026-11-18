@@ -1,4 +1,6 @@
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
+import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
 import type { DailyDtr } from '@/types/database'
 import { ReportsClient } from './ReportsClient'
 
@@ -6,6 +8,11 @@ export const dynamic = 'force-dynamic'
 
 export default async function ReportsPage() {
   const supabase = await createClient()
+
+  const cookieStore = await cookies()
+  const token = cookieStore.get('japa_session')?.value
+  const session = token ? verifySessionToken(token) : null
+  const authCheck = session ? await checkUserCanEdit(session, supabase) : { canEdit: false }
 
   const { data: dtrData } = await supabase
     .from('daily_dtr')
@@ -36,6 +43,13 @@ export default async function ReportsPage() {
         initialData={(dtrData ?? []) as DailyDtr[]}
         employees={employeesData ?? []}
         branches={branches}
+        initialUser={session ? {
+          username: session.username,
+          displayName: session.displayName,
+          role: session.role,
+          canEdit: authCheck.canEdit,
+        } : null}
+        initialCanEdit={authCheck.canEdit}
       />
     </div>
   )
