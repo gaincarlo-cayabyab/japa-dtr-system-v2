@@ -114,6 +114,42 @@ export function normalizeDtrRecord(dtr: DailyDtr): DailyDtr {
   }
 }
 
+/**
+ * Computes hours_worked and overtime_hours from raw exact biometric timestamps
+ * WITHOUT any normalization. Used in Exact Biometrics mode so that the
+ * pre-normalized `hours_worked` column from the daily_dtr VIEW is bypassed.
+ */
+export function computeExactDtrRecord(dtr: DailyDtr): DailyDtr {
+  if (!dtr.first_check_in || !dtr.last_check_out) return dtr
+
+  const workDate = dtr.work_date
+  const startMs = new Date(dtr.first_check_in).getTime()
+  const endMs = new Date(dtr.last_check_out).getTime()
+  if (endMs <= startMs) return dtr
+
+  const elapsedHours = (endMs - startMs) / (1000 * 60 * 60)
+
+  // Lunch break deduction: if shift spans 12:00 PM – 1:00 PM Manila Time
+  let lunchDeduction = 0
+  const lunchStart = new Date(`${workDate}T12:00:00+08:00`).getTime()
+  const lunchEnd = new Date(`${workDate}T13:00:00+08:00`).getTime()
+  if (endMs > lunchStart && startMs < lunchEnd) {
+    const overlapStart = Math.max(startMs, lunchStart)
+    const overlapEnd = Math.min(endMs, lunchEnd)
+    lunchDeduction = Math.max(0, (overlapEnd - overlapStart) / (1000 * 60 * 60))
+  }
+
+  const netHours = Math.max(0, elapsedHours - lunchDeduction)
+  const hoursWorked = Math.round(netHours * 100) / 100
+  const overtimeHours = Math.max(0, Math.round((hoursWorked - 8.0) * 100) / 100)
+
+  return {
+    ...dtr,
+    hours_worked: hoursWorked,
+    overtime_hours: overtimeHours,
+  }
+}
+
 export interface DOLEMultipliers {
   base: number
   ot: number
@@ -394,7 +430,7 @@ export function computeEmployeePayroll(
 
   const effectiveDtrList = calcMode === 'normalized'
     ? dtrList.map(normalizeDtrRecord)
-    : dtrList
+    : dtrList.map(computeExactDtrRecord)
 
   const records = effectiveDtrList
     .filter((d) => d.device_user_id === employee.device_user_id)
