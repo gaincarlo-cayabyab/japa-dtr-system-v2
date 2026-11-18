@@ -151,7 +151,7 @@ _HEADERS_AUTH = {
 _HEADERS_INSERT = {
     **_HEADERS_AUTH,
     'Content-Type':  'application/json',
-    'Prefer':        'return=representation,resolution=ignore-duplicates',
+    'Prefer':        'return=minimal,resolution=merge-duplicates',
 }
 
 # ─── TA500 Hardware Biometric ID to System Employee ID Mapping ────────────────

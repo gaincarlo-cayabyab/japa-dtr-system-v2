@@ -560,8 +560,8 @@ export function SyncClient({
                       : '0 8px 24px -5px rgba(0,0,0,0.06)',
                 }}
               >
-                {/* Right Docking Collar (Continuous Physical Attachment) */}
-                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-2.5 h-7 bg-slate-800 rounded-r border-y border-r border-slate-600 z-30 hidden lg:block" />
+                {/* Right connection dot (light theme) */}
+                <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-200 rounded-full border-2 border-blue-400 z-30 hidden lg:block" />
 
                 {/* 3D Hardware Device Casing Mockup */}
                 <div>
@@ -696,16 +696,29 @@ export function SyncClient({
 
               {/* ── CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) ── */}
               <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20">
-                <div className="w-full h-4 relative flex items-center justify-center">
+                <div className="w-full relative flex flex-col items-center justify-center gap-0.5">
+                  {/* Top badge */}
+                  <span
+                    className={`text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded-full border shadow-xs whitespace-nowrap mb-1 ${
+                      isLanBroken
+                        ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
+                        : isSlow
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : 'bg-blue-50 text-blue-700 border-blue-200'
+                    }`}
+                  >
+                    {isLanBroken ? '✕ UNPLUGGED' : 'Cat6 RJ45 · 100 Mbps'}
+                  </span>
+                  {/* Cable line */}
                   <div
-                    className={`w-full h-full ${
+                    className={`w-full h-3 rounded-sm border relative overflow-hidden ${
                       isLanBroken
                         ? 'bg-rose-100 border-rose-300'
-                        : 'bg-slate-900 border-slate-700 shadow-sm'
-                    } border-y relative overflow-hidden`}
+                        : 'bg-blue-50 border-blue-200'
+                    }`}
                   >
                     {isLanBroken ? (
-                      <div className="w-full h-full bg-rose-500/20 flex items-center justify-center text-[7px] font-black text-rose-600 tracking-wider">
+                      <div className="w-full h-full flex items-center justify-center text-[7px] font-black text-rose-600 tracking-wider">
                         {isManualSim ? 'SEVERED' : 'POWER OFF'}
                       </div>
                     ) : (
@@ -713,61 +726,46 @@ export function SyncClient({
                         <div
                           className={`h-full w-full ${
                             isSlow
-                              ? 'bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 animate-pipe-flow-slow'
-                              : 'bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400 animate-pipe-flow'
+                              ? 'bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 animate-pipe-flow-slow'
+                              : 'bg-gradient-to-r from-blue-200 via-cyan-100 to-blue-200 animate-pipe-flow'
                           }`}
                           style={{
                             backgroundImage:
-                              'repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.7) 0, rgba(255, 255, 255, 0.7) 8px, transparent 8px, transparent 16px)',
+                              'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                           }}
                         />
-                        <div className="absolute top-0 bottom-0 w-8 bg-white/80 blur-[2px] animate-packet-pulse pointer-events-none" />
+                        <div className="absolute top-0 bottom-0 w-6 bg-white/60 blur-[2px] animate-packet-pulse pointer-events-none" />
                       </>
                     )}
                   </div>
-
-                  <div className="absolute -top-6 flex flex-col items-center pointer-events-none">
-                    <span
-                      className={`text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded-full border shadow-xs whitespace-nowrap ${
-                        isLanBroken
-                          ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
-                          : isSlow
-                          ? 'bg-amber-100 text-amber-800 border-amber-300'
-                          : 'bg-blue-600 text-white border-blue-700'
-                      }`}
-                    >
-                      {isLanBroken ? '✕ UNPLUGGED' : 'Cat6 RJ45 ➔ 100 Mbps'}
-                    </span>
-                  </div>
-                  <div className="absolute -bottom-5 flex flex-col items-center pointer-events-none">
-                    <span className="text-[8px] font-mono font-bold text-slate-500 whitespace-nowrap">
-                      Port 4370 UDP
-                    </span>
-                  </div>
+                  {/* Bottom label */}
+                  <span className="text-[8px] font-mono font-bold text-slate-400 whitespace-nowrap mt-0.5">
+                    Port 4370 UDP
+                  </span>
                 </div>
               </div>
 
               {/* ── CONNECTOR 1: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) ── */}
               <div className="flex lg:hidden flex-col items-center justify-center py-1">
-                <div className="w-5 h-1.5 bg-slate-800 rounded-b border-x border-b border-slate-600" />
+                <div className="w-4 h-1.5 bg-blue-200 rounded-b border-x border-b border-blue-300" />
                 <div
-                  className={`w-3.5 h-8 relative overflow-hidden border-x ${
+                  className={`w-3 h-8 relative overflow-hidden border-x ${
                     isLanBroken
                       ? 'bg-rose-100 border-rose-300'
-                      : 'bg-slate-900 border-slate-700'
+                      : 'bg-blue-50 border-blue-200'
                   }`}
                 >
                   {!isLanBroken && (
                     <div
-                      className="w-full h-full bg-gradient-to-b from-blue-500 to-cyan-400 animate-pipe-flow-v"
+                      className="w-full h-full bg-gradient-to-b from-blue-200 to-cyan-100 animate-pipe-flow-v"
                       style={{
                         backgroundImage:
-                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.7) 0, rgba(255,255,255,0.7) 8px, transparent 8px, transparent 16px)',
+                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                       }}
                     />
                   )}
                 </div>
-                <div className="w-5 h-1.5 bg-slate-800 rounded-t border-x border-t border-slate-600" />
+                <div className="w-4 h-1.5 bg-blue-200 rounded-t border-x border-t border-blue-300" />
                 <span className="text-[8px] font-mono font-bold px-2.5 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200 mt-1 shadow-xs">
                   {isLanBroken ? '✕ Cat6 Cable Severed' : '▼ Cat6 RJ45 (100 Mbps)'}
                 </span>
@@ -788,9 +786,9 @@ export function SyncClient({
                       : '0 8px 24px -5px rgba(0,0,0,0.06)',
                 }}
               >
-                {/* Left & Right Docking Collars (Continuous Physical Attachment) */}
-                <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-2.5 h-7 bg-slate-800 rounded-l border-y border-l border-slate-600 z-30 hidden lg:block" />
-                <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-2.5 h-7 bg-purple-900 rounded-r border-y border-r border-purple-600 z-30 hidden lg:block" />
+                {/* Left & Right connection dots (light theme) */}
+                <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-blue-200 rounded-full border-2 border-blue-400 z-30 hidden lg:block" />
+                <div className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-purple-200 rounded-full border-2 border-purple-400 z-30 hidden lg:block" />
 
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -968,16 +966,29 @@ export function SyncClient({
 
               {/* ── CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) ── */}
               <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20">
-                <div className="w-full h-4 relative flex items-center justify-center">
+                <div className="w-full relative flex flex-col items-center justify-center gap-0.5">
+                  {/* Top badge */}
+                  <span
+                    className={`text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded-full border shadow-xs whitespace-nowrap mb-1 ${
+                      isWifiBroken
+                        ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
+                        : isSlow
+                        ? 'bg-amber-100 text-amber-800 border-amber-300'
+                        : 'bg-purple-50 text-purple-700 border-purple-200'
+                    }`}
+                  >
+                    {isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi'}
+                  </span>
+                  {/* Cable line */}
                   <div
-                    className={`w-full h-full ${
+                    className={`w-full h-3 rounded-sm border relative overflow-hidden ${
                       isWifiBroken
                         ? 'bg-rose-100 border-rose-300'
-                        : 'bg-purple-950 border-purple-800 shadow-sm'
-                    } border-y relative overflow-hidden`}
+                        : 'bg-purple-50 border-purple-200'
+                    }`}
                   >
                     {isWifiBroken ? (
-                      <div className="w-full h-full bg-rose-500/20 flex items-center justify-center text-[7px] font-black text-rose-600 tracking-wider">
+                      <div className="w-full h-full flex items-center justify-center text-[7px] font-black text-rose-600 tracking-wider">
                         DROPPED
                       </div>
                     ) : (
@@ -985,61 +996,46 @@ export function SyncClient({
                         <div
                           className={`h-full w-full ${
                             isSlow
-                              ? 'bg-gradient-to-r from-amber-500 via-amber-300 to-amber-500 animate-pipe-flow-slow'
-                              : 'bg-gradient-to-r from-purple-600 via-indigo-500 to-cyan-400 animate-pipe-flow'
+                              ? 'bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 animate-pipe-flow-slow'
+                              : 'bg-gradient-to-r from-purple-200 via-indigo-100 to-purple-200 animate-pipe-flow'
                           }`}
                           style={{
                             backgroundImage:
-                              'repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.7) 0, rgba(255, 255, 255, 0.7) 8px, transparent 8px, transparent 16px)',
+                              'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                           }}
                         />
-                        <div className="absolute top-0 bottom-0 w-8 bg-white/80 blur-[2px] animate-packet-pulse pointer-events-none" />
+                        <div className="absolute top-0 bottom-0 w-6 bg-white/60 blur-[2px] animate-packet-pulse pointer-events-none" />
                       </>
                     )}
                   </div>
-
-                  <div className="absolute -top-6 flex flex-col items-center pointer-events-none">
-                    <span
-                      className={`text-[8px] font-mono font-black uppercase px-2 py-0.5 rounded-full border shadow-xs whitespace-nowrap ${
-                        isWifiBroken
-                          ? 'bg-rose-100 text-rose-700 border-rose-300 animate-pulse'
-                          : isSlow
-                          ? 'bg-amber-100 text-amber-800 border-amber-300'
-                          : 'bg-purple-600 text-white border-purple-700'
-                      }`}
-                    >
-                      {isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi ➔'}
-                    </span>
-                  </div>
-                  <div className="absolute -bottom-5 flex flex-col items-center pointer-events-none">
-                    <span className="text-[8px] font-mono font-bold text-slate-500 whitespace-nowrap">
-                      {isWifiBroken ? 'Disconnected' : isSlow ? '-82 dBm Jitter' : '-52 dBm Stable'}
-                    </span>
-                  </div>
+                  {/* Bottom label */}
+                  <span className="text-[8px] font-mono font-bold text-slate-400 whitespace-nowrap mt-0.5">
+                    {isWifiBroken ? 'Disconnected' : isSlow ? '-82 dBm Jitter' : '-52 dBm Stable'}
+                  </span>
                 </div>
               </div>
 
               {/* ── CONNECTOR 2: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) ── */}
               <div className="flex lg:hidden flex-col items-center justify-center py-1">
-                <div className="w-5 h-1.5 bg-purple-900 rounded-b border-x border-b border-purple-700" />
+                <div className="w-4 h-1.5 bg-purple-200 rounded-b border-x border-b border-purple-300" />
                 <div
-                  className={`w-3.5 h-8 relative overflow-hidden border-x ${
+                  className={`w-3 h-8 relative overflow-hidden border-x ${
                     isWifiBroken
                       ? 'bg-rose-100 border-rose-300'
-                      : 'bg-purple-950 border-purple-800'
+                      : 'bg-purple-50 border-purple-200'
                   }`}
                 >
                   {!isWifiBroken && (
                     <div
-                      className="w-full h-full bg-gradient-to-b from-purple-500 to-amber-400 animate-pipe-flow-v"
+                      className="w-full h-full bg-gradient-to-b from-purple-200 to-indigo-100 animate-pipe-flow-v"
                       style={{
                         backgroundImage:
-                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.7) 0, rgba(255,255,255,0.7) 8px, transparent 8px, transparent 16px)',
+                          'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                       }}
                     />
                   )}
                 </div>
-                <div className="w-5 h-1.5 bg-purple-900 rounded-t border-x border-t border-purple-700" />
+                <div className="w-4 h-1.5 bg-purple-200 rounded-t border-x border-t border-purple-300" />
                 <span className="text-[8px] font-mono font-bold px-2.5 py-0.5 bg-purple-50 text-purple-700 rounded-full border border-purple-200 mt-1 shadow-xs">
                   {isWifiBroken ? '✕ Wi-Fi Link Dropped' : '▼ 2.4 GHz WLAN (-52 dBm)'}
                 </span>
@@ -1060,9 +1056,9 @@ export function SyncClient({
                       : '0 8px 24px -5px rgba(0,0,0,0.06)',
                 }}
               >
-                {/* Left & Bottom Docking Collars (Continuous Physical Attachment) */}
-                <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-2.5 h-7 bg-amber-900 rounded-l border-y border-l border-amber-600 z-30 hidden lg:block" />
-                <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-8 h-2.5 bg-slate-800 rounded-b border-x border-b border-slate-600 z-30 hidden lg:block" />
+                {/* Left & Bottom connection dots (light theme) */}
+                <div className="absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-purple-200 rounded-full border-2 border-purple-400 z-30 hidden lg:block" />
+                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-slate-200 rounded-full border-2 border-slate-400 z-30 hidden lg:block" />
 
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -1135,65 +1131,43 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* ── CONNECTOR 3: VERTICAL WAN UPLINK PIPE (DIRECT ATTACHMENT FROM TABLET TO WAN BEAM) ── */}
-          <div className="hidden lg:grid grid-cols-3 relative">
-            <div />
-            <div />
-            {/* Directly beneath Column 3 (Samsung Tab A9+) */}
-            <div className="flex flex-col items-center relative">
-              <div className="w-3.5 h-10 relative flex items-center justify-center">
-                <div className="w-full h-full bg-slate-900 border-x border-slate-700 relative overflow-hidden shadow-sm">
+          {/* ── CONNECTOR 3: VERTICAL WAN UPLINK PIPE (TABLET → WAN BEAM, right-aligned) ── */}
+          <div className="hidden lg:flex justify-end pr-[calc(16.666%+0px)] mt-1">
+            <div className="flex flex-col items-center w-14">
+              {/* Top cap (attaches to tablet card bottom dot) */}
+              <div className={`w-3 h-2 rounded-t-sm border-x border-t ${isBridgeDown ? 'border-rose-300 bg-rose-100' : 'border-slate-300 bg-slate-100'}`} />
+              {/* Animated pipe */}
+              <div className={`w-3 h-10 relative overflow-hidden border-x ${isBridgeDown ? 'bg-rose-50 border-rose-200' : 'bg-indigo-50 border-indigo-200'}`}>
+                {!isBridgeDown && (
                   <div
-                    className={`w-full h-full ${
-                      isBridgeDown
-                        ? 'bg-rose-500'
-                        : isCloudDown
-                        ? 'bg-slate-500'
-                        : isSlow
-                        ? 'bg-gradient-to-b from-amber-500 via-amber-300 to-amber-500 animate-pipe-flow-v-slow'
-                        : 'bg-gradient-to-b from-amber-500 via-blue-500 to-indigo-600 animate-pipe-flow-v'
-                    }`}
-                    style={{
-                      backgroundImage:
-                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.7) 0, rgba(255,255,255,0.7) 8px, transparent 8px, transparent 16px)',
-                    }}
+                    className={`w-full h-full ${isSlow ? 'bg-gradient-to-b from-amber-200 to-amber-100 animate-pipe-flow-v-slow' : 'bg-gradient-to-b from-indigo-200 via-blue-100 to-indigo-200 animate-pipe-flow-v'}`}
+                    style={{ backgroundImage: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)' }}
                   />
-                  {!isBridgeDown && (
-                    <div className="absolute inset-x-0 h-6 bg-white/80 blur-[2px] animate-packet-pulse-v pointer-events-none" />
-                  )}
-                </div>
-
-                {/* Attached side badge */}
-                <div className="absolute left-5 whitespace-nowrap pointer-events-none z-10">
-                  <span
-                    className={`text-[8px] font-mono font-bold px-2 py-0.5 rounded-full border shadow-xs ${
-                      isBridgeDown
-                        ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
-                        : 'bg-slate-900 text-white border-slate-700'
-                    }`}
-                  >
-                    ▼ Local Ingestion Stream (HTTPS / TLS 1.3)
-                  </span>
-                </div>
+                )}
+                {isBridgeDown && <div className="w-full h-full bg-rose-100 flex items-center justify-center"><span className="text-[7px] font-black text-rose-500 rotate-90 whitespace-nowrap">OFFLINE</span></div>}
               </div>
-              {/* Docking collar touching WAN top border */}
-              <div className="w-6 h-2 bg-slate-800 border-x border-t border-slate-600 rounded-t shrink-0" />
+              {/* Bottom cap (attaches to WAN beam) */}
+              <div className={`w-3 h-2 rounded-b-sm border-x border-b ${isBridgeDown ? 'border-rose-300 bg-rose-100' : 'border-slate-300 bg-slate-100'}`} />
+              {/* Side label */}
+              <span className={`text-[8px] font-mono font-bold px-2 py-0.5 rounded-full border shadow-xs whitespace-nowrap mt-1 ${isBridgeDown ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
+                ▼ HTTPS / TLS 1.3
+              </span>
             </div>
           </div>
 
-          {/* Mobile Vertical Connector */}
+          {/* Mobile Vertical Connector - Tablet to WAN */}
           <div className="flex lg:hidden flex-col items-center justify-center py-1">
-            <div className="w-5 h-1.5 bg-amber-900 rounded-b border-x border-b border-amber-700" />
-            <div className="w-3.5 h-8 bg-slate-900 border-x border-slate-700 overflow-hidden relative">
+            <div className="w-4 h-1.5 bg-indigo-200 rounded-b border-x border-b border-indigo-300" />
+            <div className="w-3 h-8 bg-indigo-50 border-x border-indigo-200 overflow-hidden relative">
               <div
-                className="w-full h-full bg-gradient-to-b from-amber-500 to-indigo-600 animate-pipe-flow-v"
+                className="w-full h-full bg-gradient-to-b from-indigo-100 to-indigo-200 animate-pipe-flow-v"
                 style={{
                   backgroundImage:
-                    'repeating-linear-gradient(45deg, rgba(255,255,255,0.7) 0, rgba(255,255,255,0.7) 8px, transparent 8px, transparent 16px)',
+                    'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                 }}
               />
             </div>
-            <div className="w-5 h-1.5 bg-slate-800 rounded-t border-x border-t border-slate-600" />
+            <div className="w-4 h-1.5 bg-indigo-200 rounded-t border-x border-t border-indigo-300" />
             <span className="text-[8px] font-mono font-bold px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full border border-slate-300 mt-1 shadow-xs">
               ▼ Local Ingestion Stream (HTTPS / TLS 1.3)
             </span>
@@ -1201,18 +1175,18 @@ export function SyncClient({
 
           {/* ── CLOUD UPLINK BEAM (HIGH-SPEED WAN PIPELINE CONTINUOUS BUS) ─────────────── */}
           <div className="relative my-0 z-10">
-            <div className="w-full h-3.5 bg-slate-900 rounded-full border border-slate-700 shadow-md relative overflow-hidden flex items-center justify-center">
+            <div className={`w-full h-3.5 rounded-full border relative overflow-hidden flex items-center justify-center ${isCloudDown ? 'bg-rose-100 border-rose-300' : 'bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 border-slate-300'}`}>
               <div
                 className={`w-full h-full ${
                   isCloudDown
-                    ? 'bg-rose-900'
+                    ? 'bg-rose-200'
                     : isSlow
-                    ? 'bg-gradient-to-r from-amber-600 via-amber-400 to-amber-600 animate-pipe-flow-slow'
-                    : 'bg-gradient-to-r from-emerald-500 via-cyan-400 via-indigo-500 to-purple-600 animate-pipe-flow'
+                    ? 'bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 animate-pipe-flow-slow'
+                    : 'bg-gradient-to-r from-blue-200 via-cyan-100 via-indigo-200 to-purple-200 animate-pipe-flow'
                 }`}
                 style={{
                   backgroundImage:
-                    'repeating-linear-gradient(45deg, rgba(255,255,255,0.6) 0, rgba(255,255,255,0.6) 8px, transparent 8px, transparent 16px)',
+                    'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 8px, transparent 8px, transparent 16px)',
                 }}
               />
             </div>
@@ -1220,22 +1194,22 @@ export function SyncClient({
             {/* Central WAN Pill Badge */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div
-                className={`px-3 sm:px-4 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-2 border shadow-lg ${
+                className={`px-3 sm:px-4 py-1 rounded-full text-[11px] font-mono font-bold flex items-center gap-2 border shadow-md ${
                   isCloudDown
-                    ? 'bg-rose-900 text-white border-rose-700 animate-pulse'
-                    : 'bg-slate-950 text-cyan-300 border-cyan-500/60'
+                    ? 'bg-rose-100 text-rose-800 border-rose-300 animate-pulse'
+                    : 'bg-white/95 text-slate-700 border-slate-300 shadow-sm'
                 }`}
               >
-                <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-400' : 'text-cyan-400 animate-spin'}`} style={{ animationDuration: '8s' }} />
+                <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-500' : 'text-blue-500 animate-spin'}`} style={{ animationDuration: '8s' }} />
                 <span>INTERNET WAN UPLINK ➔ SINGAPORE CLOUD REGION</span>
                 <ArrowRight className="w-3 h-3 text-slate-400 hidden sm:inline" />
                 <span
-                  className={`font-mono font-black px-2 py-0.5 rounded text-[10px] ${
+                  className={`font-mono font-black px-2 py-0.5 rounded text-[10px] border ${
                     isCloudDown
-                      ? 'bg-rose-800 text-white'
+                      ? 'bg-rose-200 text-rose-800 border-rose-400'
                       : isSlow
-                      ? 'bg-amber-950 text-amber-300 border border-amber-500/40'
-                      : 'bg-emerald-950 text-emerald-400 border border-emerald-500/40'
+                      ? 'bg-amber-50 text-amber-800 border-amber-300'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                   }`}
                 >
                   {isCloudDown ? 'LINK DOWN' : `${liveLatency} ms RTT`}
@@ -1248,56 +1222,52 @@ export function SyncClient({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative">
             {/* Col 1 vertical conduit down to Supabase */}
             <div className="flex flex-col items-center">
-              <div className="w-6 h-2 bg-slate-800 border-x border-b border-slate-600 rounded-b shrink-0" />
-              <div className="w-3.5 h-8 relative flex items-center justify-center">
-                <div className="w-full h-full bg-slate-900 border-x border-slate-700 relative overflow-hidden shadow-sm">
+              <div className={`w-3 h-2 rounded-b-sm border-x border-b ${isCloudDown ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'} shrink-0`} />
+              <div className="w-3 h-8 relative flex items-center justify-center">
+                <div className={`w-full h-full border-x relative overflow-hidden ${isCloudDown ? 'bg-rose-50 border-rose-200' : 'bg-emerald-50 border-emerald-200'}`}>
                   <div
                     className={`w-full h-full ${
                       isCloudDown
-                        ? 'bg-rose-500'
-                        : 'bg-gradient-to-b from-cyan-400 to-emerald-500 animate-pipe-flow-v'
+                        ? 'bg-rose-200'
+                        : 'bg-gradient-to-b from-emerald-100 to-emerald-200 animate-pipe-flow-v'
                     }`}
                     style={{
                       backgroundImage:
-                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.7) 0, rgba(255,255,255,0.7) 8px, transparent 8px, transparent 16px)',
+                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                     }}
                   />
-                  {!isCloudDown && (
-                    <div className="absolute inset-x-0 h-4 bg-white/80 blur-[2px] animate-packet-pulse-v pointer-events-none" />
-                  )}
                 </div>
                 {/* Side badge */}
-                <div className="absolute left-5 whitespace-nowrap pointer-events-none z-10">
-                  <span className="text-[8px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300 shadow-xs">
+                <div className="absolute left-4 whitespace-nowrap pointer-events-none z-10">
+                  <span className="text-[8px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shadow-xs">
                     ▼ Postgres Wire Protocol (Port 5432)
                   </span>
                 </div>
               </div>
-              <div className="w-6 h-2 bg-slate-800 border-x border-t border-slate-600 rounded-t shrink-0" />
+              <div className={`w-3 h-2 rounded-t-sm border-x border-t ${isCloudDown ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'} shrink-0`} />
             </div>
 
             {/* Col 2 vertical conduit down to Vercel Portal */}
             <div className="flex flex-col items-center">
-              <div className="w-6 h-2 bg-slate-800 border-x border-b border-slate-600 rounded-b shrink-0" />
-              <div className="w-3.5 h-8 relative flex items-center justify-center">
-                <div className="w-full h-full bg-slate-900 border-x border-slate-700 relative overflow-hidden shadow-sm">
+              <div className="w-3 h-2 rounded-b-sm border-x border-b border-indigo-200 bg-indigo-50 shrink-0" />
+              <div className="w-3 h-8 relative flex items-center justify-center">
+                <div className="w-full h-full border-x bg-indigo-50 border-indigo-200 relative overflow-hidden">
                   <div
-                    className="w-full h-full bg-gradient-to-b from-cyan-400 to-indigo-600 animate-pipe-flow-v"
+                    className="w-full h-full bg-gradient-to-b from-indigo-100 to-indigo-200 animate-pipe-flow-v"
                     style={{
                       backgroundImage:
-                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.7) 0, rgba(255,255,255,0.7) 8px, transparent 8px, transparent 16px)',
+                        'repeating-linear-gradient(45deg, rgba(255,255,255,0.8) 0, rgba(255,255,255,0.8) 6px, transparent 6px, transparent 12px)',
                     }}
                   />
-                  <div className="absolute inset-x-0 h-4 bg-white/80 blur-[2px] animate-packet-pulse-v pointer-events-none" />
                 </div>
                 {/* Side badge */}
-                <div className="absolute left-5 whitespace-nowrap pointer-events-none z-10">
-                  <span className="text-[8px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-300 shadow-xs">
+                <div className="absolute left-4 whitespace-nowrap pointer-events-none z-10">
+                  <span className="text-[8px] font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200 shadow-xs">
                     ▼ Vercel Global Edge SSR / API Route
                   </span>
                 </div>
               </div>
-              <div className="w-6 h-2 bg-slate-800 border-x border-t border-slate-600 rounded-t shrink-0" />
+              <div className="w-3 h-2 rounded-t-sm border-x border-t border-indigo-200 bg-indigo-50 shrink-0" />
             </div>
           </div>
 
@@ -1319,8 +1289,8 @@ export function SyncClient({
                     : '0 8px 24px -5px rgba(0,0,0,0.06)',
               }}
             >
-              {/* Top Docking Collar (Continuous Physical Attachment from WAN) */}
-              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-6 h-2 bg-slate-800 rounded-t border-x border-t border-slate-600 z-10 hidden md:block" />
+              {/* Top connection dot to WAN (light theme) */}
+              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-emerald-200 rounded-full border-2 border-emerald-400 z-10 hidden md:block" />
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -1401,8 +1371,8 @@ export function SyncClient({
                     : '0 8px 24px -5px rgba(0,0,0,0.06)',
               }}
             >
-              {/* Top Docking Collar (Continuous Physical Attachment from WAN) */}
-              <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-6 h-2 bg-slate-800 rounded-t border-x border-t border-slate-600 z-10 hidden md:block" />
+              {/* Top connection dot to WAN (light theme) */}
+              <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-indigo-200 rounded-full border-2 border-indigo-400 z-10 hidden md:block" />
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
