@@ -29,6 +29,7 @@ import sys
 import time
 import json
 import socket
+import signal
 import hashlib
 import logging
 import concurrent.futures
@@ -350,6 +351,46 @@ def save_local_token(token: int) -> None:
         pass
 
 
+# ─── Live Telemetry Heartbeat Reporting ───────────────────────────────────────
+_last_ta500_seen_ts = 0
+
+def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
+    """Updates cloud heartbeat in sync_meta so web portal detects real-time status."""
+    global _last_ta500_seen_ts
+    try:
+        now_ts = int(time.time())
+        if ta500_online:
+            _last_ta500_seen_ts = now_ts
+        payload = [
+            {'key': 'bridge_heartbeat', 'value': now_ts},
+            {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
+            {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
+            {'key': 'ta500_records',    'value': int(records_count)},
+        ]
+        url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
+        session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
+    except Exception:
+        pass
+
+
+def handle_bridge_exit(*args):
+    """Marks bridge and device as offline in cloud upon shutdown."""
+    logger.info("Bridge stopping — broadcasting offline status to cloud portal...")
+    try:
+        payload = [
+            {'key': 'bridge_heartbeat', 'value': 0},
+            {'key': 'ta500_status',     'value': 0},
+        ]
+        url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
+        session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(1, 2))
+    except Exception:
+        pass
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, handle_bridge_exit)
+signal.signal(signal.SIGTERM, handle_bridge_exit)
+
+
 # ─── Safe Device Connection & Disconnect ──────────────────────────────────────
 def safe_disconnect(conn: Optional[object]) -> None:
     if not conn:
@@ -636,6 +677,7 @@ def main():
         # ── 2. Connect to TA500 (Persistent Open TCP Socket, UDP fallback) ──
         conn = connect_device()
         if not conn:
+            update_live_heartbeat(False, 0)
             ta500_fail_count += 1
             # Short retries for first 3 attempts (hardware socket clears in 15-90s)
             # then steady 30s to avoid hammering the TA500 TCP stack
@@ -713,6 +755,9 @@ def main():
             # ── 4. Main Loop: read_sizes() heartbeat + 60s direct flash audit ──
             while True:
                 now = time.time()
+
+                # Broadcast live cloud heartbeat so portal detects real-time health
+                update_live_heartbeat(True, known_record_count)
 
                 # Flush pending offline punches
                 if _pending_upload_queue:

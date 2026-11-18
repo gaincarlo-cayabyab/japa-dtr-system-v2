@@ -177,3 +177,81 @@ body {
 .animate-wave-expand {
   animation: waveExpand 2s ease-out infinite;
 }
+
+/* Animated Cyber Conduits & Cable Data Flow */
+@keyframes pipeFlowHoriz {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 32px 0;
+  }
+}
+
+@keyframes pipeFlowVert {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 32px;
+  }
+}
+
+@keyframes packetPulse {
+  0% {
+    left: -10%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    left: 110%;
+    opacity: 0;
+  }
+}
+
+@keyframes packetPulseVert {
+  0% {
+    top: -10%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 110%;
+    opacity: 0;
+  }
+}
+
+.animate-pipe-flow {
+  animation: pipeFlowHoriz 0.85s linear infinite;
+}
+
+.animate-pipe-flow-slow {
+  animation: pipeFlowHoriz 2.2s linear infinite;
+}
+
+.animate-pipe-flow-v {
+  animation: pipeFlowVert 0.85s linear infinite;
+}
+
+.animate-pipe-flow-v-slow {
+  animation: pipeFlowVert 2.2s linear infinite;
+}
+
+.animate-packet-pulse {
+  animation: packetPulse 1.4s ease-in-out infinite;
+}
+
+.animate-packet-pulse-v {
+  animation: packetPulseVert 1.4s ease-in-out infinite;
+}
+

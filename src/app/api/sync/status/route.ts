@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
-    const [logsResult, countResult, recentPunches] = await Promise.all([
+    const [logsResult, countResult, recentPunches, metaResult] = await Promise.all([
       supabase
         .from('attendance_logs')
         .select('synced_at, punch_time, device_user_id')
@@ -23,14 +23,40 @@ export async function GET() {
         .select('*')
         .order('synced_at', { ascending: false })
         .limit(10),
+      supabase
+        .from('sync_meta')
+        .select('key, value')
+        .in('key', ['bridge_heartbeat', 'ta500_status', 'ta500_last_seen', 'ta500_records']),
     ])
 
     const dbLatencyMs = Date.now() - t0
     const lastSync = logsResult.data?.synced_at ?? null
 
+    // Parse live heartbeat metadata from tablet bridge
+    const metaMap: Record<string, number> = {}
+    for (const row of metaResult.data || []) {
+      metaMap[row.key] = row.value
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000)
+    const bridgeHeartbeat = metaMap['bridge_heartbeat'] || 0
+    const ta500Status = metaMap['ta500_status'] || 0
+    const ta500LastSeen = metaMap['ta500_last_seen'] || 0
+    const ta500Records = metaMap['ta500_records'] || 0
+
+    // Bridge is alive if heartbeat arrived within last 35 seconds
+    const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 35)
+
+    // TA500 is alive if bridge is alive AND device status was 1 within last 45 seconds
+    const ta500Online = bridgeOnline && ta500Status === 1 && (nowSec - ta500LastSeen <= 45)
+
+    const heartbeatAgeSec = bridgeHeartbeat > 0 ? Math.max(0, nowSec - bridgeHeartbeat) : 9999
+
     // Determine freshness: active if last sync < 30 minutes ago, or < 24h
     let syncHealth: 'healthy' | 'warning' | 'stale' = 'healthy'
-    if (lastSync) {
+    if (!bridgeOnline || !ta500Online) {
+      syncHealth = 'stale'
+    } else if (lastSync) {
       const diffMinutes = (Date.now() - new Date(lastSync).getTime()) / (1000 * 60)
       if (diffMinutes > 120) {
         syncHealth = 'stale'
@@ -45,6 +71,10 @@ export async function GET() {
       last_sync: lastSync,
       total_records: countResult.count ?? 0,
       sync_health: syncHealth,
+      bridge_online: bridgeOnline,
+      ta500_online: ta500Online,
+      ta500_records: ta500Records,
+      heartbeat_age_sec: heartbeatAgeSec,
       device: {
         model: 'FingerTec TA500 Biometric Terminal',
         ip: '192.168.0.58',
