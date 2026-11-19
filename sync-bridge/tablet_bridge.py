@@ -93,7 +93,7 @@ def save_device_ip(ip: str) -> None:
 ZK_IP         = load_saved_ip()
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
 ZK_TIMEOUT    = 10     # Robust socket timeout for Wi-Fi transmission
-POLL_INTERVAL = 8      # read_sizes() heartbeat every 8s
+POLL_INTERVAL = 3      # read_sizes() heartbeat every 3s (fast punch detection)
 TZ            = pytz.timezone('Asia/Manila')
 SEEN_MAX_DAYS = 30     # Bounded seen hashes window
 
@@ -822,7 +822,7 @@ def main():
         session_start_time = time.time()
         read_sizes_fail_streak = 0
 
-        AUDIT_INTERVAL = 60           # 60s flash audit
+        AUDIT_INTERVAL = 30           # 30s flash audit (faster catch-up)
         MAX_SESSION_DURATION = 600     # 10m clean socket refresh
 
         try:
