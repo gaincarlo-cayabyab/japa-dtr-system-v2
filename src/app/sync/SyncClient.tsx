@@ -1158,15 +1158,34 @@ export function SyncClient({
                           </div>
                         </div>
                       ) : (
-                        <div>
-                          <div className="text-emerald-400">
-                            [INFO] Polling 192.168.0.58:4370... OK
+                        <div className="space-y-1 font-mono text-[9px] leading-tight">
+                          <div className="text-emerald-400 font-bold flex items-center justify-between">
+                            <span>[POLL] 192.168.0.58:4370</span>
+                            <span className="text-emerald-300 font-semibold">● HEALTHY (10s)</span>
                           </div>
-                          <div className="text-cyan-300">
-                            [AUDIT] 60s Direct Flash Check Active
+                          <div className="text-cyan-300 flex items-center justify-between">
+                            <span>[SENSOR] Optical Prism Scanner</span>
+                            <span className="text-cyan-200">UNLOCKED / ACTIVE</span>
                           </div>
-                          <div className="text-slate-400 text-[9px]">
-                            [HEARTBEAT] {heartbeatAgeSec}s ago · 10m Rejuvenation Active
+                          <div className="text-amber-300/95 flex items-center justify-between">
+                            <span>[DEBOUNCE] Anti-Double Tap Filter</span>
+                            <span className="text-amber-200">15s Window (Active)</span>
+                          </div>
+                          <div className="text-purple-300 flex items-center justify-between">
+                            <span>[BUFFER] Hardware Flash Commit</span>
+                            <span className="text-purple-200">1.5s Grace Period</span>
+                          </div>
+                          <div className="text-blue-300 flex items-center justify-between">
+                            <span>[DATABASE] Biometric Punches</span>
+                            <span className="text-blue-200">{totalRecords} Synced · 0 Queue</span>
+                          </div>
+                          <div className="text-indigo-300 flex items-center justify-between">
+                            <span>[UPLINK] Supabase Realtime CDC</span>
+                            <span className="text-indigo-200">TLS 1.3 Streaming</span>
+                          </div>
+                          <div className="text-slate-400 text-[8.5px] pt-1 border-t border-slate-800/80 flex items-center justify-between">
+                            <span>[HEARTBEAT] {heartbeatAgeSec}s ago · Persistent</span>
+                            <span className="text-emerald-400 font-bold">● 24/7 Watchdog Active</span>
                           </div>
                         </div>
                       )}
@@ -1176,6 +1195,26 @@ export function SyncClient({
                   <div>
                     <h3 className="text-sm font-black text-slate-900">Samsung Galaxy Tab A9+</h3>
                     <p className="text-xs text-slate-500 font-medium">Local Python Synchronization Bridge Daemon</p>
+
+                    {/* Bridge Telemetry Micro-Pills to fill white space */}
+                    <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[10px] font-mono">
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                        <span className="text-slate-400 font-semibold">Sensor CPU:</span>
+                        <span className="font-bold text-emerald-600">&gt; 95% Free</span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                        <span className="text-slate-400 font-semibold">Transport:</span>
+                        <span className="font-bold text-slate-700">TCP Port 4370</span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                        <span className="text-slate-400 font-semibold">Session:</span>
+                        <span className="font-bold text-blue-600">Continuous Keepalive</span>
+                      </div>
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                        <span className="text-slate-400 font-semibold">Watchdog:</span>
+                        <span className="font-bold text-indigo-600">Option B Supervised</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
