@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v16.3 "NO-LOCK Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
+v16.4 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
 
-Major v16.3 Architecture Fix (CRITICAL):
+Major v16.4 Architecture Fix (CRITICAL):
   1. ZERO DISABLE_DEVICE ARCHITECTURE — ROOT CAUSE FIX:
      - REMOVED all disable_device() / enable_device() calls EVERYWHERE.
      - These calls lock the TA500 on the "Working..." blue dotted PC sync screen.
@@ -223,7 +223,7 @@ def init_recent_punches() -> None:
                 if uid not in _last_device_punch:
                     pt = _parse_ts(row['punch_time'])
                     _last_device_punch[uid] = pt
-            logger.info(f'Anti-Double Tap Debounce active: {len(_last_device_punch)} employee punch history loaded')
+            logger.info(f'Anti-Double Tap Debounce active (15s): {len(_last_device_punch)} employee punch history loaded')
     except Exception as e:
         logger.warning(f'Recent punches init notice: {e}')
 
@@ -459,50 +459,33 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v16.3 NO-LOCK Direct Attendance Extractor.
-    - ZERO disable_device() / enable_device() calls — TA500 screen never locks.
-    - Uses read_with_buffer(CMD_ATTLOG_RRQ=13) to read ONLY attendance log bytes (<2KB).
-    - Never downloads fingerprint templates (get_users() / get_attendance() AVOIDED).
-    - Buffer length guard prevents 'unpack requires a buffer of 4 bytes' crash.
+    v16.4 Fast Sentinel Direct Attendance Extractor:
+    - Zero free_data() calls before read_with_buffer (prevents protocol desync).
+    - Uses read_with_buffer(13) directly.
+    - If TCP packet error occurs, raises exception so main loop cleanly rejuvenates socket.
     """
     if not conn:
         return []
     for attempt in range(max_retries):
         try:
-            # Flush stale buffer without locking the device
-            try:
-                conn.free_data()
-            except Exception:
-                pass
-
-            # Temporarily boost socket timeout for data transfer only
             sock = getattr(conn, '_ZK__sock', None) or getattr(conn, '_sock', None)
             old_timeout = sock.gettimeout() if sock else None
             if sock:
                 sock.settimeout(15.0)
 
             # CMD_ATTLOG_RRQ = 13: reads ONLY the raw attendance log (< 2KB)
-            # NO disable_device() before this — device stays unlocked
             attendance_data, size = conn.read_with_buffer(13)
 
             if sock and old_timeout is not None:
                 sock.settimeout(old_timeout)
 
-            # CRITICAL: guard against short/empty buffer before unpack
+            # Guard against short/empty buffer before unpack
             if not attendance_data or len(attendance_data) < 4:
-                try:
-                    conn.free_data()
-                except Exception:
-                    pass
                 return []
 
             total_size = struct.unpack('<I', attendance_data[:4])[0]
             records_count = getattr(conn, 'records', 0)
             if records_count <= 0:
-                try:
-                    conn.free_data()
-                except Exception:
-                    pass
                 return []
 
             record_size = total_size // records_count
@@ -511,44 +494,40 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
 
             if record_size == 8:
                 while len(raw_data) >= 8:
-                    uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, b'\x00')[:8])
+                    uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, b' ')[:8])
                     raw_data = raw_data[8:]
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(str(uid), dt, status, punch, uid))
             elif record_size == 16:
                 while len(raw_data) >= 16:
-                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, b'\x00')[:16])
+                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, b' ')[:16])
                     raw_data = raw_data[16:]
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(str(user_id), dt, status, punch, int(user_id)))
             else:  # 40-byte format
                 while len(raw_data) >= 40:
-                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, b'\x00')[:40])
+                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, b' ')[:40])
                     raw_data = raw_data[40:]
-                    uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
+                    uid_str = user_id_bytes.split(b' ')[0].decode(errors='ignore').strip()
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
-            try:
-                conn.free_data()
-            except Exception:
-                pass
             return attendances
 
         except Exception as e:
             if attempt == max_retries - 1:
                 logger.warning(f"Fast attendance extraction notice: {e}")
-                return []  # NO fallback to get_attendance() — it calls get_users() (65KB download)
-            time.sleep(1.5)
+                raise
+            time.sleep(1.0)
     return []
 
 def sync_device_users(conn) -> int:
-    """Sync enrolled users over the active single connection (v16.3: no disable_device)."""
+    """Sync enrolled users over the active single connection (v16.4: no disable_device)."""
     global _employee_cache
     if not conn:
         return 0
     try:
-        # v16.3: NO disable_device() before get_users() — avoids screen lock.
+        # v16.4: NO disable_device() before get_users() — avoids screen lock.
         # get_users() itself is safe; only get_attendance() wrapping get_users() causes issues.
         users = conn.get_users()
         if not users:
@@ -639,7 +618,7 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         prev_punch_dt = _last_device_punch.get(uid)
         if prev_punch_dt is not None:
             diff_sec = abs((local_dt - prev_punch_dt).total_seconds())
-            if diff_sec < 300:
+            if diff_sec < 15:
                 seen.add(key)
                 save_seen_set(seen)
                 continue
@@ -704,9 +683,9 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.3')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.4')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    logger.info('   Mode      : NO-LOCK Sentinel | Zero TA500 Screen Lock | Direct Buffer Only')
+    logger.info('   Mode      : Fast Sentinel | Rapid Ingestion | 15s Debounce | Protocol Resync')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
     logger.info('   Schedule  : Option B Hourly Window Maintenance Support Active')
     logger.info('==================================================================')
@@ -784,7 +763,7 @@ def main():
         ta500_fail_count = 0
         failure_start_time = 0.0
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
-        # v16.3: NO enable_device() after connect — device is already active on fresh connect.
+        # v16.4: NO enable_device() after connect — device is already active on fresh connect.
 
         # ── 2. Status & Catch-Up Check ───────────────────────────────────────
         try:
@@ -886,15 +865,19 @@ def main():
                 if current_count > known_record_count:
                     delta = current_count - known_record_count
                     logger.info(f'🆕 {delta} new punch(es) detected via counter! Fetching from TA500...')
-                    atts = safe_fetch_attendance(conn)
-                    new_punches = process_punches_batch(atts, seen)
-                    known_record_count = current_count
-                    last_audit_time = now
-                    if new_punches > 0:
-                        logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
-                        flush_upload_queue(seen)
-                    else:
-                        logger.info('Records fetched — duplicates skipped (already synced).')
+                    try:
+                        atts = safe_fetch_attendance(conn)
+                        new_punches = process_punches_batch(atts, seen)
+                        known_record_count = current_count
+                        last_audit_time = now
+                        if new_punches > 0:
+                            logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
+                            flush_upload_queue(seen)
+                        else:
+                            logger.info('Records fetched — duplicates skipped (already synced).')
+                    except Exception as e_fetch:
+                        logger.warning(f'⚠️ Attendance extraction error ({e_fetch}). Refreshing socket to guarantee sync...')
+                        raise
                 else:
                     known_record_count = current_count
 

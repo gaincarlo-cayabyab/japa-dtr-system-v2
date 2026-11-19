@@ -215,7 +215,7 @@ export function SyncClient({
       type: 'Edge Ingestion & Anti-Double Tap Gateway',
       ip: '192.168.0.112 (WLAN Static Lease)',
       port: 'Loopback / HTTPS Uplink',
-      protocol: 'Python 3.11 · tablet_bridge.py v16.3',
+      protocol: 'Python 3.11 · tablet_bridge.py v16.4',
       statusBadge: isBridgeDown ? 'DAEMON TERMINATED' : 'ACTIVE POLLING (8s)',
       statusColor: isBridgeDown ? 'rose' : 'amber',
       specs: [
@@ -228,7 +228,7 @@ export function SyncClient({
       ],
       diagnosticTitle: isBridgeDown
         ? 'Python Sync Daemon Offline'
-        : 'Bridge Engine Running v16.3 (Single-Socket Safe Session + Hourly Maintenance)',
+        : 'Bridge Engine Running v16.4 (Single-Socket Safe Session + Hourly Maintenance)',
       diagnosticText: isBridgeDown
         ? 'The bridge process has been terminated. Open Termux on the tablet and type "bash sync-bridge/watchdog.sh" to restart automatic synchronization.'
         : 'The bridge engine queries the TA500 every 8s, isolates attendance fetching to dedicated clean sockets, strips duplicated double-taps within 5 minutes, and securely ships records to Supabase.',
@@ -466,7 +466,7 @@ export function SyncClient({
             {isHealthy &&
               (isManualSim
                 ? `FingerTec TA500 (192.168.0.58) communicates cleanly over physical Cat6 Ethernet through the Wi-Fi Repeater to the Samsung Tab A9+ bridge daemon. Latest roundtrip latency: ${liveLatency}ms.`
-                : `FingerTec TA500 (192.168.0.58) is online and responding. Samsung Tab A9+ bridge v16.3 heartbeat active (${heartbeatAgeSec}s ago). Cloud roundtrip latency: ${liveLatency}ms.`)}
+                : `FingerTec TA500 (192.168.0.58) is online and responding. Samsung Tab A9+ bridge v16.4 heartbeat active (${heartbeatAgeSec}s ago). Cloud roundtrip latency: ${liveLatency}ms.`)}
             {isSlow &&
               'Biometric query packet roundtrip is elevated (~480ms). Check for 2.4 GHz Wi-Fi channel congestion or physical obstructions between the repeater and tablet.'}
             {isLanBroken &&
@@ -477,7 +477,7 @@ export function SyncClient({
               'The Wi-Fi Repeater has lost connection to the office Wi-Fi router. Verify the wall socket power LED and ensure the repeater is within range.'}
             {isBridgeDown &&
               (isManualSim
-                ? 'The synchronization daemon (tablet_bridge.py v16.3) has terminated on the Samsung Tab A9+. Open Termux and execute: "bash sync-bridge/watchdog.sh".'
+                ? 'The synchronization daemon (tablet_bridge.py v16.4) has terminated on the Samsung Tab A9+. Open Termux and execute: "bash sync-bridge/watchdog.sh".'
                 : `No live heartbeat received from the bridge daemon in ${heartbeatAgeSec}s. Turn on the Samsung Galaxy Tab A9+, open Termux, and execute: "bash sync-bridge/watchdog.sh".`)}
             {isCloudDown &&
               'Local tablet cannot reach Supabase in Singapore. New biometric punches remain securely buffered in TA500 onboard flash memory and will sync upon reconnection.'}
@@ -1118,7 +1118,7 @@ export function SyncClient({
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                       }`}
                     >
-                      {isBridgeDown ? '✕ DAEMON STOPPED' : '● BRIDGE v16.3 ACTIVE'}
+                      {isBridgeDown ? '✕ DAEMON STOPPED' : '● BRIDGE v16.4 ACTIVE'}
                     </span>
                   </div>
 
@@ -1135,7 +1135,7 @@ export function SyncClient({
                         <span className="flex items-center gap-1 text-amber-400 font-bold">
                           <Terminal className="w-3 h-3" /> Termux · python tablet_bridge.py
                         </span>
-                        <span>v16.3</span>
+                        <span>v16.4</span>
                       </div>
                       {isBridgeDown ? (
                         <div className="text-rose-400 font-bold py-1">
@@ -1589,7 +1589,7 @@ export function SyncClient({
               3. Samsung Galaxy Tab A9+ (Bridge Engine)
             </h4>
             <p>
-              Dedicated local tablet running Python Bridge Engine v16.3 via Termux. Features single-socket bulletproof session, graduated self-healing, and Option B hourly protected maintenance.
+              Dedicated local tablet running Python Bridge Engine v16.4 via Termux. Features single-socket bulletproof session, graduated self-healing, and Option B hourly protected maintenance.
             </p>
             <p className="text-[11px] text-slate-500">
               💡 If stopped: open Termux on the tablet and run{' '}
