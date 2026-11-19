@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v16.0 "Iron Sentinel" — Dual-Socket Isolation | Graduated Self-Healing | Hourly Protected Rest
+v16.1 "Iron Sentinel" — Single-Socket Bulletproof Engine | Graduated Self-Healing | Hourly Protected Rest
 
-Major v16 Architecture Improvements:
-  1. DUAL-SOCKET ISOLATION:
-     - Socket A (Heartbeat): Dedicated persistent connection strictly for read_sizes() (8s).
-     - Socket B (Fetch): Dedicated ephemeral connection strictly for get_attendance().
-       Uses disable_device() -> free_data() -> get_attendance() -> free_data() -> enable_device().
-       Completely eliminates the pyzk chunk buffer desynchronization bugs
-       ('can't read chunk', 'TCP packet invalid', 'missing user data').
+Major v16.1 Architecture Improvements:
+  1. SINGLE-SOCKET BULLETPROOF ARCHITECTURE:
+     - Maintains ONE clean, persistent session with the FingerTec TA500 terminal.
+     - Never opens concurrent sockets on port 4370 (preventing the hardware-level ECONNRESET lockout).
+     - Attendance fetching wraps the active session in disable_device() -> free_data() -> get_attendance() -> free_data() -> enable_device().
+     - Eliminates all buffer desynchronization bugs ('can't read chunk', 'TCP packet invalid', 'missing user data').
   2. GRADUATED SELF-HEALING & REMOTE SOFT-RESTART:
      - 0-3m: Quick 8s retries (clears normal socket resets).
      - 3-10m: 20s backoff for stressed hardware.
@@ -18,7 +17,7 @@ Major v16 Architecture Improvements:
      - 3h+: Controlled process recycle (watchdog supervisor restores fresh environment).
   3. 30-DAY ROLLING BOUNDED CACHE:
      - Prunes seen_punches hashes older than 30 days to guarantee zero memory leaks.
-     - Replaces flawed len(seen) count comparison with true cloud-vs-device hash audits.
+     - True cloud-vs-device hash audits.
   4. ROTATING LOG HANDLER:
      - Automatically caps bridge.log to 5 MB with 3 backups, preventing tablet disk fill.
   5. SCHEDULED RESTART COMPATIBLE (Option B Hourly Windows):
@@ -431,73 +430,57 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
                     logger.warning(f'TA500 LAN connect notice ({target_ip}): {e_tcp}')
     return None
 
-def fetch_attendance_isolated(ip: Optional[str] = None, timeout: int = 30) -> list:
+def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    SOCKET B — DEDICATED FETCH CONNECTION (ISOLATED):
-    Opens a fresh dedicated socket solely for get_attendance().
-    Never touches or pollutes the persistent heartbeat connection.
-    Executes disable_device() -> free_data() -> get_attendance() -> free_data() -> enable_device().
-    Completely prevents chunk reading corruption ('can't read chunk', 'TCP packet invalid', 'missing user data').
+    Safely retrieves attendance records over the ACTIVE single socket.
+    Wraps pyzk calls in disable_device() -> free_data() -> get_attendance() -> free_data() -> enable_device().
+    Respects the FingerTec TA500's strict single-connection limit and prevents buffer desynchronization.
     """
-    target_ip = ip or ZK_IP
-    for use_udp in (False, True):
-        zk = None
-        conn = None
+    if not conn:
+        return []
+    for attempt in range(max_retries):
         try:
-            zk = ZK(target_ip, port=ZK_PORT, timeout=timeout if not use_udp else 15,
-                    password=0, force_udp=use_udp, ommit_ping=True)
-            conn = zk.connect()
-            if not conn:
-                continue
-
-            # 1. Lock UI so new finger scans don't write to flash memory during the read
             try:
                 conn.disable_device()
             except Exception:
                 pass
-
-            # 2. Flush any stale command buffer bytes
             try:
                 conn.free_data()
             except Exception:
                 pass
-
-            # 3. Pull full attendance logs
-            records = conn.get_attendance() or []
-
-            # 4. Flush buffer after large payload
+            records = conn.get_attendance()
             try:
                 conn.free_data()
             except Exception:
                 pass
-
-            return records
-        except Exception as e_fetch:
-            if not use_udp:
-                logger.warning(f"TCP attendance fetch blip: {e_fetch}. Retrying via UDP...")
-            else:
-                logger.warning(f"UDP attendance fetch blip: {e_fetch}")
+            return records or []
+        except Exception as e:
+            if attempt == max_retries - 1:
+                logger.warning(f"Fetch attendance attempt {attempt + 1} notice: {e}")
+                raise
+            time.sleep(1)
         finally:
-            if conn:
-                try:
-                    conn.enable_device()
-                except Exception:
-                    pass
-                safe_disconnect(conn)
+            try:
+                conn.enable_device()
+            except Exception:
+                pass
     return []
 
-def sync_all_device_users_isolated(ip: Optional[str] = None) -> int:
-    """Isolated user sync connection."""
+def sync_device_users(conn) -> int:
+    """Sync enrolled users over the active single connection."""
     global _employee_cache
-    target_ip = ip or ZK_IP
-    zk = None
-    conn = None
+    if not conn:
+        return 0
     try:
-        zk = ZK(target_ip, port=ZK_PORT, timeout=15, password=0, force_udp=False, ommit_ping=True)
-        conn = zk.connect()
-        if not conn:
-            return 0
+        try:
+            conn.disable_device()
+        except Exception:
+            pass
         users = conn.get_users()
+        try:
+            conn.enable_device()
+        except Exception:
+            pass
         if not users:
             return 0
 
@@ -528,8 +511,6 @@ def sync_all_device_users_isolated(ip: Optional[str] = None) -> int:
                 return len(new_or_updated)
     except Exception as e:
         logger.warning(f'Device user sync notice: {e}')
-    finally:
-        safe_disconnect(conn)
     return 0
 
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
@@ -649,15 +630,14 @@ def discover_ta500() -> None:
 
 # ─── Main Bridge Engine ───────────────────────────────────────────────────────
 def main():
-    discover_ta500()
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
 
     print('=' * 66)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.0')
+    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.1')
     print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Iron Sentinel 24/7 | Dual-Socket Isolation | 60s Audit')
-    print(f'   Stability : Dedicated Fetch Socket | Graduated Backoff | 30d Window')
+    print(f'   Mode      : Iron Sentinel 24/7 | Single-Socket Safe Session | 60s Audit')
+    print(f'   Stability : Single-Session Bulletproof | Graduated Backoff | 30d Window')
     print(f'   Schedule  : Option B Hourly Window Maintenance Support Active')
     print('=' * 66)
 
@@ -673,13 +653,14 @@ def main():
     failure_start_time = 0.0
     ta500_fail_count = 0
     last_soft_reboot_attempt = 0.0
+    known_record_count = 0
 
     while True:
         # Flush pending offline punches if any
         if _pending_upload_queue:
             flush_upload_queue(seen)
 
-        # ── 1. Connect Heartbeat Socket (Socket A) ───────────────────────────
+        # ── 1. Connect Device Socket ─────────────────────────────────────────
         conn = connect_heartbeat_socket()
         if not conn:
             now = time.time()
@@ -688,9 +669,8 @@ def main():
             time_down = now - failure_start_time
             ta500_fail_count += 1
 
-            # Broadcast TA500 down to cloud immediately
-            last_recs = known_record_count if 'known_record_count' in locals() else 0
-            update_live_heartbeat(False, last_recs)
+            # Broadcast TA500 down to cloud immediately, while bridge remains online
+            update_live_heartbeat(False, known_record_count)
 
             # Graduated Self-Healing Backoff
             if time_down < 180:         # 0 - 3 minutes: quick 8s retry
@@ -716,30 +696,36 @@ def main():
                 logger.info(f'💡 Network Status: Device IP is {local_ip}. Target device is {ZK_IP}.')
                 logger.info('   1. Verify TA500 power switch is ON and display is illuminated.')
                 logger.info('   2. Verify Cat6 LAN cable link LED is lit on TA500 and Wi-Fi repeater.')
+                # Try scanning subnet in case DHCP reassigned TA500
+                found_ip = scan_for_ta500()
+                if found_ip and found_ip != ZK_IP:
+                    logger.info(f'🎯 TA500 auto-discovered at {found_ip}!')
+                    ZK_IP = found_ip
 
             elapsed_cd = 0
             while elapsed_cd < cooldown:
-                time.sleep(min(3, cooldown - elapsed_cd))
-                elapsed_cd += 3
-                update_live_heartbeat(False, last_recs)
+                sleep_chunk = min(4, cooldown - elapsed_cd)
+                time.sleep(sleep_chunk)
+                elapsed_cd += sleep_chunk
+                update_live_heartbeat(False, known_record_count)
             continue
 
         # Hardware connection recovered!
         ta500_fail_count = 0
         failure_start_time = 0.0
-        logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Heartbeat engine ready in <1s.')
+        logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
 
         try:
             conn.enable_device()
         except Exception:
             pass
 
-        # ── 2. Status & Isolated Catch-Up Check ──────────────────────────────
-        known_record_count = 0
+        # ── 2. Status & Catch-Up Check ───────────────────────────────────────
         try:
             conn.read_sizes()
             known_record_count = conn.records
             logger.info(f'📊 TA500 reports {known_record_count} total attendance records on device.')
+            update_live_heartbeat(True, known_record_count)
 
             # Sync cloud hashes on startup so punches already in DB aren't re-inserted
             cloud_hashes = load_cloud_seen_hashes(limit=max(known_record_count + 50, 300))
@@ -749,10 +735,10 @@ def main():
                 save_seen_set(seen)
                 logger.info(f'☁️ Synced {len(new_cloud)} cloud punch hashes to local cache.')
 
-            # Run catch-up via DEDICATED FETCH SOCKET (Socket B)
+            # Run catch-up via SAFE SINGLE-SOCKET FETCH
             if known_record_count > 0:
-                logger.info('🔄 Running startup catch-up audit on isolated socket...')
-                atts = fetch_attendance_isolated(ZK_IP)
+                logger.info('🔄 Running startup catch-up audit on active connection...')
+                atts = safe_fetch_attendance(conn)
                 caught_up = process_punches_batch(atts, seen)
                 if caught_up > 0:
                     logger.info(f'✅ Caught up {caught_up} punch(es) from TA500 memory!')
@@ -768,11 +754,11 @@ def main():
         session_start_time = time.time()
         read_sizes_fail_streak = 0
 
-        AUDIT_INTERVAL = 60           # 60s isolated audit
+        AUDIT_INTERVAL = 60           # 60s flash audit
         MAX_SESSION_DURATION = 600     # 10m clean socket refresh
 
         try:
-            # ── 3. Main Heartbeat Loop (Socket A strictly read_sizes) ────────
+            # ── 3. Main Loop ─────────────────────────────────────────────────
             while True:
                 now = time.time()
 
@@ -781,7 +767,7 @@ def main():
 
                 # Graceful 10m rejuvenation
                 if now - session_start_time >= MAX_SESSION_DURATION:
-                    logger.info('🔄 Periodic Socket Rejuvenation (10m): Refreshing heartbeat session...')
+                    logger.info('🔄 Periodic Socket Rejuvenation (10m): Refreshing session...')
                     break
 
                 # Cloud portal commands check (~20s)
@@ -805,7 +791,7 @@ def main():
 
                     if meta.get('sync_employees') == 1:
                         logger.info('👤 Enrolled user sync requested from web portal!')
-                        sync_all_device_users_isolated(ZK_IP)
+                        sync_device_users(conn)
                         acknowledge_command('sync_employees')
 
                 # ── KEY 1: Ultra-fast read_sizes() heartbeat (0.05 - 1.5s) ───
@@ -829,9 +815,8 @@ def main():
                 # ── KEY 2: New Punches Detected via Counter ──────────────────
                 if current_count > known_record_count:
                     delta = current_count - known_record_count
-                    logger.info(f'🆕 {delta} new punch(es) detected via counter! Fetching on isolated socket...')
-                    # Fetch via DEDICATED FETCH SOCKET (Socket B) — Socket A remains clean!
-                    atts = fetch_attendance_isolated(ZK_IP)
+                    logger.info(f'🆕 {delta} new punch(es) detected via counter! Fetching from TA500...')
+                    atts = safe_fetch_attendance(conn)
                     new_punches = process_punches_batch(atts, seen)
                     known_record_count = current_count
                     last_audit_time = now
@@ -847,8 +832,7 @@ def main():
                 if now - last_audit_time >= AUDIT_INTERVAL:
                     last_audit_time = now
                     try:
-                        # Fetch via DEDICATED FETCH SOCKET (Socket B)
-                        atts = fetch_attendance_isolated(ZK_IP)
+                        atts = safe_fetch_attendance(conn)
                         audit_punches = process_punches_batch(atts, seen)
                         if audit_punches > 0:
                             logger.info(f'🎯 Direct Audit: {audit_punches} new punch(es) caught from TA500 flash memory!')
