@@ -500,6 +500,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
       start_date: startDate,
       end_date: endDate,
       calc_mode: calcMode,
+      _t: String(Date.now()),
     })
     if (branchFilter) params.append('branch', branchFilter)
     window.open(`/api/reports/excel?${params.toString()}`, '_blank')

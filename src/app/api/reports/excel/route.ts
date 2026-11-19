@@ -8,12 +8,44 @@ import type {
   PayrollSettings,
 } from '@/types/database'
 import ExcelJS from 'exceljs'
-import { format } from 'date-fns'
 
-function formatTime(ts: string | null) {
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
+// Philippine Standard Time (UTC+8 / Asia/Manila)
+// Vercel serverless runs in UTC; formatting explicitly in Asia/Manila guarantees
+// accurate local timestamps across all cloud edge and serverless environments.
+function formatManilaDateTime(date: Date = new Date()): string {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    }).formatToParts(date)
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || ''
+    return `${get('month')} ${get('day')}, ${get('year')}  ${get('hour')}:${get('minute')} ${get('dayPeriod').toUpperCase()}`
+  } catch {
+    return date.toISOString()
+  }
+}
+
+function formatTime(ts: string | null): string {
   if (!ts) return '—'
   try {
-    return format(new Date(ts), 'hh:mm aa')
+    const d = new Date(ts)
+    if (isNaN(d.getTime())) return ts
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Manila',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).formatToParts(d)
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || ''
+    return `${get('hour')}:${get('minute')} ${get('dayPeriod').toUpperCase()}`
   } catch {
     return ts
   }
@@ -199,7 +231,7 @@ export async function GET(request: NextRequest) {
         ? 'Standard Normalized — Shift Policy'
         : 'Exact Biometrics — Raw Real-Time'
 
-    const generatedAt = format(new Date(), 'MMMM d, yyyy  h:mm aa')
+    const generatedAt = formatManilaDateTime(new Date())
 
     // ============================================================
     // TAB 1 — SALARY SHEET (PAYROLL SUMMARY)
@@ -681,6 +713,9 @@ export async function GET(request: NextRequest) {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
       },
     })
   } catch (err: unknown) {
