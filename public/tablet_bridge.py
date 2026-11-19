@@ -703,13 +703,13 @@ def main():
     acquire_instance_lock()
     global _pending_upload_queue, ZK_IP
 
-    print('=' * 66)
-    print('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.2')
-    print(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    print(f'   Mode      : Iron Sentinel 24/7 | Fast Direct Buffer Extractor | 60s Audit')
-    print(f'   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
-    print(f'   Schedule  : Option B Hourly Window Maintenance Support Active')
-    print('=' * 66)
+    logger.info('==================================================================')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.2')
+    logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
+    logger.info('   Mode      : Iron Sentinel 24/7 | Fast Direct Buffer Extractor | 60s Audit')
+    logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
+    logger.info('   Schedule  : Option B Hourly Window Maintenance Support Active')
+    logger.info('==================================================================')
 
     seen = load_seen_set()
     logger.info(f'Loaded {len(seen)} previously-synced punch hashes.')
