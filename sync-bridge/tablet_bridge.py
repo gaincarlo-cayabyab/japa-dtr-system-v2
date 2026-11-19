@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v16.1 "Iron Sentinel" — Single-Socket Bulletproof Engine | Graduated Self-Healing | Hourly Protected Rest
+v16.3 "NO-LOCK Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
 
-Major v16.1 Architecture Improvements:
-  1. SINGLE-SOCKET BULLETPROOF ARCHITECTURE:
-     - Maintains ONE clean, persistent session with the FingerTec TA500 terminal.
-     - Never opens concurrent sockets on port 4370 (preventing the hardware-level ECONNRESET lockout).
-     - Attendance fetching wraps the active session in disable_device() -> free_data() -> get_attendance() -> free_data() -> enable_device().
-     - Eliminates all buffer desynchronization bugs ('can't read chunk', 'TCP packet invalid', 'missing user data').
-  2. GRADUATED SELF-HEALING & REMOTE SOFT-RESTART:
-     - 0-3m: Quick 8s retries (clears normal socket resets).
-     - 3-10m: 20s backoff for stressed hardware.
-     - 10-30m: 30s backoff + Automatic UDP Soft-Reboot of TA500 (bypasses locked TCP stack).
-     - 30m-3h: 120s battery-saver polling + cloud telemetry alert.
-     - 3h+: Controlled process recycle (watchdog supervisor restores fresh environment).
-  3. 30-DAY ROLLING BOUNDED CACHE:
-     - Prunes seen_punches hashes older than 30 days to guarantee zero memory leaks.
-     - True cloud-vs-device hash audits.
-  4. ROTATING LOG HANDLER:
-     - Automatically caps bridge.log to 5 MB with 3 backups, preventing tablet disk fill.
-  5. SCHEDULED RESTART COMPATIBLE (Option B Hourly Windows):
-     - Designed to work seamlessly with scheduled_restart.sh and watchdog.sh.
+Major v16.3 Architecture Fix (CRITICAL):
+  1. ZERO DISABLE_DEVICE ARCHITECTURE — ROOT CAUSE FIX:
+     - REMOVED all disable_device() / enable_device() calls EVERYWHERE.
+     - These calls lock the TA500 on the "Working..." blue dotted PC sync screen.
+     - If Wi-Fi drops while device is locked → TA500 freezes indefinitely on that screen.
+     - Nobody can scan fingerprints. Port 4370 stays "LAN busy holding previous session" forever.
+     - The TA500 firmware does NOT require disable_device() for read operations.
+     - Solution: NEVER call disable_device(). Read attendance directly with read_with_buffer(13).
+  2. DIRECT BUFFER ONLY — NO get_attendance() FALLBACK:
+     - Removed the fallback to conn.get_attendance() which internally calls get_users().
+     - get_users() downloads 65KB of biometric fingerprint templates over Wi-Fi → timeout.
+     - Now uses ONLY read_with_buffer(CMD_ATTLOG_RRQ=13) → reads < 2KB attendance log directly.
+  3. BUFFER LENGTH GUARD:
+     - Added len(attendance_data) >= 4 guard before struct.unpack('<I', attendance_data[:4]).
+     - Prevents 'unpack requires a buffer of 4 bytes' crash on empty/short reads.
+  4. CONNECT WITHOUT enable_device():
+     - Removed the enable_device() call right after TCP connect.
+     - The device is ALREADY enabled on connect; calling it again causes protocol confusion.
+  5. All previous v16.x improvements retained (Graduated backoff, UDP soft-reboot, 30d cache, etc.)
 """
 
 import os
@@ -459,98 +459,98 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    Direct, ultra-fast attendance extractor that bypasses pyzk's bloated get_users().
-    Transfers ONLY raw attendance logs (<2 KB) in 0.05 seconds.
-    Completely eliminates 'can't read chunk 0: [65472]', 'TCP packet invalid', and socket timeouts.
+    v16.3 NO-LOCK Direct Attendance Extractor.
+    - ZERO disable_device() / enable_device() calls — TA500 screen never locks.
+    - Uses read_with_buffer(CMD_ATTLOG_RRQ=13) to read ONLY attendance log bytes (<2KB).
+    - Never downloads fingerprint templates (get_users() / get_attendance() AVOIDED).
+    - Buffer length guard prevents 'unpack requires a buffer of 4 bytes' crash.
     """
     if not conn:
         return []
     for attempt in range(max_retries):
         try:
-            try:
-                conn.disable_device()
-            except Exception:
-                pass
+            # Flush stale buffer without locking the device
             try:
                 conn.free_data()
             except Exception:
                 pass
 
-            attendances = []
-            # Increase socket timeout temporarily during attendance transfer
+            # Temporarily boost socket timeout for data transfer only
             sock = getattr(conn, '_ZK__sock', None) or getattr(conn, '_sock', None)
             old_timeout = sock.gettimeout() if sock else None
             if sock:
-                sock.settimeout(12.0)
+                sock.settimeout(15.0)
 
-            # CMD_ATTLOG_RRQ = 13 (Read attendance log records)
+            # CMD_ATTLOG_RRQ = 13: reads ONLY the raw attendance log (< 2KB)
+            # NO disable_device() before this — device stays unlocked
             attendance_data, size = conn.read_with_buffer(13)
 
             if sock and old_timeout is not None:
                 sock.settimeout(old_timeout)
 
-            if size >= 4 and len(attendance_data) >= 4:
-                total_size = struct.unpack('<I', attendance_data[:4])[0]
-                records_count = getattr(conn, 'records', 0)
-                record_size = (total_size // records_count) if records_count > 0 else 16
-                raw_data = attendance_data[4:]
+            # CRITICAL: guard against short/empty buffer before unpack
+            if not attendance_data or len(attendance_data) < 4:
+                try:
+                    conn.free_data()
+                except Exception:
+                    pass
+                return []
 
-                if record_size == 8:
-                    while len(raw_data) >= 8:
-                        uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, b'\x00')[:8])
-                        raw_data = raw_data[8:]
-                        dt = decode_zk_time(ts_bytes)
-                        attendances.append(SimpleAttendance(str(uid), dt, status, punch, uid))
-                elif record_size == 16:
-                    while len(raw_data) >= 16:
-                        user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, b'\x00')[:16])
-                        raw_data = raw_data[16:]
-                        dt = decode_zk_time(ts_bytes)
-                        attendances.append(SimpleAttendance(str(user_id), dt, status, punch, int(user_id)))
-                else:
-                    while len(raw_data) >= 40:
-                        uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, b'\x00')[:40])
-                        raw_data = raw_data[40:]
-                        uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
-                        dt = decode_zk_time(ts_bytes)
-                        attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
+            total_size = struct.unpack('<I', attendance_data[:4])[0]
+            records_count = getattr(conn, 'records', 0)
+            if records_count <= 0:
+                try:
+                    conn.free_data()
+                except Exception:
+                    pass
+                return []
+
+            record_size = total_size // records_count
+            raw_data = attendance_data[4:]
+            attendances = []
+
+            if record_size == 8:
+                while len(raw_data) >= 8:
+                    uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, b'\x00')[:8])
+                    raw_data = raw_data[8:]
+                    dt = decode_zk_time(ts_bytes)
+                    attendances.append(SimpleAttendance(str(uid), dt, status, punch, uid))
+            elif record_size == 16:
+                while len(raw_data) >= 16:
+                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, b'\x00')[:16])
+                    raw_data = raw_data[16:]
+                    dt = decode_zk_time(ts_bytes)
+                    attendances.append(SimpleAttendance(str(user_id), dt, status, punch, int(user_id)))
+            else:  # 40-byte format
+                while len(raw_data) >= 40:
+                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, b'\x00')[:40])
+                    raw_data = raw_data[40:]
+                    uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
+                    dt = decode_zk_time(ts_bytes)
+                    attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
             try:
                 conn.free_data()
             except Exception:
                 pass
             return attendances
+
         except Exception as e:
             if attempt == max_retries - 1:
                 logger.warning(f"Fast attendance extraction notice: {e}")
-                # Fallback to standard get_attendance only if custom direct parser fails
-                try:
-                    return conn.get_attendance() or []
-                except Exception:
-                    raise
-            time.sleep(1)
-        finally:
-            try:
-                conn.enable_device()
-            except Exception:
-                pass
+                return []  # NO fallback to get_attendance() — it calls get_users() (65KB download)
+            time.sleep(1.5)
     return []
 
 def sync_device_users(conn) -> int:
-    """Sync enrolled users over the active single connection."""
+    """Sync enrolled users over the active single connection (v16.3: no disable_device)."""
     global _employee_cache
     if not conn:
         return 0
     try:
-        try:
-            conn.disable_device()
-        except Exception:
-            pass
+        # v16.3: NO disable_device() before get_users() — avoids screen lock.
+        # get_users() itself is safe; only get_attendance() wrapping get_users() causes issues.
         users = conn.get_users()
-        try:
-            conn.enable_device()
-        except Exception:
-            pass
         if not users:
             return 0
 
@@ -704,9 +704,9 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.2')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.3')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    logger.info('   Mode      : Iron Sentinel 24/7 | Fast Direct Buffer Extractor | 60s Audit')
+    logger.info('   Mode      : NO-LOCK Sentinel | Zero TA500 Screen Lock | Direct Buffer Only')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
     logger.info('   Schedule  : Option B Hourly Window Maintenance Support Active')
     logger.info('==================================================================')
@@ -784,11 +784,7 @@ def main():
         ta500_fail_count = 0
         failure_start_time = 0.0
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
-
-        try:
-            conn.enable_device()
-        except Exception:
-            pass
+        # v16.3: NO enable_device() after connect — device is already active on fresh connect.
 
         # ── 2. Status & Catch-Up Check ───────────────────────────────────────
         try:

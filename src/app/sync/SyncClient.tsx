@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import {
@@ -215,11 +215,11 @@ export function SyncClient({
       type: 'Edge Ingestion & Anti-Double Tap Gateway',
       ip: '192.168.0.112 (WLAN Static Lease)',
       port: 'Loopback / HTTPS Uplink',
-      protocol: 'Python 3.11 · tablet_bridge.py v16.2',
+      protocol: 'Python 3.11 Â· tablet_bridge.py v16.3',
       statusBadge: isBridgeDown ? 'DAEMON TERMINATED' : 'ACTIVE POLLING (8s)',
       statusColor: isBridgeDown ? 'rose' : 'amber',
       specs: [
-        { label: 'Platform & OS', value: 'Android 14 (One UI 6.0) · Termux' },
+        { label: 'Platform & OS', value: 'Android 14 (One UI 6.0) Â· Termux' },
         { label: 'Processor', value: 'Qualcomm Snapdragon 695 5G' },
         { label: 'Architecture', value: 'Dual-Socket Isolation (Heartbeat + Dedicated Fetch)' },
         { label: 'Maintenance Schedule', value: 'Option B Hourly Protected Rest (Termux Cron)' },
@@ -228,7 +228,7 @@ export function SyncClient({
       ],
       diagnosticTitle: isBridgeDown
         ? 'Python Sync Daemon Offline'
-        : 'Bridge Engine Running v16.2 (Single-Socket Safe Session + Hourly Maintenance)',
+        : 'Bridge Engine Running v16.3 (Single-Socket Safe Session + Hourly Maintenance)',
       diagnosticText: isBridgeDown
         ? 'The bridge process has been terminated. Open Termux on the tablet and type "bash sync-bridge/watchdog.sh" to restart automatic synchronization.'
         : 'The bridge engine queries the TA500 every 8s, isolates attendance fetching to dedicated clean sockets, strips duplicated double-taps within 5 minutes, and securely ships records to Supabase.',
@@ -240,7 +240,7 @@ export function SyncClient({
       ip: 'aws-0-ap-southeast-1.pooler.supabase.com',
       port: '5432 / 6543 (SSL Enforced)',
       protocol: 'PostgreSQL Wire Protocol + Realtime WS',
-      statusBadge: isCloudDown ? 'GATEWAY TIMEOUT (504)' : 'CONNECTED · SYNCHRONIZED',
+      statusBadge: isCloudDown ? 'GATEWAY TIMEOUT (504)' : 'CONNECTED Â· SYNCHRONIZED',
       statusColor: isCloudDown ? 'rose' : 'emerald',
       specs: [
         { label: 'Cloud Region', value: 'AWS Singapore (ap-southeast-1)' },
@@ -264,7 +264,7 @@ export function SyncClient({
       ip: 'japa-dtr-system.vercel.app',
       port: '443 (HTTPS / TLS 1.3)',
       protocol: 'HTTP/2 + Edge Middleware',
-      statusBadge: 'ONLINE · PRODUCTION',
+      statusBadge: 'ONLINE Â· PRODUCTION',
       statusColor: 'indigo',
       specs: [
         { label: 'Edge Platform', value: 'Vercel Global Edge Network' },
@@ -284,7 +284,7 @@ export function SyncClient({
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* ── Top Header ─────────────────────────────────────────────── */}
+      {/* â”€â”€ Top Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2.5">
@@ -319,7 +319,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* ── Scenario / Simulation Selector (Light Theme) ────────────── */}
+      {/* â”€â”€ Scenario / Simulation Selector (Light Theme) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -364,7 +364,7 @@ export function SyncClient({
             }`}
           >
             <CheckCircle2 className={`w-4 h-4 ${scenario === 'healthy' ? 'text-white' : 'text-emerald-600'}`} />
-            <span>⚡ Live Auto-Detect</span>
+            <span>âš¡ Live Auto-Detect</span>
           </button>
 
           <button
@@ -377,7 +377,7 @@ export function SyncClient({
             }`}
           >
             <AlertTriangle className={`w-4 h-4 ${scenario === 'slow_network' ? 'text-white' : 'text-amber-600'}`} />
-            <span>🟡 High Latency</span>
+            <span>ðŸŸ¡ High Latency</span>
           </button>
 
           <button
@@ -390,7 +390,7 @@ export function SyncClient({
             }`}
           >
             <Cable className={`w-4 h-4 ${scenario === 'lan_unplugged' ? 'text-white' : 'text-rose-600'}`} />
-            <span>🔴 LAN Unplugged</span>
+            <span>ðŸ”´ LAN Unplugged</span>
           </button>
 
           <button
@@ -403,7 +403,7 @@ export function SyncClient({
             }`}
           >
             <WifiOff className={`w-4 h-4 ${scenario === 'wifi_disconnected' ? 'text-white' : 'text-rose-600'}`} />
-            <span>🔴 Wi-Fi Drop</span>
+            <span>ðŸ”´ Wi-Fi Drop</span>
           </button>
 
           <button
@@ -416,7 +416,7 @@ export function SyncClient({
             }`}
           >
             <Tablet className={`w-4 h-4 ${scenario === 'bridge_offline' ? 'text-white' : 'text-rose-600'}`} />
-            <span>🔴 Bridge Offline</span>
+            <span>ðŸ”´ Bridge Offline</span>
           </button>
 
           <button
@@ -429,12 +429,12 @@ export function SyncClient({
             }`}
           >
             <Cloud className={`w-4 h-4 ${scenario === 'cloud_error' ? 'text-white' : 'text-rose-600'}`} />
-            <span>🔴 Cloud/WAN Out</span>
+            <span>ðŸ”´ Cloud/WAN Out</span>
           </button>
         </div>
       </div>
 
-      {/* ── Active Status Alert Banner ─────────────────────────────────── */}
+      {/* â”€â”€ Active Status Alert Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         className={`p-4 rounded-2xl border transition-all flex items-start gap-3 shadow-sm ${
           isHealthy
@@ -455,18 +455,18 @@ export function SyncClient({
         </div>
         <div className="flex-1">
           <h2 className="text-sm font-black uppercase tracking-wider">
-            {isHealthy && (isManualSim ? 'Operational · All Biometric Nodes Synchronized' : 'Live Pipeline 100% Operational · All Hardware Synchronized')}
-            {isSlow && 'Performance Advisory · Elevated Latency / Wireless Jitter Detected'}
-            {isLanBroken && (isManualSim ? 'Hardware Fault · RJ45 Ethernet Disconnected from FingerTec TA500' : 'Live Hardware Advisory · FingerTec TA500 Powered Off or Unreachable')}
-            {isWifiBroken && 'Wireless Link Severed · Wi-Fi Repeater Lost 2.4 GHz Association'}
-            {isBridgeDown && (isManualSim ? 'Daemon Inactive · Termux Python Sync Engine Stopped on Tablet' : 'Live Daemon Offline · Samsung Tab A9+ Bridge Inactive')}
-            {isCloudDown && 'WAN Outage · Supabase Singapore Cloud Database Unreachable'}
+            {isHealthy && (isManualSim ? 'Operational Â· All Biometric Nodes Synchronized' : 'Live Pipeline 100% Operational Â· All Hardware Synchronized')}
+            {isSlow && 'Performance Advisory Â· Elevated Latency / Wireless Jitter Detected'}
+            {isLanBroken && (isManualSim ? 'Hardware Fault Â· RJ45 Ethernet Disconnected from FingerTec TA500' : 'Live Hardware Advisory Â· FingerTec TA500 Powered Off or Unreachable')}
+            {isWifiBroken && 'Wireless Link Severed Â· Wi-Fi Repeater Lost 2.4 GHz Association'}
+            {isBridgeDown && (isManualSim ? 'Daemon Inactive Â· Termux Python Sync Engine Stopped on Tablet' : 'Live Daemon Offline Â· Samsung Tab A9+ Bridge Inactive')}
+            {isCloudDown && 'WAN Outage Â· Supabase Singapore Cloud Database Unreachable'}
           </h2>
           <p className="text-xs mt-0.5 leading-relaxed opacity-90 font-medium">
             {isHealthy &&
               (isManualSim
                 ? `FingerTec TA500 (192.168.0.58) communicates cleanly over physical Cat6 Ethernet through the Wi-Fi Repeater to the Samsung Tab A9+ bridge daemon. Latest roundtrip latency: ${liveLatency}ms.`
-                : `FingerTec TA500 (192.168.0.58) is online and responding. Samsung Tab A9+ bridge v16.2 heartbeat active (${heartbeatAgeSec}s ago). Cloud roundtrip latency: ${liveLatency}ms.`)}
+                : `FingerTec TA500 (192.168.0.58) is online and responding. Samsung Tab A9+ bridge v16.3 heartbeat active (${heartbeatAgeSec}s ago). Cloud roundtrip latency: ${liveLatency}ms.`)}
             {isSlow &&
               'Biometric query packet roundtrip is elevated (~480ms). Check for 2.4 GHz Wi-Fi channel congestion or physical obstructions between the repeater and tablet.'}
             {isLanBroken &&
@@ -477,7 +477,7 @@ export function SyncClient({
               'The Wi-Fi Repeater has lost connection to the office Wi-Fi router. Verify the wall socket power LED and ensure the repeater is within range.'}
             {isBridgeDown &&
               (isManualSim
-                ? 'The synchronization daemon (tablet_bridge.py v16.2) has terminated on the Samsung Tab A9+. Open Termux and execute: "bash sync-bridge/watchdog.sh".'
+                ? 'The synchronization daemon (tablet_bridge.py v16.3) has terminated on the Samsung Tab A9+. Open Termux and execute: "bash sync-bridge/watchdog.sh".'
                 : `No live heartbeat received from the bridge daemon in ${heartbeatAgeSec}s. Turn on the Samsung Galaxy Tab A9+, open Termux, and execute: "bash sync-bridge/watchdog.sh".`)}
             {isCloudDown &&
               'Local tablet cannot reach Supabase in Singapore. New biometric punches remain securely buffered in TA500 onboard flash memory and will sync upon reconnection.'}
@@ -485,7 +485,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* ── Visual Topology Architecture Diagram (Light Theme 3D/2D Visual) ──────── */}
+      {/* â”€â”€ Visual Topology Architecture Diagram (Light Theme 3D/2D Visual) â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div
         className="rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden relative"
         style={{
@@ -541,11 +541,11 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* ── 3D PHYSICAL HARDWARE DIAGRAM ROW (LOCAL EDGE TIER WITH CONNECTING LINES) ───────── */}
+          {/* â”€â”€ 3D PHYSICAL HARDWARE DIAGRAM ROW (LOCAL EDGE TIER WITH CONNECTING LINES) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="relative mb-0">
             <div className="flex flex-col lg:flex-row items-stretch justify-between gap-0 relative">
 
-              {/* ════════════ NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) ════════════ */}
+              {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) â•â•â•â•â•â•â•â•â•â•â•â• */}
               <div
                 onClick={() => setSelectedNode('ta500')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
@@ -573,7 +573,7 @@ export function SyncClient({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      DEVICE #1 · BIOMETRIC TERMINAL
+                      DEVICE #1 Â· BIOMETRIC TERMINAL
                     </span>
                     <span
                       className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -585,10 +585,10 @@ export function SyncClient({
                       }`}
                     >
                       {isLanBroken
-                        ? (isManualSim ? '✕ LAN UNPLUGGED' : '✕ POWER OFF / NO LINK')
+                        ? (isManualSim ? 'âœ• LAN UNPLUGGED' : 'âœ• POWER OFF / NO LINK')
                         : isBridgeDown
-                        ? '⚠️ BRIDGE OFFLINE'
-                        : '● READY (UDP 4370)'}
+                        ? 'âš ï¸ BRIDGE OFFLINE'
+                        : 'â— READY (UDP 4370)'}
                     </span>
                   </div>
 
@@ -700,7 +700,7 @@ export function SyncClient({
                 </div>
               </div>
 
-              {/* ── CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) ── */}
+              {/* â”€â”€ CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) â”€â”€ */}
               <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20 -mx-1">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top badge */}
@@ -714,7 +714,7 @@ export function SyncClient({
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${isLanBroken ? 'bg-rose-500' : 'bg-blue-500 animate-ping'}`} />
-                    <span>{isLanBroken ? '✕ LAN SEVERED' : 'Cat6 RJ45 ➔ 100M'}</span>
+                    <span>{isLanBroken ? 'âœ• LAN SEVERED' : 'Cat6 RJ45 âž” 100M'}</span>
                   </span>
 
                   {/* Sleek Continuous Cable Line */}
@@ -741,12 +741,12 @@ export function SyncClient({
 
                   {/* Bottom label */}
                   <span className="text-[8px] font-mono font-bold text-slate-500 whitespace-nowrap mt-1">
-                    {isLanBroken ? 'Port Closed' : 'UDP 4370 · Flow: Active'}
+                    {isLanBroken ? 'Port Closed' : 'UDP 4370 Â· Flow: Active'}
                   </span>
                 </div>
               </div>
 
-              {/* ── CONNECTOR 1: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) ── */}
+              {/* â”€â”€ CONNECTOR 1: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) â”€â”€ */}
               <div className="flex lg:hidden flex-col items-center justify-center py-2 relative">
                 <div className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs z-10 -mb-1 ${
                   isLanBroken ? 'bg-rose-500 ring-2 ring-rose-200' : 'bg-blue-600 ring-2 ring-blue-200'
@@ -768,11 +768,11 @@ export function SyncClient({
                   isLanBroken ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-white text-blue-700 border-blue-200'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isLanBroken ? 'bg-rose-500' : 'bg-blue-500 animate-ping'}`} />
-                  <span>{isLanBroken ? '✕ Cat6 Severed / TA500 Off' : '▼ Cat6 RJ45 (100 Mbps Duplex)'}</span>
+                  <span>{isLanBroken ? 'âœ• Cat6 Severed / TA500 Off' : 'â–¼ Cat6 RJ45 (100 Mbps Duplex)'}</span>
                 </span>
               </div>
 
-              {/* ════════════ NODE 2: WI-FI REPEATER (AP BRIDGE) ════════════ */}
+              {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 2: WI-FI REPEATER (AP BRIDGE) â•â•â•â•â•â•â•â•â•â•â•â• */}
               <div
                 onClick={() => setSelectedNode('repeater')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
@@ -806,7 +806,7 @@ export function SyncClient({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      DEVICE #2 · ETHERNET &amp; WI-FI REPEATER
+                      DEVICE #2 Â· ETHERNET &amp; WI-FI REPEATER
                     </span>
                     <span
                       className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -816,10 +816,10 @@ export function SyncClient({
                       }`}
                     >
                       {isWifiBroken
-                        ? '✕ NO WI-FI'
+                        ? 'âœ• NO WI-FI'
                         : isLanBroken
-                        ? '✕ NO LAN INPUT'
-                        : '● BRIDGE ON (AP)'}
+                        ? 'âœ• NO LAN INPUT'
+                        : 'â— BRIDGE ON (AP)'}
                     </span>
                   </div>
 
@@ -868,7 +868,7 @@ export function SyncClient({
                       <div className="flex-1 h-6 rounded-full bg-slate-200/90 border border-slate-300 p-0.5 overflow-hidden relative shadow-inner">
                         {isLanBroken ? (
                           <div className="w-full h-full rounded-full bg-rose-100 flex items-center justify-center text-[8px] font-mono font-black text-rose-700 tracking-wider">
-                            PORT OFFLINE · NO CARRIER / TA500 OFF
+                            PORT OFFLINE Â· NO CARRIER / TA500 OFF
                           </div>
                         ) : (
                           <>
@@ -888,9 +888,9 @@ export function SyncClient({
 
                     {/* Active Telemetry Sub-row */}
                     <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 mt-2 pt-1.5 border-t border-slate-200">
-                      <span>Wire: STP 4-Pair 24AWG · Cat6</span>
+                      <span>Wire: STP 4-Pair 24AWG Â· Cat6</span>
                       <span className={isLanBroken ? 'text-rose-600 font-bold' : 'text-blue-700 font-bold'}>
-                        {isLanBroken ? 'Link State: DOWN' : 'UDP Port: 4370 · Flow: Active'}
+                        {isLanBroken ? 'Link State: DOWN' : 'UDP Port: 4370 Â· Flow: Active'}
                       </span>
                     </div>
                   </div>
@@ -964,14 +964,14 @@ export function SyncClient({
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] font-mono text-slate-500 font-bold">802.11n · 2.4 GHz</span>
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">802.11n Â· 2.4 GHz</span>
                   <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                     Inspect Specs <ChevronRight className="w-3 h-3" />
                   </span>
                 </div>
               </div>
 
-              {/* ── CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) ── */}
+              {/* â”€â”€ CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) â”€â”€ */}
               <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20 -mx-1">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top badge */}
@@ -985,7 +985,7 @@ export function SyncClient({
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${isWifiBroken ? 'bg-rose-500' : 'bg-purple-500 animate-ping'}`} />
-                    <span>{isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi ➔'}</span>
+                    <span>{isWifiBroken ? 'âœ• NO SIGNAL' : '2.4 GHz Wi-Fi âž”'}</span>
                   </span>
 
                   {/* Sleek Wireless Link Conduit */}
@@ -1017,7 +1017,7 @@ export function SyncClient({
                 </div>
               </div>
 
-              {/* ── CONNECTOR 2: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) ── */}
+              {/* â”€â”€ CONNECTOR 2: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) â”€â”€ */}
               <div className="flex lg:hidden flex-col items-center justify-center py-2 relative">
                 <div className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs z-10 -mb-1 ${
                   isWifiBroken ? 'bg-rose-500 ring-2 ring-rose-200' : 'bg-purple-600 ring-2 ring-purple-200'
@@ -1039,11 +1039,11 @@ export function SyncClient({
                   isWifiBroken ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-white text-purple-700 border-purple-200'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isWifiBroken ? 'bg-rose-500' : 'bg-purple-500 animate-ping'}`} />
-                  <span>{isWifiBroken ? '✕ Wi-Fi Dropped' : '▼ 2.4 GHz WLAN (-52 dBm)'}</span>
+                  <span>{isWifiBroken ? 'âœ• Wi-Fi Dropped' : 'â–¼ 2.4 GHz WLAN (-52 dBm)'}</span>
                 </span>
               </div>
 
-              {/* ════════════ NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE ENGINE) ════════════ */}
+              {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE ENGINE) â•â•â•â•â•â•â•â•â•â•â•â• */}
               <div
                 onClick={() => setSelectedNode('tablet')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
@@ -1067,7 +1067,7 @@ export function SyncClient({
                   <div className="w-1.5 h-1.5 rounded-full bg-white" />
                 </div>
 
-                {/* ── VERTICAL CONDUIT: TABLET TO WAN UPLINK BEAM (SEAMLESS FLUSH DOCKING) ── */}
+                {/* â”€â”€ VERTICAL CONDUIT: TABLET TO WAN UPLINK BEAM (SEAMLESS FLUSH DOCKING) â”€â”€ */}
                 <div className="absolute left-1/2 -translate-x-1/2 top-full h-16 w-2.5 z-20 hidden lg:flex flex-col items-center pointer-events-none">
                   {/* Top connection socket touching Card 3 bottom */}
                   <div className={`absolute top-0 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm z-30 flex items-center justify-center ${
@@ -1101,7 +1101,7 @@ export function SyncClient({
                         : 'bg-white text-indigo-700 border-indigo-200'
                     }`}>
                       <span className={`w-2 h-2 rounded-full ${isBridgeDown ? 'bg-rose-500' : 'bg-indigo-500 animate-ping'}`} />
-                      <span>{isBridgeDown ? '▼ LOCAL INGESTION HALTED (DAEMON DOWN)' : '▼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
+                      <span>{isBridgeDown ? 'â–¼ LOCAL INGESTION HALTED (DAEMON DOWN)' : 'â–¼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
                     </span>
                   </div>
                 </div>
@@ -1109,7 +1109,7 @@ export function SyncClient({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      DEVICE #3 · LOCAL BRIDGE HOST
+                      DEVICE #3 Â· LOCAL BRIDGE HOST
                     </span>
                     <span
                       className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -1118,7 +1118,7 @@ export function SyncClient({
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                       }`}
                     >
-                      {isBridgeDown ? '✕ DAEMON STOPPED' : '● BRIDGE v16.2 ACTIVE'}
+                      {isBridgeDown ? 'âœ• DAEMON STOPPED' : 'â— BRIDGE v16.3 ACTIVE'}
                     </span>
                   </div>
 
@@ -1133,9 +1133,9 @@ export function SyncClient({
                     <div className="bg-slate-950 rounded-lg p-2.5 font-mono text-[10px] text-slate-200 border border-slate-800 leading-relaxed shadow-inner">
                       <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1 mb-1.5 text-[9px]">
                         <span className="flex items-center gap-1 text-amber-400 font-bold">
-                          <Terminal className="w-3 h-3" /> Termux · python tablet_bridge.py
+                          <Terminal className="w-3 h-3" /> Termux Â· python tablet_bridge.py
                         </span>
-                        <span>v16.2</span>
+                        <span>v16.3</span>
                       </div>
                       {isBridgeDown ? (
                         <div className="text-rose-400 font-bold py-1">
@@ -1154,7 +1154,7 @@ export function SyncClient({
                             Bridge daemon active (Heartbeat {heartbeatAgeSec}s ago)
                           </div>
                           <div className="text-cyan-300 text-[9px]">
-                            [SUPERVISOR] 24/7 Watchdog Protected · Option B Active
+                            [SUPERVISOR] 24/7 Watchdog Protected Â· Option B Active
                           </div>
                         </div>
                       ) : (
@@ -1166,7 +1166,7 @@ export function SyncClient({
                             [AUDIT] 60s Direct Flash Check Active
                           </div>
                           <div className="text-slate-400 text-[9px]">
-                            [HEARTBEAT] {heartbeatAgeSec}s ago · 10m Rejuvenation Active
+                            [HEARTBEAT] {heartbeatAgeSec}s ago Â· 10m Rejuvenation Active
                           </div>
                         </div>
                       )}
@@ -1180,7 +1180,7 @@ export function SyncClient({
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] font-mono text-slate-500 font-bold">Termux · Python 3.11</span>
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">Termux Â· Python 3.11</span>
                   <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                     Inspect Specs <ChevronRight className="w-3 h-3" />
                   </span>
@@ -1209,11 +1209,11 @@ export function SyncClient({
               isBridgeDown ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-white text-indigo-700 border-indigo-200'
             }`}>
               <span className={`w-1.5 h-1.5 rounded-full ${isBridgeDown ? 'bg-rose-500' : 'bg-indigo-500 animate-ping'}`} />
-              <span>{isBridgeDown ? '▼ Ingestion Halted (Daemon Down)' : '▼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
+              <span>{isBridgeDown ? 'â–¼ Ingestion Halted (Daemon Down)' : 'â–¼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
             </span>
           </div>
 
-          {/* ── CLOUD UPLINK BEAM (HIGH-SPEED WAN PIPELINE CONTINUOUS BUS) ─────────────── */}
+          {/* â”€â”€ CLOUD UPLINK BEAM (HIGH-SPEED WAN PIPELINE CONTINUOUS BUS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="relative lg:mt-16 mt-3 mb-0 z-10">
             <div className={`w-full h-5 rounded-full border-2 relative overflow-hidden flex items-center justify-center shadow-md ${
               isCloudDown ? 'bg-rose-100 border-rose-400' : 'bg-slate-100 border-slate-400'
@@ -1239,7 +1239,7 @@ export function SyncClient({
                 }`}
               >
                 <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-600' : 'text-blue-600 animate-spin'}`} style={{ animationDuration: '8s' }} />
-                <span className="font-black">INTERNET WAN UPLINK ➔ SINGAPORE CLOUD REGION</span>
+                <span className="font-black">INTERNET WAN UPLINK âž” SINGAPORE CLOUD REGION</span>
                 <ArrowRight className="w-3 h-3 text-slate-400 hidden sm:inline" />
                 <span
                   className={`font-mono font-black px-2 py-0.5 rounded text-[10px] border ${
@@ -1256,7 +1256,7 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* ── CONNECTOR 4: BRANCHING DOWNWARD PIPELINES (SEAMLESSLY DOCKING TO CLOUD CARDS) ── */}
+          {/* â”€â”€ CONNECTOR 4: BRANCHING DOWNWARD PIPELINES (SEAMLESSLY DOCKING TO CLOUD CARDS) â”€â”€ */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative">
             {/* Col 1 vertical conduit down to Supabase */}
             <div className="flex flex-col items-center relative h-10 pointer-events-none">
@@ -1292,7 +1292,7 @@ export function SyncClient({
                     : 'bg-white text-emerald-700 border-emerald-200'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isCloudDown ? 'bg-rose-500' : 'bg-emerald-500 animate-ping'}`} />
-                  <span>{isCloudDown ? '✕ DB Link Down' : '▼ Postgres Wire Protocol (Port 5432)'}</span>
+                  <span>{isCloudDown ? 'âœ• DB Link Down' : 'â–¼ Postgres Wire Protocol (Port 5432)'}</span>
                 </span>
               </div>
             </div>
@@ -1318,16 +1318,16 @@ export function SyncClient({
               <div className="absolute left-5 top-1/2 -translate-y-1/2 whitespace-nowrap pointer-events-auto z-30">
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-xs border bg-white text-indigo-700 border-indigo-200">
                   <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
-                  <span>▼ Vercel Global Edge SSR / API Route</span>
+                  <span>â–¼ Vercel Global Edge SSR / API Route</span>
                 </span>
               </div>
             </div>
           </div>
 
-          {/* ── 3D CLOUD & APPLICATION TIER (SUPABASE + VERCEL) ───────── */}
+          {/* â”€â”€ 3D CLOUD & APPLICATION TIER (SUPABASE + VERCEL) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-            {/* ════════════ NODE 4: SUPABASE CLOUD DATABASE (3D CYLINDERS) ════════════ */}
+            {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 4: SUPABASE CLOUD DATABASE (3D CYLINDERS) â•â•â•â•â•â•â•â•â•â•â•â• */}
             <div
               onClick={() => setSelectedNode('supabase')}
               className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
@@ -1350,7 +1350,7 @@ export function SyncClient({
                     </span>
                     <div>
                       <h3 className="text-sm font-black text-slate-900">Supabase Cloud Database</h3>
-                      <p className="text-[11px] text-slate-500 font-mono">PostgreSQL 15 · Singapore</p>
+                      <p className="text-[11px] text-slate-500 font-mono">PostgreSQL 15 Â· Singapore</p>
                     </div>
                   </div>
                   <span
@@ -1360,7 +1360,7 @@ export function SyncClient({
                         : 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     }`}
                   >
-                    {isCloudDown ? '✕ TIMEOUT' : '● CLOUD READY'}
+                    {isCloudDown ? 'âœ• TIMEOUT' : 'â— CLOUD READY'}
                   </span>
                 </div>
 
@@ -1407,7 +1407,7 @@ export function SyncClient({
               </div>
             </div>
 
-            {/* ════════════ NODE 5: JAPA DTR ENTERPRISE PORTAL (VERCEL) ════════════ */}
+            {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 5: JAPA DTR ENTERPRISE PORTAL (VERCEL) â•â•â•â•â•â•â•â•â•â•â•â• */}
             <div
               onClick={() => setSelectedNode('vercel')}
               className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
@@ -1434,7 +1434,7 @@ export function SyncClient({
                     </div>
                   </div>
                   <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
-                    ● ONLINE · LIVE
+                    â— ONLINE Â· LIVE
                   </span>
                 </div>
 
@@ -1442,7 +1442,7 @@ export function SyncClient({
                 <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 flex items-center justify-around">
                   <div className="flex flex-col items-center">
                     <div className="w-10 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
-                      ▲
+                      â–²
                     </div>
                     <span className="text-[9px] font-mono font-bold text-slate-500 mt-1">Vercel Edge</span>
                   </div>
@@ -1470,7 +1470,7 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* ── CONNECTOR 5: REALTIME BI-DIRECTIONAL CLOUD BUS ─────────── */}
+          {/* â”€â”€ CONNECTOR 5: REALTIME BI-DIRECTIONAL CLOUD BUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="mt-4 flex items-center justify-center">
             <div className="w-full max-w-xl bg-gradient-to-r from-emerald-50 via-cyan-50 to-indigo-50 px-4 py-2.5 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono font-bold text-slate-600 shadow-xs">
               <span className="flex items-center gap-1.5 text-emerald-800">
@@ -1479,7 +1479,7 @@ export function SyncClient({
               </span>
               <span className="flex items-center gap-1.5 text-cyan-800 font-black bg-white/80 px-2.5 py-1 rounded-full border border-cyan-200 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
-                <span>◀ WebSocket Realtime CDC Channel (Live Punch Push) ▶</span>
+                <span>â—€ WebSocket Realtime CDC Channel (Live Punch Push) â–¶</span>
               </span>
               <span className="flex items-center gap-1.5 text-indigo-800">
                 <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -1488,7 +1488,7 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* ── SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR ───────── */}
+          {/* â”€â”€ SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
           <div className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-4">
               <div>
@@ -1546,7 +1546,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* ── Troubleshooting & Component Details Reference ─────────── */}
+      {/* â”€â”€ Troubleshooting & Component Details Reference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-600" />
@@ -1564,7 +1564,7 @@ export function SyncClient({
               UDP Port <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">4370</code>.
             </p>
             <p className="text-[11px] text-slate-500">
-              💡 If unreachable: check if the LAN cable link light is blinking on both the TA500 and the repeater.
+              ðŸ’¡ If unreachable: check if the LAN cable link light is blinking on both the TA500 and the repeater.
             </p>
           </div>
 
@@ -1579,7 +1579,7 @@ export function SyncClient({
               Allows the biometric terminal to reside anywhere without running cables across the office.
             </p>
             <p className="text-[11px] text-slate-500">
-              💡 If disconnected: verify the power LED and ensure the repeater is within good range of the Wi-Fi router.
+              ðŸ’¡ If disconnected: verify the power LED and ensure the repeater is within good range of the Wi-Fi router.
             </p>
           </div>
 
@@ -1589,10 +1589,10 @@ export function SyncClient({
               3. Samsung Galaxy Tab A9+ (Bridge Engine)
             </h4>
             <p>
-              Dedicated local tablet running Python Bridge Engine v16.2 via Termux. Features single-socket bulletproof session, graduated self-healing, and Option B hourly protected maintenance.
+              Dedicated local tablet running Python Bridge Engine v16.3 via Termux. Features single-socket bulletproof session, graduated self-healing, and Option B hourly protected maintenance.
             </p>
             <p className="text-[11px] text-slate-500">
-              💡 If stopped: open Termux on the tablet and run{' '}
+              ðŸ’¡ If stopped: open Termux on the tablet and run{' '}
               <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">
                 bash sync-bridge/watchdog.sh
               </code>
@@ -1602,7 +1602,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* ── Recent Synced Punches Table ────────────────────────────── */}
+      {/* â”€â”€ Recent Synced Punches Table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
@@ -234,7 +234,7 @@ export function DashboardClient({
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8">
-      {/* ── Header & Executive Controls ───────────────────────────────────── */}
+      {/* â”€â”€ Header & Executive Controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1.5">
@@ -248,7 +248,7 @@ export function DashboardClient({
             </div>
           </div>
           <p className="text-slate-500 text-xs md:text-sm">
-            Live workforce analytics · Shift performance · Biometric hardware telemetry
+            Live workforce analytics Â· Shift performance Â· Biometric hardware telemetry
           </p>
         </div>
 
@@ -338,7 +338,7 @@ export function DashboardClient({
         </Link>
       </div>
 
-      {/* ── Top Executive KPI Cards (5 Cards) ─────────────────────────────── */}
+      {/* â”€â”€ Top Executive KPI Cards (5 Cards) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Card 1: Registered Workforce */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs relative overflow-hidden">
@@ -351,7 +351,7 @@ export function DashboardClient({
           <p className="text-3xl font-black text-slate-900 mt-2">{stats.totalEmployees}</p>
           <div className="mt-2.5 flex items-center gap-1.5 text-xs text-slate-500 font-medium">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
-            <span>21 Dagupan · 3 Manila</span>
+            <span>21 Dagupan Â· 3 Manila</span>
           </div>
         </div>
 
@@ -426,7 +426,7 @@ export function DashboardClient({
         </div>
       </div>
 
-      {/* ── Visual Graphs Section ────────────────────────────────────────── */}
+      {/* â”€â”€ Visual Graphs Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Graph 1: 7-Day Attendance Volume & Hours Trend (8 cols) */}
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col justify-between">
@@ -466,7 +466,7 @@ export function DashboardClient({
                         <div className="absolute -top-14 z-20 bg-slate-900 text-white text-xs rounded-xl py-1.5 px-3 shadow-lg whitespace-nowrap pointer-events-none transform -translate-y-1">
                           <p className="font-bold">{t.label}</p>
                           <p className="text-[11px] text-slate-300">
-                            {t.present} Present ({t.rate}%) · {t.hours} hrs · {t.completed} Completed
+                            {t.present} Present ({t.rate}%) Â· {t.hours} hrs Â· {t.completed} Completed
                           </p>
                         </div>
                       )}
@@ -502,7 +502,7 @@ export function DashboardClient({
                         {t.label.split(',')[0]}
                       </p>
                       <p className="text-[10px] text-slate-400 mt-0.5">
-                        {t.hours > 0 ? `${t.hours}h` : '—'}
+                        {t.hours > 0 ? `${t.hours}h` : 'â€”'}
                       </p>
                     </div>
                   )
@@ -537,7 +537,7 @@ export function DashboardClient({
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-slate-900">Peak Punch Activity</h2>
-                  <p className="text-xs text-slate-400">Hourly arrival & departure rush (6 AM – 8 PM)</p>
+                  <p className="text-xs text-slate-400">Hourly arrival & departure rush (6 AM â€“ 8 PM)</p>
                 </div>
               </div>
             </div>
@@ -583,7 +583,7 @@ export function DashboardClient({
         </div>
       </div>
 
-      {/* ── Summary Reports & Operational Breakdowns ──────────────────────── */}
+      {/* â”€â”€ Summary Reports & Operational Breakdowns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Summary Card 1: Shift Compliance Breakdown */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
@@ -683,7 +683,7 @@ export function DashboardClient({
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                 <span className="text-slate-600 font-medium">Sync Engine</span>
                 <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                  v16.2 Iron Sentinel Engine
+                  v16.3 Iron Sentinel Engine
                 </span>
               </div>
 
