@@ -26,7 +26,7 @@ export async function GET() {
       supabase
         .from('sync_meta')
         .select('key, value')
-        .in('key', ['bridge_heartbeat', 'ta500_status', 'ta500_last_seen', 'ta500_records']),
+        .in('key', ['bridge_heartbeat', 'ta500_status', 'ta500_last_seen', 'ta500_records', 'bridge_version']),
     ])
 
     const dbLatencyMs = Date.now() - t0
@@ -43,6 +43,7 @@ export async function GET() {
     const ta500Status = metaMap['ta500_status'] || 0
     const ta500LastSeen = metaMap['ta500_last_seen'] || 0
     const ta500Records = metaMap['ta500_records'] || 0
+    const bridgeVersion = metaMap['bridge_version'] || 16
 
     // Bridge is alive if heartbeat arrived within last 45 seconds
     const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 45)
@@ -74,6 +75,7 @@ export async function GET() {
       bridge_online: bridgeOnline,
       ta500_online: ta500Online,
       ta500_records: ta500Records,
+      bridge_version: bridgeVersion,
       heartbeat_age_sec: heartbeatAgeSec,
       device: {
         model: 'FingerTec TA500 Biometric Terminal',
@@ -97,9 +99,11 @@ export async function GET() {
       tablet_bridge: {
         device: 'Samsung Galaxy Tab A9+ (SM-X210)',
         os: 'Android 14 / Termux',
-        engine_version: 'Bridge Engine v15.3',
-        poll_interval_sec: 60,
+        engine_version: 'Bridge Engine v16.0',
+        poll_interval_sec: 8,
         anti_double_tap_min: 5,
+        architecture: 'Dual-Socket Isolation (Heartbeat + Dedicated Fetch)',
+        scheduled_restart: 'Option B Hourly Protected Rest (Termux Cron)',
       },
       cloud: {
         provider: 'Supabase PostgreSQL',
