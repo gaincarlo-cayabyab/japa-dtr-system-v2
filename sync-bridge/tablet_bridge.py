@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v16.4 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
+v16.5 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
 
-Major v16.4 Architecture Fix (CRITICAL):
+Major v16.5 Architecture Fix (CRITICAL):
   1. ZERO DISABLE_DEVICE ARCHITECTURE — ROOT CAUSE FIX:
      - REMOVED all disable_device() / enable_device() calls EVERYWHERE.
      - These calls lock the TA500 on the "Working..." blue dotted PC sync screen.
@@ -459,7 +459,7 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v16.4 Fast Sentinel Direct Attendance Extractor:
+    v16.5 Fast Sentinel Direct Attendance Extractor:
     - Zero free_data() calls before read_with_buffer (prevents protocol desync).
     - Uses read_with_buffer(13) directly.
     - If TCP packet error occurs, raises exception so main loop cleanly rejuvenates socket.
@@ -522,12 +522,12 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     return []
 
 def sync_device_users(conn) -> int:
-    """Sync enrolled users over the active single connection (v16.4: no disable_device)."""
+    """Sync enrolled users over the active single connection (v16.5: no disable_device)."""
     global _employee_cache
     if not conn:
         return 0
     try:
-        # v16.4: NO disable_device() before get_users() — avoids screen lock.
+        # v16.5: NO disable_device() before get_users() — avoids screen lock.
         # get_users() itself is safe; only get_attendance() wrapping get_users() causes issues.
         users = conn.get_users()
         if not users:
@@ -683,7 +683,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.4')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.5')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Fast Sentinel | Rapid Ingestion | 15s Debounce | Protocol Resync')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
@@ -722,19 +722,26 @@ def main():
             update_live_heartbeat(False, known_record_count)
 
             # Graduated Self-Healing Backoff
-            if time_down < 180:         # 0 - 3 minutes: quick 8s retry
+            if time_down < 60:          # 0 - 60s: fast 8s retry
                 cooldown = 8
-            elif time_down < 600:       # 3 - 10 minutes: 20s retry
-                cooldown = 20
-            elif time_down < 1800:      # 10 - 30 minutes: 30s retry + soft-reboot TA500
-                cooldown = 30
-                if (now - last_soft_reboot_attempt) > 300:
+            elif time_down < 300:       # 60s - 5 min: 15s retry + early UDP reboot
+                cooldown = 15
+                if (now - last_soft_reboot_attempt) > 120:
                     last_soft_reboot_attempt = now
-                    logger.warning(f'⚠️ TA500 offline for {int(time_down)}s. Triggering automatic UDP soft-reboot...')
-                    restart_ta500_soft(ZK_IP)
-                    cooldown = 90  # Allow hardware boot time
-            elif time_down < 10800:     # 30 mins - 3 hours: battery saver 120s polling
-                cooldown = 120
+                    logger.warning(f'⚠️ TA500 offline for {int(time_down)}s. Triggering early UDP soft-reboot...')
+                    success = restart_ta500_soft(ZK_IP)
+                    if success:
+                        cooldown = 60   # Give hardware ~45s to boot
+            elif time_down < 1800:      # 5 - 30 min: 30s retry + periodic reboot
+                cooldown = 30
+                if (now - last_soft_reboot_attempt) > 180:
+                    last_soft_reboot_attempt = now
+                    logger.warning(f'⚠️ TA500 offline for {int(time_down)}s. Retrying UDP soft-reboot...')
+                    success = restart_ta500_soft(ZK_IP)
+                    if success:
+                        cooldown = 60
+            elif time_down < 10800:     # 30 mins - 3 hours: battery saver 90s polling
+                cooldown = 90
             else:                       # 3+ hours stuck: recycle process via watchdog
                 logger.critical('🛑 Connection down for >3 hours. Recycling bridge via watchdog...')
                 sys.exit(42)
@@ -763,7 +770,7 @@ def main():
         ta500_fail_count = 0
         failure_start_time = 0.0
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
-        # v16.4: NO enable_device() after connect — device is already active on fresh connect.
+        # v16.5: NO enable_device() after connect — device is already active on fresh connect.
 
         # ── 2. Status & Catch-Up Check ───────────────────────────────────────
         try:
