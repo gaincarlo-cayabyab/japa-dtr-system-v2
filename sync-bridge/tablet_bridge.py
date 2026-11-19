@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v16.5 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
+v16.6 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
 
-Major v16.5 Architecture Fix (CRITICAL):
+Major v16.6 Architecture Fix (CRITICAL):
   1. ZERO DISABLE_DEVICE ARCHITECTURE — ROOT CAUSE FIX:
      - REMOVED all disable_device() / enable_device() calls EVERYWHERE.
      - These calls lock the TA500 on the "Working..." blue dotted PC sync screen.
@@ -61,6 +61,9 @@ _SEEN_FILE   = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
 _TOKEN_FILE  = os.path.join(_SCRIPT_DIR, 'sync_token.json')
 _LOG_FILE    = os.path.join(_SCRIPT_DIR, 'bridge.log')
 _IP_FILE     = os.path.join(_SCRIPT_DIR, 'ta500_ip.txt')
+_SESSION_FILE = os.path.join(_SCRIPT_DIR, 'ta500_session.json')
+_ACTIVE_ZK_CONN: Optional[object] = None
+
 
 def load_saved_ip() -> str:
     for arg in sys.argv[1:]:
@@ -288,8 +291,17 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
         pass
 
 def handle_bridge_exit(*args):
-    """Marks bridge and device as offline in cloud upon shutdown."""
-    logger.info("Bridge stopping — broadcasting offline status to cloud portal...")
+    """Gracefully terminates active TA500 hardware session and marks bridge offline in cloud."""
+    global _ACTIVE_ZK_CONN
+    logger.info("Bridge stopping — gracefully disconnecting TA500 session...")
+    if _ACTIVE_ZK_CONN:
+        try:
+            _ACTIVE_ZK_CONN.disconnect()
+            logger.info("✅ TA500 session cleanly terminated (CMD_EXIT sent).")
+        except Exception as e:
+            logger.debug(f"Disconnect notice on exit: {e}")
+        _ACTIVE_ZK_CONN = None
+    logger.info("Broadcasting offline status to cloud portal...")
     try:
         payload = [
             {'key': 'bridge_heartbeat', 'value': 0},
@@ -305,6 +317,51 @@ signal.signal(signal.SIGINT, handle_bridge_exit)
 signal.signal(signal.SIGTERM, handle_bridge_exit)
 
 # ─── Safe Device Connection, Disconnect & Remote Reboot ───────────────────────
+
+def save_active_session(zk_obj: object) -> None:
+    """Caches the active hardware session ID so that dropped connections can be cleanly flushed."""
+    try:
+        sid = getattr(zk_obj, '_ZK__session_id', None)
+        rid = getattr(zk_obj, '_ZK__reply_id', None)
+        if sid is not None and sid > 0:
+            with open(_SESSION_FILE, 'w') as f:
+                json.dump({'session_id': sid, 'reply_id': rid or 0, 'ts': time.time(), 'ip': ZK_IP}, f)
+    except Exception:
+        pass
+
+def teardown_stale_session(target_ip: str) -> bool:
+    """
+    If the TA500 is stuck in 'LAN busy (hardware holding previous session)',
+    this sends a blind CMD_EXIT (1001) using the cached session ID
+    to force the device firmware to release the socket lock immediately.
+    """
+    if not os.path.exists(_SESSION_FILE):
+        return False
+    try:
+        with open(_SESSION_FILE, 'r') as f:
+            data = json.load(f)
+        saved_sid = data.get('session_id')
+        saved_rid = data.get('reply_id', 0)
+        if not saved_sid:
+            return False
+
+        logger.info(f"Injecting blind CMD_EXIT with cached Session #{saved_sid} to release hardware lock...")
+        for use_udp in (False, True):
+            try:
+                zk = ZK(target_ip, port=ZK_PORT, timeout=2, password=0, force_udp=use_udp, ommit_ping=True)
+                zk._ZK__create_socket()
+                zk._ZK__session_id = saved_sid
+                zk._ZK__reply_id = saved_rid
+                zk.is_connect = True
+                zk.disconnect()
+                logger.info(f"Successfully flushed stale TA500 session via {'UDP' if use_udp else 'TCP'}!")
+                return True
+            except Exception:
+                pass
+    except Exception as e:
+        logger.debug(f"Could not teardown stale session: {e}")
+    return False
+
 def safe_disconnect(conn: Optional[object]) -> None:
     if not conn:
         return
@@ -320,23 +377,47 @@ def safe_disconnect(conn: Optional[object]) -> None:
 
 def restart_ta500_soft(ip: Optional[str] = None) -> bool:
     """
-    Sends remote soft reboot command to TA500 via UDP port 4370.
-    UDP bypasses stuck TCP sockets, clearing any hardware locks.
+    Sends remote soft reboot command to TA500 via ZKTeco protocol.
+    Tries standard handshake over UDP and TCP, then falls back to blind restart with cached session ID.
     """
     target_ip = ip or ZK_IP
-    try:
-        zk = ZK(target_ip, port=ZK_PORT, timeout=5, password=0, force_udp=True, ommit_ping=True)
-        conn = zk.connect()
-        if conn:
-            conn.restart_device()
-            try:
-                conn.disconnect()
-            except Exception:
-                pass
-            logger.info(f"🔁 Remote reboot signal transmitted to TA500 ({target_ip}) via UDP!")
-            return True
-    except Exception as e:
-        logger.warning(f"Could not issue soft reboot to TA500: {e}")
+
+    # Attempt 1: Standard connection handshake (.restart() method in pyzk)
+    for use_udp in (True, False):
+        try:
+            zk = ZK(target_ip, port=ZK_PORT, timeout=4, password=0, force_udp=use_udp, ommit_ping=True)
+            conn = zk.connect()
+            if conn:
+                conn.restart()  # Standard pyzk method is .restart(), NOT .restart_device()
+                logger.info(f"🔁 Remote reboot signal transmitted to TA500 ({target_ip}) via {'UDP' if use_udp else 'TCP'}!")
+                return True
+        except Exception:
+            pass
+
+    # Attempt 2: Blind restart injection with cached session ID (bypasses connect handshake)
+    if os.path.exists(_SESSION_FILE):
+        try:
+            with open(_SESSION_FILE, 'r') as f:
+                data = json.load(f)
+            saved_sid = data.get('session_id')
+            saved_rid = data.get('reply_id', 0)
+            if saved_sid:
+                for use_udp in (True, False):
+                    try:
+                        zk = ZK(target_ip, port=ZK_PORT, timeout=3, password=0, force_udp=use_udp, ommit_ping=True)
+                        zk._ZK__create_socket()
+                        zk._ZK__session_id = saved_sid
+                        zk._ZK__reply_id = saved_rid
+                        zk.is_connect = True
+                        zk.restart()
+                        logger.info(f"🔁 Injected blind CMD_RESTART with Session #{saved_sid} to TA500 ({target_ip})!")
+                        return True
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    logger.warning("Could not issue soft reboot to TA500 (both handshake and session injection timed out)")
     return False
 
 def get_local_subnet() -> Tuple[Optional[str], Optional[str]]:
@@ -424,7 +505,8 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
             if not use_udp:
                 err_str = str(e_tcp)
                 if '104' in err_str or '10054' in err_str or 'reset' in err_str.lower():
-                    logger.warning('TA500 LAN busy (hardware holding previous session). Waiting for device socket to clear...')
+                    logger.warning('TA500 LAN busy (hardware holding previous session). Attempting auto-clear...')
+                    teardown_stale_session(target_ip)
                 elif 'timed out' in err_str.lower() or 'timeout' in err_str.lower():
                     logger.warning(f'TA500 LAN connect notice ({target_ip}): timed out')
                 else:
@@ -459,7 +541,7 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v16.5 Fast Sentinel Direct Attendance Extractor:
+    v16.6 Fast Sentinel Direct Attendance Extractor:
     - Zero free_data() calls before read_with_buffer (prevents protocol desync).
     - Uses read_with_buffer(13) directly.
     - If TCP packet error occurs, raises exception so main loop cleanly rejuvenates socket.
@@ -522,12 +604,12 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     return []
 
 def sync_device_users(conn) -> int:
-    """Sync enrolled users over the active single connection (v16.5: no disable_device)."""
+    """Sync enrolled users over the active single connection (v16.6: no disable_device)."""
     global _employee_cache
     if not conn:
         return 0
     try:
-        # v16.5: NO disable_device() before get_users() — avoids screen lock.
+        # v16.6: NO disable_device() before get_users() — avoids screen lock.
         # get_users() itself is safe; only get_attendance() wrapping get_users() causes issues.
         users = conn.get_users()
         if not users:
@@ -683,7 +765,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.5')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.6')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Fast Sentinel | Rapid Ingestion | 15s Debounce | Protocol Resync')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
@@ -767,10 +849,13 @@ def main():
             continue
 
         # Hardware connection recovered!
+        global _ACTIVE_ZK_CONN
+        _ACTIVE_ZK_CONN = conn
+        save_active_session(conn)
         ta500_fail_count = 0
         failure_start_time = 0.0
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
-        # v16.5: NO enable_device() after connect — device is already active on fresh connect.
+        # v16.6: NO enable_device() after connect — device is already active on fresh connect.
 
         # ── 2. Status & Catch-Up Check ───────────────────────────────────────
         try:
@@ -913,6 +998,7 @@ def main():
             logger.warning(f'⚠️ TA500 stream notice: {err}. Auto-reconnecting...')
         finally:
             safe_disconnect(conn)
+            _ACTIVE_ZK_CONN = None
             time.sleep(3)
 
 if __name__ == '__main__':
