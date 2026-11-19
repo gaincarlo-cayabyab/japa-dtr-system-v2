@@ -494,21 +494,21 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
 
             if record_size == 8:
                 while len(raw_data) >= 8:
-                    uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, b' ')[:8])
+                    uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, bytes(1))[:8])
                     raw_data = raw_data[8:]
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(str(uid), dt, status, punch, uid))
             elif record_size == 16:
                 while len(raw_data) >= 16:
-                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, b' ')[:16])
+                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, bytes(1))[:16])
                     raw_data = raw_data[16:]
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(str(user_id), dt, status, punch, int(user_id)))
             else:  # 40-byte format
                 while len(raw_data) >= 40:
-                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, b' ')[:40])
+                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, bytes(1))[:40])
                     raw_data = raw_data[40:]
-                    uid_str = user_id_bytes.split(b' ')[0].decode(errors='ignore').strip()
+                    uid_str = user_id_bytes.split(bytes(1))[0].decode(errors='ignore').strip()
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
