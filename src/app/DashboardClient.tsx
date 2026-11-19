@@ -248,7 +248,7 @@ export function DashboardClient({
             </div>
           </div>
           <p className="text-slate-500 text-xs md:text-sm">
-            Live workforce analytics  &middot;  Shift performance  &middot;  Biometric hardware telemetry
+            Live workforce analytics · Shift performance · Biometric hardware telemetry
           </p>
         </div>
 
@@ -351,7 +351,7 @@ export function DashboardClient({
           <p className="text-3xl font-black text-slate-900 mt-2">{stats.totalEmployees}</p>
           <div className="mt-2.5 flex items-center gap-1.5 text-xs text-slate-500 font-medium">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-500"></span>
-            <span>21 Dagupan  &middot;  3 Manila</span>
+            <span>21 Dagupan · 3 Manila</span>
           </div>
         </div>
 
@@ -466,7 +466,7 @@ export function DashboardClient({
                         <div className="absolute -top-14 z-20 bg-slate-900 text-white text-xs rounded-xl py-1.5 px-3 shadow-lg whitespace-nowrap pointer-events-none transform -translate-y-1">
                           <p className="font-bold">{t.label}</p>
                           <p className="text-[11px] text-slate-300">
-                            {t.present} Present ({t.rate}%)  &middot;  {t.hours} hrs  &middot;  {t.completed} Completed
+                            {t.present} Present ({t.rate}%) · {t.hours} hrs · {t.completed} Completed
                           </p>
                         </div>
                       )}

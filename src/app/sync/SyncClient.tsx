@@ -215,11 +215,11 @@ export function SyncClient({
       type: 'Edge Ingestion & Anti-Double Tap Gateway',
       ip: '192.168.0.112 (WLAN Static Lease)',
       port: 'Loopback / HTTPS Uplink',
-      protocol: 'Python 3.11  &middot;  tablet_bridge.py v16.5',
+      protocol: 'Python 3.11 · tablet_bridge.py v16.5',
       statusBadge: isBridgeDown ? 'DAEMON TERMINATED' : 'ACTIVE POLLING (8s)',
       statusColor: isBridgeDown ? 'rose' : 'amber',
       specs: [
-        { label: 'Platform & OS', value: 'Android 14 (One UI 6.0)  &middot;  Termux' },
+        { label: 'Platform & OS', value: 'Android 14 (One UI 6.0) · Termux' },
         { label: 'Processor', value: 'Qualcomm Snapdragon 695 5G' },
         { label: 'Architecture', value: 'Dual-Socket Isolation (Heartbeat + Dedicated Fetch)' },
         { label: 'Maintenance Schedule', value: 'Option B Hourly Protected Rest (Termux Cron)' },
@@ -240,7 +240,7 @@ export function SyncClient({
       ip: 'aws-0-ap-southeast-1.pooler.supabase.com',
       port: '5432 / 6543 (SSL Enforced)',
       protocol: 'PostgreSQL Wire Protocol + Realtime WS',
-      statusBadge: isCloudDown ? 'GATEWAY TIMEOUT (504)' : 'CONNECTED  &middot;  SYNCHRONIZED',
+      statusBadge: isCloudDown ? 'GATEWAY TIMEOUT (504)' : 'CONNECTED · SYNCHRONIZED',
       statusColor: isCloudDown ? 'rose' : 'emerald',
       specs: [
         { label: 'Cloud Region', value: 'AWS Singapore (ap-southeast-1)' },
@@ -264,7 +264,7 @@ export function SyncClient({
       ip: 'japa-dtr-system.vercel.app',
       port: '443 (HTTPS / TLS 1.3)',
       protocol: 'HTTP/2 + Edge Middleware',
-      statusBadge: 'ONLINE  &middot;  PRODUCTION',
+      statusBadge: 'ONLINE · PRODUCTION',
       statusColor: 'indigo',
       specs: [
         { label: 'Edge Platform', value: 'Vercel Global Edge Network' },
@@ -455,12 +455,12 @@ export function SyncClient({
         </div>
         <div className="flex-1">
           <h2 className="text-sm font-black uppercase tracking-wider">
-            {isHealthy && (isManualSim ? 'Operational  &middot;  All Biometric Nodes Synchronized' : 'Live Pipeline 100% Operational  &middot;  All Hardware Synchronized')}
-            {isSlow && 'Performance Advisory  &middot;  Elevated Latency / Wireless Jitter Detected'}
-            {isLanBroken && (isManualSim ? 'Hardware Fault  &middot;  RJ45 Ethernet Disconnected from FingerTec TA500' : 'Live Hardware Advisory  &middot;  FingerTec TA500 Powered Off or Unreachable')}
-            {isWifiBroken && 'Wireless Link Severed  &middot;  Wi-Fi Repeater Lost 2.4 GHz Association'}
-            {isBridgeDown && (isManualSim ? 'Daemon Inactive  &middot;  Termux Python Sync Engine Stopped on Tablet' : 'Live Daemon Offline  &middot;  Samsung Tab A9+ Bridge Inactive')}
-            {isCloudDown && 'WAN Outage  &middot;  Supabase Singapore Cloud Database Unreachable'}
+            {isHealthy && (isManualSim ? 'Operational · All Biometric Nodes Synchronized' : 'Live Pipeline 100% Operational · All Hardware Synchronized')}
+            {isSlow && 'Performance Advisory · Elevated Latency / Wireless Jitter Detected'}
+            {isLanBroken && (isManualSim ? 'Hardware Fault · RJ45 Ethernet Disconnected from FingerTec TA500' : 'Live Hardware Advisory · FingerTec TA500 Powered Off or Unreachable')}
+            {isWifiBroken && 'Wireless Link Severed · Wi-Fi Repeater Lost 2.4 GHz Association'}
+            {isBridgeDown && (isManualSim ? 'Daemon Inactive · Termux Python Sync Engine Stopped on Tablet' : 'Live Daemon Offline · Samsung Tab A9+ Bridge Inactive')}
+            {isCloudDown && 'WAN Outage · Supabase Singapore Cloud Database Unreachable'}
           </h2>
           <p className="text-xs mt-0.5 leading-relaxed opacity-90 font-medium">
             {isHealthy &&
@@ -573,7 +573,7 @@ export function SyncClient({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      DEVICE #1  &middot;  BIOMETRIC TERMINAL
+                      DEVICE #1 · BIOMETRIC TERMINAL
                     </span>
                     <span
                       className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -714,7 +714,7 @@ export function SyncClient({
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${isLanBroken ? 'bg-rose-500' : 'bg-blue-500 animate-ping'}`} />
-                    <span>{isLanBroken ? '✕ LAN SEVERED' : 'Cat6 RJ45  &rarr;  100M'}</span>
+                    <span>{isLanBroken ? '✕ LAN SEVERED' : 'Cat6 RJ45 → 100M'}</span>
                   </span>
 
                   {/* Sleek Continuous Cable Line */}
@@ -741,7 +741,7 @@ export function SyncClient({
 
                   {/* Bottom label */}
                   <span className="text-[8px] font-mono font-bold text-slate-500 whitespace-nowrap mt-1">
-                    {isLanBroken ? 'Port Closed' : 'UDP 4370  &middot;  Flow: Active'}
+                    {isLanBroken ? 'Port Closed' : 'UDP 4370 · Flow: Active'}
                   </span>
                 </div>
               </div>
@@ -806,7 +806,7 @@ export function SyncClient({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      DEVICE #2  &middot;  ETHERNET &amp; WI-FI REPEATER
+                      DEVICE #2 · ETHERNET &amp; WI-FI REPEATER
                     </span>
                     <span
                       className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -868,7 +868,7 @@ export function SyncClient({
                       <div className="flex-1 h-6 rounded-full bg-slate-200/90 border border-slate-300 p-0.5 overflow-hidden relative shadow-inner">
                         {isLanBroken ? (
                           <div className="w-full h-full rounded-full bg-rose-100 flex items-center justify-center text-[8px] font-mono font-black text-rose-700 tracking-wider">
-                            PORT OFFLINE  &middot;  NO CARRIER / TA500 OFF
+                            PORT OFFLINE · NO CARRIER / TA500 OFF
                           </div>
                         ) : (
                           <>
@@ -888,9 +888,9 @@ export function SyncClient({
 
                     {/* Active Telemetry Sub-row */}
                     <div className="flex items-center justify-between text-[9px] font-mono text-slate-500 mt-2 pt-1.5 border-t border-slate-200">
-                      <span>Wire: STP 4-Pair 24AWG  &middot;  Cat6</span>
+                      <span>Wire: STP 4-Pair 24AWG · Cat6</span>
                       <span className={isLanBroken ? 'text-rose-600 font-bold' : 'text-blue-700 font-bold'}>
-                        {isLanBroken ? 'Link State: DOWN' : 'UDP Port: 4370  &middot;  Flow: Active'}
+                        {isLanBroken ? 'Link State: DOWN' : 'UDP Port: 4370 · Flow: Active'}
                       </span>
                     </div>
                   </div>
@@ -964,7 +964,7 @@ export function SyncClient({
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] font-mono text-slate-500 font-bold">802.11n  &middot;  2.4 GHz</span>
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">802.11n · 2.4 GHz</span>
                   <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                     Inspect Specs <ChevronRight className="w-3 h-3" />
                   </span>
@@ -985,7 +985,7 @@ export function SyncClient({
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${isWifiBroken ? 'bg-rose-500' : 'bg-purple-500 animate-ping'}`} />
-                    <span>{isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi  &rarr; '}</span>
+                    <span>{isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi  → '}</span>
                   </span>
 
                   {/* Sleek Wireless Link Conduit */}
@@ -1109,7 +1109,7 @@ export function SyncClient({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-                      DEVICE #3  &middot;  LOCAL BRIDGE HOST
+                      DEVICE #3 · LOCAL BRIDGE HOST
                     </span>
                     <span
                       className={`text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full border ${
@@ -1133,7 +1133,7 @@ export function SyncClient({
                     <div className="bg-slate-950 rounded-lg p-2.5 font-mono text-[10px] text-slate-200 border border-slate-800 leading-relaxed shadow-inner">
                       <div className="flex items-center justify-between text-slate-400 border-b border-slate-800 pb-1 mb-1.5 text-[9px]">
                         <span className="flex items-center gap-1 text-amber-400 font-bold">
-                          <Terminal className="w-3 h-3" /> Termux  &middot;  python tablet_bridge.py
+                          <Terminal className="w-3 h-3" /> Termux · python tablet_bridge.py
                         </span>
                         <span>v16.5</span>
                       </div>
@@ -1154,7 +1154,7 @@ export function SyncClient({
                             Bridge daemon active (Heartbeat {heartbeatAgeSec}s ago)
                           </div>
                           <div className="text-cyan-300 text-[9px]">
-                            [SUPERVISOR] 24/7 Watchdog Protected  &middot;  Option B Active
+                            [SUPERVISOR] 24/7 Watchdog Protected · Option B Active
                           </div>
                         </div>
                       ) : (
@@ -1166,7 +1166,7 @@ export function SyncClient({
                             [AUDIT] 60s Direct Flash Check Active
                           </div>
                           <div className="text-slate-400 text-[9px]">
-                            [HEARTBEAT] {heartbeatAgeSec}s ago  &middot;  10m Rejuvenation Active
+                            [HEARTBEAT] {heartbeatAgeSec}s ago · 10m Rejuvenation Active
                           </div>
                         </div>
                       )}
@@ -1180,7 +1180,7 @@ export function SyncClient({
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-[11px] font-mono text-slate-500 font-bold">Termux  &middot;  Python 3.11</span>
+                  <span className="text-[11px] font-mono text-slate-500 font-bold">Termux · Python 3.11</span>
                   <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
                     Inspect Specs <ChevronRight className="w-3 h-3" />
                   </span>
@@ -1239,7 +1239,7 @@ export function SyncClient({
                 }`}
               >
                 <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-600' : 'text-blue-600 animate-spin'}`} style={{ animationDuration: '8s' }} />
-                <span className="font-black">INTERNET WAN UPLINK  &rarr;  SINGAPORE CLOUD REGION</span>
+                <span className="font-black">INTERNET WAN UPLINK → SINGAPORE CLOUD REGION</span>
                 <ArrowRight className="w-3 h-3 text-slate-400 hidden sm:inline" />
                 <span
                   className={`font-mono font-black px-2 py-0.5 rounded text-[10px] border ${
@@ -1350,7 +1350,7 @@ export function SyncClient({
                     </span>
                     <div>
                       <h3 className="text-sm font-black text-slate-900">Supabase Cloud Database</h3>
-                      <p className="text-[11px] text-slate-500 font-mono">PostgreSQL 15  &middot;  Singapore</p>
+                      <p className="text-[11px] text-slate-500 font-mono">PostgreSQL 15 · Singapore</p>
                     </div>
                   </div>
                   <span
@@ -1434,7 +1434,7 @@ export function SyncClient({
                     </div>
                   </div>
                   <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
-                    ● ONLINE  &middot;  LIVE
+                    ● ONLINE · LIVE
                   </span>
                 </div>
 
@@ -1479,7 +1479,7 @@ export function SyncClient({
               </span>
               <span className="flex items-center gap-1.5 text-cyan-800 font-black bg-white/80 px-2.5 py-1 rounded-full border border-cyan-200 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
-                <span> &#9664;  WebSocket Realtime CDC Channel (Live Punch Push)  &#9654; </span>
+                <span> ◀ WebSocket Realtime CDC Channel (Live Punch Push) ▶ </span>
               </span>
               <span className="flex items-center gap-1.5 text-indigo-800">
                 <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -1703,7 +1703,7 @@ export function SyncClient({
                             ? 'bg-red-50 text-red-700 border-red-200'
                             : 'bg-slate-100 text-slate-700 border-slate-200'
                         }`}>
-                          {log.status === 0 ? ' &rarr;  TIME IN' : log.status === 1 ? ' &larr;  TIME OUT' : `Status ${log.status}`}
+                          {log.status === 0 ? ' →  TIME IN' : log.status === 1 ? ' ←  TIME OUT' : `Status ${log.status}`}
                         </span>
                       </td>
                       <td className="px-4 py-3 font-mono text-slate-500 text-[11px]">
