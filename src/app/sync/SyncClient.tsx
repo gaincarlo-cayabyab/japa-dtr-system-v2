@@ -284,7 +284,7 @@ export function SyncClient({
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* â”€â”€ Top Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ──── Top Header ────────────────────────────────────────────────────────────────────────────────────────────── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div>
           <div className="flex items-center gap-2.5">
@@ -319,7 +319,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* â”€â”€ Scenario / Simulation Selector (Light Theme) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ──── Scenario / Simulation Selector (Light Theme) ──────────────────────────── */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
           <div className="flex items-center gap-2 flex-wrap">
@@ -377,7 +377,7 @@ export function SyncClient({
             }`}
           >
             <AlertTriangle className={`w-4 h-4 ${scenario === 'slow_network' ? 'text-white' : 'text-amber-600'}`} />
-            <span>ðŸŸ¡ High Latency</span>
+            <span>High Latency</span>
           </button>
 
           <button
@@ -390,7 +390,7 @@ export function SyncClient({
             }`}
           >
             <Cable className={`w-4 h-4 ${scenario === 'lan_unplugged' ? 'text-white' : 'text-rose-600'}`} />
-            <span>ðŸ”´ LAN Unplugged</span>
+            <span>LAN Unplugged</span>
           </button>
 
           <button
@@ -403,7 +403,7 @@ export function SyncClient({
             }`}
           >
             <WifiOff className={`w-4 h-4 ${scenario === 'wifi_disconnected' ? 'text-white' : 'text-rose-600'}`} />
-            <span>ðŸ”´ Wi-Fi Drop</span>
+            <span>Wi-Fi Drop</span>
           </button>
 
           <button
@@ -416,7 +416,7 @@ export function SyncClient({
             }`}
           >
             <Tablet className={`w-4 h-4 ${scenario === 'bridge_offline' ? 'text-white' : 'text-rose-600'}`} />
-            <span>ðŸ”´ Bridge Offline</span>
+            <span>Bridge Offline</span>
           </button>
 
           <button
@@ -429,12 +429,12 @@ export function SyncClient({
             }`}
           >
             <Cloud className={`w-4 h-4 ${scenario === 'cloud_error' ? 'text-white' : 'text-rose-600'}`} />
-            <span>ðŸ”´ Cloud/WAN Out</span>
+            <span>Cloud/WAN Out</span>
           </button>
         </div>
       </div>
 
-      {/* â”€â”€ Active Status Alert Banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ──── Active Status Alert Banner ────────────────────────────────────────────────────────────────────── */}
       <div
         className={`p-4 rounded-2xl border transition-all flex items-start gap-3 shadow-sm ${
           isHealthy
@@ -485,7 +485,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* â”€â”€ Visual Topology Architecture Diagram (Light Theme 3D/2D Visual) â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ──── Visual Topology Architecture Diagram (Light Theme 3D/2D Visual) ──────────────── */}
       <div
         className="rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden relative"
         style={{
@@ -541,11 +541,11 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* â”€â”€ 3D PHYSICAL HARDWARE DIAGRAM ROW (LOCAL EDGE TIER WITH CONNECTING LINES) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ──── 3D PHYSICAL HARDWARE DIAGRAM ROW (LOCAL EDGE TIER WITH CONNECTING LINES) ────────────────── */}
           <div className="relative mb-0">
             <div className="flex flex-col lg:flex-row items-stretch justify-between gap-0 relative">
 
-              {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ════════════════════════ NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) ════════════════════════ */}
               <div
                 onClick={() => setSelectedNode('ta500')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
@@ -700,7 +700,7 @@ export function SyncClient({
                 </div>
               </div>
 
-              {/* â”€â”€ CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) â”€â”€ */}
+              {/* ──── CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) ──── */}
               <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20 -mx-1">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top badge */}
@@ -714,7 +714,7 @@ export function SyncClient({
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${isLanBroken ? 'bg-rose-500' : 'bg-blue-500 animate-ping'}`} />
-                    <span>{isLanBroken ? '✕ LAN SEVERED' : 'Cat6 RJ45 âž” 100M'}</span>
+                    <span>{isLanBroken ? '✕ LAN SEVERED' : 'Cat6 RJ45 → 100M'}</span>
                   </span>
 
                   {/* Sleek Continuous Cable Line */}
@@ -746,7 +746,7 @@ export function SyncClient({
                 </div>
               </div>
 
-              {/* â”€â”€ CONNECTOR 1: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) â”€â”€ */}
+              {/* ──── CONNECTOR 1: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) ──── */}
               <div className="flex lg:hidden flex-col items-center justify-center py-2 relative">
                 <div className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs z-10 -mb-1 ${
                   isLanBroken ? 'bg-rose-500 ring-2 ring-rose-200' : 'bg-blue-600 ring-2 ring-blue-200'
@@ -772,7 +772,7 @@ export function SyncClient({
                 </span>
               </div>
 
-              {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 2: WI-FI REPEATER (AP BRIDGE) â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ════════════════════════ NODE 2: WI-FI REPEATER (AP BRIDGE) ════════════════════════ */}
               <div
                 onClick={() => setSelectedNode('repeater')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
@@ -971,7 +971,7 @@ export function SyncClient({
                 </div>
               </div>
 
-              {/* â”€â”€ CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) â”€â”€ */}
+              {/* ──── CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) ──── */}
               <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20 -mx-1">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top badge */}
@@ -985,7 +985,7 @@ export function SyncClient({
                     }`}
                   >
                     <span className={`w-1.5 h-1.5 rounded-full ${isWifiBroken ? 'bg-rose-500' : 'bg-purple-500 animate-ping'}`} />
-                    <span>{isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi âž”'}</span>
+                    <span>{isWifiBroken ? '✕ NO SIGNAL' : '2.4 GHz Wi-Fi →'}</span>
                   </span>
 
                   {/* Sleek Wireless Link Conduit */}
@@ -1017,7 +1017,7 @@ export function SyncClient({
                 </div>
               </div>
 
-              {/* â”€â”€ CONNECTOR 2: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) â”€â”€ */}
+              {/* ──── CONNECTOR 2: MOBILE VERTICAL BRIDGE (EDGE-TO-EDGE) ──── */}
               <div className="flex lg:hidden flex-col items-center justify-center py-2 relative">
                 <div className={`w-3.5 h-3.5 rounded-full border-2 border-white shadow-xs z-10 -mb-1 ${
                   isWifiBroken ? 'bg-rose-500 ring-2 ring-rose-200' : 'bg-purple-600 ring-2 ring-purple-200'
@@ -1043,7 +1043,7 @@ export function SyncClient({
                 </span>
               </div>
 
-              {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE ENGINE) â•â•â•â•â•â•â•â•â•â•â•â• */}
+              {/* ════════════════════════ NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE ENGINE) ════════════════════════ */}
               <div
                 onClick={() => setSelectedNode('tablet')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
@@ -1067,7 +1067,7 @@ export function SyncClient({
                   <div className="w-1.5 h-1.5 rounded-full bg-white" />
                 </div>
 
-                {/* â”€â”€ VERTICAL CONDUIT: TABLET TO WAN UPLINK BEAM (SEAMLESS FLUSH DOCKING) â”€â”€ */}
+                {/* ──── VERTICAL CONDUIT: TABLET TO WAN UPLINK BEAM (SEAMLESS FLUSH DOCKING) ──── */}
                 <div className="absolute left-1/2 -translate-x-1/2 top-full h-16 w-2.5 z-20 hidden lg:flex flex-col items-center pointer-events-none">
                   {/* Top connection socket touching Card 3 bottom */}
                   <div className={`absolute top-0 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-white shadow-sm z-30 flex items-center justify-center ${
@@ -1213,7 +1213,7 @@ export function SyncClient({
             </span>
           </div>
 
-          {/* â”€â”€ CLOUD UPLINK BEAM (HIGH-SPEED WAN PIPELINE CONTINUOUS BUS) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ──── CLOUD UPLINK BEAM (HIGH-SPEED WAN PIPELINE CONTINUOUS BUS) ────────────────────────────── */}
           <div className="relative lg:mt-16 mt-3 mb-0 z-10">
             <div className={`w-full h-5 rounded-full border-2 relative overflow-hidden flex items-center justify-center shadow-md ${
               isCloudDown ? 'bg-rose-100 border-rose-400' : 'bg-slate-100 border-slate-400'
@@ -1239,7 +1239,7 @@ export function SyncClient({
                 }`}
               >
                 <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-600' : 'text-blue-600 animate-spin'}`} style={{ animationDuration: '8s' }} />
-                <span className="font-black">INTERNET WAN UPLINK âž” SINGAPORE CLOUD REGION</span>
+                <span className="font-black">INTERNET WAN UPLINK → SINGAPORE CLOUD REGION</span>
                 <ArrowRight className="w-3 h-3 text-slate-400 hidden sm:inline" />
                 <span
                   className={`font-mono font-black px-2 py-0.5 rounded text-[10px] border ${
@@ -1256,7 +1256,7 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* â”€â”€ CONNECTOR 4: BRANCHING DOWNWARD PIPELINES (SEAMLESSLY DOCKING TO CLOUD CARDS) â”€â”€ */}
+          {/* ──── CONNECTOR 4: BRANCHING DOWNWARD PIPELINES (SEAMLESSLY DOCKING TO CLOUD CARDS) ──── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5 relative">
             {/* Col 1 vertical conduit down to Supabase */}
             <div className="flex flex-col items-center relative h-10 pointer-events-none">
@@ -1324,10 +1324,10 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* â”€â”€ 3D CLOUD & APPLICATION TIER (SUPABASE + VERCEL) â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ──── 3D CLOUD & APPLICATION TIER (SUPABASE + VERCEL) ────────────────── */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-            {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 4: SUPABASE CLOUD DATABASE (3D CYLINDERS) â•â•â•â•â•â•â•â•â•â•â•â• */}
+            {/* ════════════════════════ NODE 4: SUPABASE CLOUD DATABASE (3D CYLINDERS) ════════════════════════ */}
             <div
               onClick={() => setSelectedNode('supabase')}
               className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
@@ -1407,7 +1407,7 @@ export function SyncClient({
               </div>
             </div>
 
-            {/* â•â•â•â•â•â•â•â•â•â•â•â• NODE 5: JAPA DTR ENTERPRISE PORTAL (VERCEL) â•â•â•â•â•â•â•â•â•â•â•â• */}
+            {/* ════════════════════════ NODE 5: JAPA DTR ENTERPRISE PORTAL (VERCEL) ════════════════════════ */}
             <div
               onClick={() => setSelectedNode('vercel')}
               className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
@@ -1470,7 +1470,7 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* â”€â”€ CONNECTOR 5: REALTIME BI-DIRECTIONAL CLOUD BUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ──── CONNECTOR 5: REALTIME BI-DIRECTIONAL CLOUD BUS ────────────────────── */}
           <div className="mt-4 flex items-center justify-center">
             <div className="w-full max-w-xl bg-gradient-to-r from-emerald-50 via-cyan-50 to-indigo-50 px-4 py-2.5 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono font-bold text-slate-600 shadow-xs">
               <span className="flex items-center gap-1.5 text-emerald-800">
@@ -1479,7 +1479,7 @@ export function SyncClient({
               </span>
               <span className="flex items-center gap-1.5 text-cyan-800 font-black bg-white/80 px-2.5 py-1 rounded-full border border-cyan-200 shadow-xs">
                 <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
-                <span>â—€ WebSocket Realtime CDC Channel (Live Punch Push) ▶</span>
+                <span>◀ WebSocket Realtime CDC Channel (Live Punch Push) ▶</span>
               </span>
               <span className="flex items-center gap-1.5 text-indigo-800">
                 <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -1488,7 +1488,7 @@ export function SyncClient({
             </div>
           </div>
 
-          {/* â”€â”€ SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+          {/* ──── SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR ────────────────── */}
           <div className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-4">
               <div>
@@ -1546,7 +1546,7 @@ export function SyncClient({
         </div>
       </div>
 
-      {/* â”€â”€ Troubleshooting & Component Details Reference â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ──── Troubleshooting & Component Details Reference ────────────────────── */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <h2 className="text-sm font-black text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-2">
           <Info className="w-4 h-4 text-blue-600" />
@@ -1564,7 +1564,7 @@ export function SyncClient({
               UDP Port <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">4370</code>.
             </p>
             <p className="text-[11px] text-slate-500">
-              ðŸ’¡ If unreachable: check if the LAN cable link light is blinking on both the TA500 and the repeater.
+              💡 If unreachable: check if the LAN cable link light is blinking on both the TA500 and the repeater.
             </p>
           </div>
 
@@ -1579,7 +1579,7 @@ export function SyncClient({
               Allows the biometric terminal to reside anywhere without running cables across the office.
             </p>
             <p className="text-[11px] text-slate-500">
-              ðŸ’¡ If disconnected: verify the power LED and ensure the repeater is within good range of the Wi-Fi router.
+              💡 If disconnected: verify the power LED and ensure the repeater is within good range of the Wi-Fi router.
             </p>
           </div>
 
@@ -1592,7 +1592,7 @@ export function SyncClient({
               Dedicated local tablet running Python Bridge Engine v16.3 via Termux. Features single-socket bulletproof session, graduated self-healing, and Option B hourly protected maintenance.
             </p>
             <p className="text-[11px] text-slate-500">
-              ðŸ’¡ If stopped: open Termux on the tablet and run{' '}
+              💡 If stopped: open Termux on the tablet and run{' '}
               <code className="bg-slate-200 px-1 py-0.5 rounded font-mono text-[11px]">
                 bash sync-bridge/watchdog.sh
               </code>
