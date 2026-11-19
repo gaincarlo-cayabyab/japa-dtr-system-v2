@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v16.7 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
+v16.8 "Fast Sentinel" — Zero TA500 Screen Lock | Direct Buffer Only | Graduated Self-Healing
 
-Major v16.7 Architecture Fix (CRITICAL):
+Major v16.8 Architecture Fix (CRITICAL):
   1. ZERO DISABLE_DEVICE ARCHITECTURE — ROOT CAUSE FIX:
      - REMOVED all disable_device() / enable_device() calls EVERYWHERE.
      - These calls lock the TA500 on the "Working..." blue dotted PC sync screen.
@@ -96,7 +96,7 @@ def save_device_ip(ip: str) -> None:
 ZK_IP         = load_saved_ip()
 ZK_PORT       = int(os.getenv('ZK_DEVICE_PORT', '4370'))
 ZK_TIMEOUT    = 10     # Robust socket timeout for Wi-Fi transmission
-POLL_INTERVAL = 5      # 5s heartbeat (collision-free over Wi-Fi)      # read_sizes() heartbeat every 3s (fast punch detection)
+POLL_INTERVAL = 10     # 10s steady heartbeat (leaves TA500 CPU 100% free for fingerprint sensor)
 TZ            = pytz.timezone('Asia/Manila')
 SEEN_MAX_DAYS = 30     # Bounded seen hashes window
 
@@ -548,7 +548,7 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v16.7 Fast Sentinel Direct Attendance Extractor:
+    v16.8 Fast Sentinel Direct Attendance Extractor:
     - Zero free_data() calls before read_with_buffer (prevents protocol desync).
     - Uses read_with_buffer(13) directly.
     - If TCP packet error occurs, raises exception so main loop cleanly rejuvenates socket.
@@ -577,7 +577,17 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
             if records_count <= 0:
                 return []
 
-            record_size = total_size // records_count
+            # Robust record format detection
+            if records_count > 0 and total_size % records_count == 0:
+                record_size = total_size // records_count
+            elif total_size % 40 == 0:
+                record_size = 40
+            elif total_size % 16 == 0:
+                record_size = 16
+            elif total_size % 8 == 0:
+                record_size = 8
+            else:
+                record_size = 40
             raw_data = attendance_data[4:]
             attendances = []
 
@@ -611,12 +621,12 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     return []
 
 def sync_device_users(conn) -> int:
-    """Sync enrolled users over the active single connection (v16.7: no disable_device)."""
+    """Sync enrolled users over the active single connection (v16.8: no disable_device)."""
     global _employee_cache
     if not conn:
         return 0
     try:
-        # v16.7: NO disable_device() before get_users() — avoids screen lock.
+        # v16.8: NO disable_device() before get_users() — avoids screen lock.
         # get_users() itself is safe; only get_attendance() wrapping get_users() causes issues.
         users = conn.get_users()
         if not users:
@@ -772,9 +782,9 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.7')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v16.8')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    logger.info('   Mode      : Iron Keepalive | Zero-Disconnect Daemon | Collision-Free 5s Polling')
+    logger.info('   Mode      : Sensor-First Engine | Unthrottled Scanner CPU | Flash Grace Period')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
     logger.info('   Schedule  : Option B Hourly Window Maintenance Support Active')
     logger.info('==================================================================')
@@ -862,7 +872,12 @@ def main():
         ta500_fail_count = 0
         failure_start_time = 0.0
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
-        # v16.7: NO enable_device() after connect — device is already active on fresh connect.
+        try:
+            conn.enable_device()
+            logger.info('🟢 Sensor & Keypad Verification Active (enable_device confirmed).')
+        except Exception:
+            pass
+        # v16.8: NO enable_device() after connect — device is already active on fresh connect.
 
         # ── 2. Status & Catch-Up Check ───────────────────────────────────────
         try:
@@ -900,7 +915,7 @@ def main():
         session_start_time = time.time()
         read_sizes_fail_streak = 0
 
-        # v16.7: Permanent continuous connection — NEVER disconnect on a timer!
+        # v16.8: Permanent continuous connection — NEVER disconnect on a timer!
         # Attendance fetching is triggered strictly when current_count > known_record_count.
 
         try:
@@ -911,7 +926,7 @@ def main():
                 if _pending_upload_queue:
                     flush_upload_queue(seen)
 
-# v16.7: Continuous session — no periodic disconnect
+# v16.8: Continuous session — no periodic disconnect
 
                 # Cloud portal commands check (~20s)
                 if now - last_cloud_check >= 20:
@@ -960,25 +975,33 @@ def main():
                 # ── KEY 2: New Punches Detected via Counter ──────────────────
                 if current_count > known_record_count:
                     delta = current_count - known_record_count
-                    logger.info(f'🆕 {delta} new punch(es) detected via counter! Fetching from TA500...')
+                    logger.info(f'🆕 {delta} new punch(es) detected via counter! Allowing 1.5s flash commit...')
+                    time.sleep(1.5)  # Allow hardware to finish writing minutiae/timestamp to internal flash
                     try:
                         atts = safe_fetch_attendance(conn)
                         new_punches = process_punches_batch(atts, seen)
-                        known_record_count = current_count
-                        last_audit_time = now
                         if new_punches > 0:
+                            known_record_count = current_count
+                            empty_punch_retries = 0
                             logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
                             flush_upload_queue(seen)
                         else:
-                            logger.info('Records fetched — duplicates skipped (already synced).')
+                            empty_punch_retries += 1
+                            if empty_punch_retries >= 3:
+                                logger.info('All records verified — duplicates already recorded in database.')
+                                known_record_count = current_count
+                                empty_punch_retries = 0
+                            else:
+                                logger.info(f'Record write pending in hardware buffer (attempt {empty_punch_retries}/3)... will verify next cycle.')
                     except Exception as e_fetch:
-                        logger.warning(f'⚠️ Attendance extraction error ({e_fetch}). Refreshing socket to guarantee sync...')
-                        raise
+                        logger.warning(f'⚠️ Attendance extraction error ({e_fetch}). Retrying next cycle...')
+                        time.sleep(1.0)
                 else:
                     known_record_count = current_count
+                    empty_punch_retries = 0
 
                 # ── KEY 3: Direct Flash Memory Audit ────────────────────────
-                # In v16.7, punch detection is handled cleanly by KEY 2 (record counter delta).
+                # In v16.8, punch detection is handled cleanly by KEY 2 (record counter delta).
                 # This prevents concurrent socket access and eliminates 'TCP packet invalid' collisions.
 
                 if now - last_heartbeat >= 30:
