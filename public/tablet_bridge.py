@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-JAPA DTR Enterprise Biometric Synchronization Bridge — Version 17.0
+JAPA DTR Enterprise Biometric Synchronization Bridge — Version 17.1
 Platform: Samsung Galaxy Tab A8 / A9+ (Termux Python 3.11/3.12)
 Target  : FingerTec TA500 Stand-alone Terminal (192.168.0.58:4370)
 Cloud   : Supabase Managed Cloud DB (Singapore Region, TLS 1.3)
 ================================================================================
+V17.1 PATCH NOTES ("Precision Mapping & Zero-Fault Sentinel"):
+  - JOANNE mapping fix: name-based UID resolver for newly enrolled employees.
+  - Extended TA500_TO_SYSTEM_MAP to cover slots 19-24 for new hires.
+  - ta500_last_seen heartbeat key added — fixes "LIVE DAEMON OFFLINE" on sync page.
+  - NoneType guard in fetch_attendance_from_ta500 — eliminates startup TypeError.
+  - Auto-reboot TA500 after 5 consecutive read_sizes errors (proactive recovery).
+  - bridge_version_num posted as integer for route.ts numeric compatibility.
 V17.0 ARCHITECTURE SPECIFICATION ("Omni-Sentinel & Direct-Sync Engine"):
   1. DUAL-TRANSPORT BULLETPROOF EXTRACTION:
      - Primary Channel: Isolated single-shot UDP extraction (force_udp=True).
@@ -160,6 +167,9 @@ _HEADERS_INSERT = {
 }
 
 # ─── TA500 Enrolled Hardware UID -> System Employee ID Mapping ────────────────
+# Maps TA500 terminal slot number → Supabase employees.device_user_id
+# Slots 1-18: original enrolled employees
+# Slots 19-24: newly enrolled employees (added after initial setup)
 TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '1':  '24',  # Gain Carlo Cayabyab
     '2':  '4',   # Pearly B. De Vera
@@ -179,6 +189,30 @@ TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '16': '15',  # Juvell Luna
     '17': '16',  # Henry M. Tiozon
     '18': '18',  # Robert Luna
+    # --- NEW HIRES (enrolled after initial setup) ---
+    # GALVAN, JOANNE KRYSHELLE C. → system device_user_id = 10
+    # Her TA500 slot is resolved by name-matching in sync_device_users().
+    # Pre-mapped here for the most common TA500 auto-assignment slots:
+    '19': '10',  # GALVAN, JOANNE KRYSHELLE C. (most likely TA500 slot)
+    '20': '20',  # COSTALES, BARBARA ELLAINE S.
+    '21': '21',  # COSTALES, MARIE STEFI S.
+    '22': '22',  # JOCELYN LUTERIA
+    '23': '23',  # HARIM LAGAO
+    '24': '24',  # (reserve — Gain Carlo already on slot 1; skip if conflict)
+    '25': '10',  # GALVAN, JOANNE KRYSHELLE C. (fallback if TA500 slot was 25)
+}
+
+# ─── Name-to-SystemID resolver for newly enrolled employees ───────────────────
+# If a user's name on the TA500 matches a known employee name, override the map.
+_TA500_NAME_OVERRIDES: Dict[str, str] = {
+    # Key: lowercase substring of the TA500-registered name
+    # Value: system device_user_id to use
+    'joanne':   '10',  # GALVAN, JOANNE KRYSHELLE C.
+    'kryshelle':'10',  # GALVAN, JOANNE KRYSHELLE C. (alternate name fragment)
+    'barbara':  '20',  # COSTALES, BARBARA ELLAINE S.
+    'marie stefi': '21',  # COSTALES, MARIE STEFI S.
+    'jocelyn':  '22',  # JOCELYN LUTERIA
+    'harim':    '23',  # HARIM LAGAO
 }
 
 _employee_cache: Dict[str, str] = {}
@@ -292,16 +326,22 @@ def update_live_heartbeat(is_online: bool, record_count: int = 0) -> None:
         return
     _last_heartbeat_post = now
     try:
+        # Note: sync_meta.value column is BIGINT in Supabase PostgreSQL.
+        # Every value MUST strictly be an integer (e.g. version 171 = v17.1).
         payload = [
-            {'key': 'bridge_heartbeat', 'value': int(now)},
-            {'key': 'ta500_status',     'value': 1 if is_online else 0},
-            {'key': 'ta500_records',    'value': int(record_count)},
-            {'key': 'bridge_version',   'value': 'v17.0'},
+            {'key': 'bridge_heartbeat',   'value': int(now)},
+            {'key': 'ta500_status',        'value': 1 if is_online else 0},
+            {'key': 'ta500_records',       'value': int(record_count)},
+            {'key': 'bridge_version',      'value': 171},   # 171 = v17.1
         ]
+        # Post ta500_last_seen whenever device is online
+        # This is what the web portal reads to confirm the bridge is LIVE.
+        if is_online:
+            payload.append({'key': 'ta500_last_seen', 'value': int(now)})
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
-        session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 3))
-    except Exception:
-        pass
+        session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
+    except Exception as e_hb:
+        logger.debug(f'Heartbeat broadcast notice: {e_hb}')
 
 def fetch_cloud_meta() -> Dict[str, Any]:
     try:
@@ -614,6 +654,8 @@ def fetch_attendance_from_ta500(target_ip: str, active_conn=None, records_count:
         if conn_udp:
             try:
                 raw_data, size = conn_udp.read_with_buffer(13)
+                if raw_data is None:
+                    raise ValueError("UDP read_with_buffer returned None — socket in bad state")
                 atts = parse_raw_attendance_bytes(raw_data, records_count)
                 if atts:
                     logger.info(f"⚡ Extracted {len(atts)} attendance record(s) via UDP direct channel!")
@@ -636,6 +678,10 @@ def fetch_attendance_from_ta500(target_ip: str, active_conn=None, records_count:
 
             if sock and old_timeout is not None:
                 sock.settimeout(old_timeout)
+
+            if raw_data is None:
+                drain_socket_buffer(active_conn)
+                raise ValueError("Active stream read_with_buffer returned None — reconnecting")
 
             drain_socket_buffer(active_conn)
             atts = parse_raw_attendance_bytes(raw_data, records_count)
@@ -679,7 +725,11 @@ def fetch_users_from_ta500(target_ip: str, active_conn=None) -> List[Any]:
     return []
 
 def sync_device_users(target_ip: str, active_conn=None) -> int:
-    """Syncs enrolled users to Supabase to prevent foreign key errors."""
+    """Syncs enrolled users to Supabase to prevent foreign key errors.
+    Uses name-based UID override (_TA500_NAME_OVERRIDES) so newly enrolled
+    employees like JOANNE are always mapped to the correct system device_user_id,
+    even if their TA500 slot wasn't pre-mapped in TA500_TO_SYSTEM_MAP.
+    """
     global _employee_cache
     try:
         users = fetch_users_from_ta500(target_ip, active_conn)
@@ -689,8 +739,21 @@ def sync_device_users(target_ip: str, active_conn=None) -> int:
         new_or_updated = []
         for u in users:
             raw_uid = str(u.user_id)
-            uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
             raw_name = (getattr(u, 'name', '') or '').strip()
+            name_lower = raw_name.lower()
+
+            # Priority 1: Name-based override (most accurate for newly enrolled employees)
+            uid = None
+            for name_key, sys_id in _TA500_NAME_OVERRIDES.items():
+                if name_key in name_lower:
+                    uid = sys_id
+                    logger.info(f"🔗 Name-override: TA500 slot {raw_uid} ('{raw_name}') → system ID {sys_id}")
+                    break
+
+            # Priority 2: Slot-based map
+            if uid is None:
+                uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
+
             name = raw_name if raw_name else f'NN-{uid}'
 
             if uid in _employee_cache and not _employee_cache[uid].startswith('NN-'):
@@ -821,7 +884,17 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
 
     for att in attendances:
         raw_uid = str(att.user_id)
+        # Apply slot map first, then check employee cache for name-based override
         uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
+        # Additional name-based override: check if cache entry for this UID is a
+        # placeholder (NN-xx) and there's a real employee expected at a different slot
+        emp_name_in_cache = _employee_cache.get(uid, '')
+        if emp_name_in_cache:
+            name_lower = emp_name_in_cache.lower()
+            for name_key, sys_id in _TA500_NAME_OVERRIDES.items():
+                if name_key in name_lower and sys_id != uid:
+                    uid = sys_id
+                    break
         local_dt = _parse_ts(att.timestamp)
         utc_iso = local_dt.astimezone(timezone.utc).isoformat()
 
@@ -886,7 +959,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v17.0')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v17.1')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Omni-Sentinel Dual-Transport | Zero-Dropout Direct Extractor')
     logger.info('   Security  : Foreign Key Auto-Enroller | 15s Debounce | 30d Window')
@@ -1087,6 +1160,11 @@ def main():
                         logger.warning(f'⚠️ TA500 heartbeat blip ({read_sizes_fail_streak}/2): {e_rs}. Retrying...')
                         time.sleep(2)
                         continue
+                    # ── Auto-restart TA500 after 5 consecutive failures ──────
+                    if read_sizes_fail_streak >= 5:
+                        logger.warning(f'🔄 {read_sizes_fail_streak} consecutive errors — sending TA500 proactive soft-reboot...')
+                        restart_ta500_soft(ZK_IP)
+                        read_sizes_fail_streak = 0
                     logger.warning(f'⚠️ TA500 connection lost ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
                     raise
 

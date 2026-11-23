@@ -1,4 +1,4 @@
-﻿import { NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
@@ -35,7 +35,10 @@ export async function GET() {
     // Parse live heartbeat metadata from tablet bridge
     const metaMap: Record<string, number> = {}
     for (const row of metaResult.data || []) {
-      metaMap[row.key] = row.value
+      const numVal = typeof row.value === 'number' ? row.value : Number(row.value)
+      if (!isNaN(numVal)) {
+        metaMap[row.key] = numVal
+      }
     }
 
     const nowSec = Math.floor(Date.now() / 1000)
@@ -43,13 +46,20 @@ export async function GET() {
     const ta500Status = metaMap['ta500_status'] || 0
     const ta500LastSeen = metaMap['ta500_last_seen'] || 0
     const ta500Records = metaMap['ta500_records'] || 0
-    const bridgeVersion = metaMap['bridge_version'] || 16
+    // bridge_version as numeric: 171 = v17.1, 170 = v17.0, 168 = v16.8, etc.
+    const bridgeVersionNum = metaMap['bridge_version'] || 171
+    const bridgeVersionStr = bridgeVersionNum >= 100
+      ? `v${(bridgeVersionNum / 10).toFixed(1)}`
+      : `v${bridgeVersionNum}.0`
 
-    // Bridge is alive if heartbeat arrived within last 45 seconds
-    const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 45)
+    // Bridge is alive if heartbeat arrived within last 60 seconds
+    const bridgeOnline = bridgeHeartbeat > 0 && (nowSec - bridgeHeartbeat <= 60)
 
-    // TA500 is alive if bridge is alive AND device status is 1 AND last seen within last 25 seconds
-    const ta500Online = bridgeOnline && ta500Status === 1 && (nowSec - ta500LastSeen <= 25)
+    // TA500 is alive if bridge is online AND status=1 AND last seen within last 60s
+    // (with intelligent fallback to bridgeHeartbeat if ta500_last_seen is transitioning)
+    const effectiveLastSeen = ta500LastSeen > 0 ? ta500LastSeen : (ta500Status === 1 ? bridgeHeartbeat : 0)
+    const ta500LastSeenAge = effectiveLastSeen > 0 ? nowSec - effectiveLastSeen : 9999
+    const ta500Online = bridgeOnline && ta500Status === 1 && ta500LastSeenAge <= 60
 
     const heartbeatAgeSec = bridgeHeartbeat > 0 ? Math.max(0, nowSec - bridgeHeartbeat) : 9999
 
@@ -75,7 +85,8 @@ export async function GET() {
       bridge_online: bridgeOnline,
       ta500_online: ta500Online,
       ta500_records: ta500Records,
-      bridge_version: bridgeVersion,
+      bridge_version: bridgeVersionStr,
+      bridge_version_num: bridgeVersionNum,
       heartbeat_age_sec: heartbeatAgeSec,
       device: {
         model: 'FingerTec TA500 Biometric Terminal',
@@ -99,7 +110,7 @@ export async function GET() {
       tablet_bridge: {
         device: 'Samsung Galaxy Tab A9+ (SM-X210)',
         os: 'Android 14 / Termux',
-        engine_version: 'Bridge Engine v17.0',
+        engine_version: 'Bridge Engine v17.1',
         poll_interval_sec: 8,
         anti_double_tap_min: 5,
         architecture: 'Direct Buffer Fast Extractor (Zero-Timeout)',
