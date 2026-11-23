@@ -46,8 +46,8 @@ export async function GET() {
     const ta500Status = metaMap['ta500_status'] || 0
     const ta500LastSeen = metaMap['ta500_last_seen'] || 0
     const ta500Records = metaMap['ta500_records'] || 0
-    // bridge_version as numeric: 171 = v17.1, 170 = v17.0, 168 = v16.8, etc.
-    const bridgeVersionNum = metaMap['bridge_version'] || 171
+    // bridge_version as numeric: 172 = v17.2, 170 = v17.0, 168 = v16.8, etc.
+    const bridgeVersionNum = metaMap['bridge_version'] || 172
     const bridgeVersionStr = bridgeVersionNum >= 100
       ? `v${(bridgeVersionNum / 10).toFixed(1)}`
       : `v${bridgeVersionNum}.0`
@@ -110,7 +110,7 @@ export async function GET() {
       tablet_bridge: {
         device: 'Samsung Galaxy Tab A9+ (SM-X210)',
         os: 'Android 14 / Termux',
-        engine_version: 'Bridge Engine v17.1',
+        engine_version: 'Bridge Engine v17.2',
         poll_interval_sec: 8,
         anti_double_tap_min: 5,
         architecture: 'Direct Buffer Fast Extractor (Zero-Timeout)',
@@ -133,3 +133,4 @@ export async function GET() {
     }, { status: 500 })
   }
 }
+

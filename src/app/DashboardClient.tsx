@@ -683,7 +683,7 @@ export function DashboardClient({
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                 <span className="text-slate-600 font-medium">Sync Engine</span>
                 <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
-                  v17.1 Omni-Sentinel Engine
+                  v17.2 Omni-Sentinel Engine
                 </span>
               </div>
 
@@ -713,4 +713,5 @@ export function DashboardClient({
     </div>
   )
 }
+
 
