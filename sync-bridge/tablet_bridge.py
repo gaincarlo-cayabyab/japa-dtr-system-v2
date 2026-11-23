@@ -227,6 +227,39 @@ def refresh_employee_cache() -> None:
     except Exception as e:
         logger.warning(f'Employee cache refresh failed (will retry): {e}')
 
+def ensure_employee_exists(uid: str, full_name: Optional[str] = None) -> bool:
+    global _employee_cache
+    s_uid = str(uid).strip()
+    if not s_uid or s_uid == '0':
+        return False
+    if s_uid in _employee_cache:
+        return True
+
+    name = full_name or f'Enrolled #{s_uid}'
+    logger.info(f'Auto-registering missing employee slot #{s_uid} ({name}) to Supabase...')
+    payload = {
+        'device_user_id': s_uid,
+        'full_name': name,
+        'branch': 'Dagupan Main',
+        'position': 'Staff',
+        'department': 'Operations',
+    }
+    url = f'{SUPABASE_URL}/rest/v1/employees?on_conflict=device_user_id'
+    try:
+        res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(3, 5))
+        if res.status_code in (200, 201):
+            _employee_cache[s_uid] = name
+            logger.info(f'✅ Auto-registered employee #{s_uid} ({name}) successfully!')
+            return True
+        elif res.status_code == 409:
+            _employee_cache[s_uid] = name
+            return True
+        else:
+            logger.warning(f'Auto-register employee #{s_uid} returned HTTP {res.status_code}: {res.text}')
+    except Exception as e:
+        logger.warning(f'Error auto-registering employee #{s_uid}: {e}')
+    return False
+
 def _parse_ts(ts_val) -> datetime:
     if isinstance(ts_val, datetime):
         return TZ.localize(ts_val) if ts_val.tzinfo is None else ts_val
@@ -314,7 +347,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 173},
+            {'key': 'bridge_version',   'value': 174},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -698,6 +731,12 @@ def flush_upload_queue(seen: Set[str]) -> bool:
     if not _pending_upload_queue:
         return True
 
+    # Pre-flight check: ensure every employee in queue exists in Supabase to prevent 409 foreign key violations
+    for r in _pending_upload_queue:
+        uid = str(r.get('device_user_id', '')).strip()
+        if uid and uid not in _employee_cache:
+            ensure_employee_exists(uid)
+
     payload = [{k: v for k, v in r.items() if k != '_key'} for r in _pending_upload_queue]
     url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
 
@@ -713,10 +752,45 @@ def flush_upload_queue(seen: Set[str]) -> bool:
             logger.info(f'✅ SYNCED: {len(_pending_upload_queue)} punch(es) to cloud! (Latest: {emp_name})')
             _pending_upload_queue.clear()
             return True
+        elif res.status_code == 409:
+            err_text = res.text
+            logger.warning(f'Supabase returned HTTP 409 Conflict: {err_text}')
+
+            # Attempt single-item isolation to prevent permanent queue block
+            recovered = 0
+            valid_remaining = []
+            for r in _pending_upload_queue:
+                single_payload = [{k: v for k, v in r.items() if k != '_key'}]
+                uid = str(r.get('device_user_id', '')).strip()
+                try:
+                    sres = session.post(url, headers=_HEADERS_INSERT, json=single_payload, timeout=(3, 5))
+                    if sres.status_code in (200, 201):
+                        seen.add(r['_key'])
+                        recovered += 1
+                    elif sres.status_code == 409:
+                        # Auto-enroll if missing
+                        if uid and ensure_employee_exists(uid):
+                            retry_res = session.post(url, headers=_HEADERS_INSERT, json=single_payload, timeout=(3, 5))
+                            if retry_res.status_code in (200, 201):
+                                seen.add(r['_key'])
+                                recovered += 1
+                                continue
+                        # If permanent constraint failure, discard to protect bridge stability
+                        logger.error(f'⚠️ Discarding rejected punch for UID {uid} to prevent queue lock ({sres.text})')
+                        seen.add(r['_key'])
+                    else:
+                        valid_remaining.append(r)
+                except Exception:
+                    valid_remaining.append(r)
+
+            save_seen_set(seen)
+            _pending_upload_queue = valid_remaining
+            logger.info(f'Queue recovery finished: {recovered} synced, {len(valid_remaining)} remaining in queue')
+            return recovered > 0
         else:
-            logger.warning(f'Supabase returned HTTP {res.status_code} — kept in queue')
-    except Exception:
-        logger.warning(f'Slow network: upload queued ({len(_pending_upload_queue)} punch(es)). Retrying...')
+            logger.warning(f'Supabase returned HTTP {res.status_code} — kept in queue (will retry with backoff)')
+    except Exception as e:
+        logger.warning(f'Slow network: upload queued ({len(_pending_upload_queue)} punch(es)): {e}')
 
     return False
 
@@ -757,6 +831,10 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         status_val = getattr(att, 'punch', None)
         if status_val is None:
             status_val = int(att.status or 0)
+
+        # Proactively ensure employee exists in database before accepting punch into queue!
+        if uid not in _employee_cache:
+            ensure_employee_exists(uid)
 
         _pending_upload_queue.append({
             'device_user_id': uid,
@@ -813,7 +891,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v17.3')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v17.4')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Sensor-First Engine | Unthrottled Scanner CPU | Flash Grace Period')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
@@ -939,10 +1017,11 @@ def main():
         last_cloud_check = time.time()
         last_heartbeat = 0
         last_audit_time = time.time()
+        last_upload_attempt = 0.0
         session_start_time = time.time()
         read_sizes_fail_streak = 0
 
-        # v17.3: Permanent continuous connection — NEVER disconnect on a timer!
+        # v17.4: Permanent continuous connection — NEVER disconnect on a timer!
         # Attendance fetching is triggered strictly when current_count > known_record_count.
 
         try:
@@ -950,10 +1029,9 @@ def main():
             while True:
                 now = time.time()
 
-                if _pending_upload_queue:
+                if _pending_upload_queue and (now - last_upload_attempt >= 4.0):
+                    last_upload_attempt = now
                     flush_upload_queue(seen)
-
-# v17.3: Continuous session — no periodic disconnect
 
                 # Cloud portal commands check (~6s for rapid Super Admin response)
                 if now - last_cloud_check >= 6:
@@ -965,11 +1043,46 @@ def main():
                         logger.warning('🚨 Remote TA500 RESTART command received from Super Admin web portal!')
                         acknowledge_command('restart_ta500')
                         acknowledge_command('restart_hardware')
-                        logger.info(f'Transmitting soft-reboot signal to TA500 ({ZK_IP})...')
-                        restart_ta500_soft(ZK_IP)
-                        time.sleep(2)
-                        # Reconnect cleanly as TA500 begins hardware boot cycle
-                        raise ConnectionResetError("Remote restart commanded by Super Admin")
+                        update_live_heartbeat(False, 0)
+
+                        reboot_success = False
+
+                        # Method 1: Send CMD_RESTART down the ACTIVE authenticated session!
+                        if conn and getattr(conn, 'is_connect', False):
+                            logger.info(f'Transmitting CMD_RESTART down active connection to TA500 ({ZK_IP})...')
+                            try:
+                                conn.restart()
+                                reboot_success = True
+                                logger.info('✅ TA500 accepted CMD_RESTART! Hardware microcontroller is now rebooting...')
+                            except Exception as e_rst:
+                                logger.warning(f'Active conn.restart() notice: {e_rst}')
+
+                            try:
+                                conn.disconnect()
+                            except Exception:
+                                pass
+                            _cleanup_socket(conn)
+
+                        # Method 2: If active conn was not connected, use direct socket fallback
+                        if not reboot_success:
+                            logger.info('Falling back to direct socket injection for remote reboot...')
+                            reboot_success = restart_ta500_soft(ZK_IP)
+
+                        if reboot_success:
+                            logger.info('⚡ TA500 hardware reboot signal transmitted successfully!')
+                        else:
+                            logger.warning('⚠️ TA500 hardware reboot attempted via fallback.')
+
+                        # ── Hardware Power-Cycle Grace Period ──
+                        # The TA500 ARM SoC requires ~30s to discharge capacitors, reboot,
+                        # and reload its internal ZKTeco listening daemon on port 4370.
+                        # We MUST pause the bridge so it does NOT hammer the closed socket!
+                        logger.info('⏳ Hardware boot grace active: waiting 30 seconds for physical TA500 power cycle...')
+                        for sec in range(30, 0, -5):
+                            logger.info(f'⏳ Hardware rebooting... {sec}s remaining before bridge reconnect...')
+                            time.sleep(5)
+                        logger.info('🔄 30s boot grace elapsed. Reconnecting to freshly rebooted TA500...')
+                        raise ConnectionResetError("Remote restart hardware cycle completed")
 
                     if meta.get('clear_hardware') == 1:
                         logger.info('🧹 Remote clear requested from web portal!')
@@ -1008,8 +1121,17 @@ def main():
                         time.sleep(2)
                         continue
                     if read_sizes_fail_streak >= 5:
-                        logger.warning(f'⚠️ {read_sizes_fail_streak} consecutive polling errors — sending proactive soft-reboot to TA500...')
+                        logger.warning(f'⚠️ {read_sizes_fail_streak} consecutive polling errors — cleaning socket and rebooting TA500...')
+                        try:
+                            conn.disconnect()
+                        except Exception:
+                            pass
+                        _cleanup_socket(conn)
+                        time.sleep(1)
                         restart_ta500_soft(ZK_IP)
+                        time.sleep(20)
+                        read_sizes_fail_streak = 0
+                        raise ConnectionResetError("Proactive reboot cycle completed")
                         read_sizes_fail_streak = 0
                     logger.warning(f'⚠️ TA500 connection lost ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
                     raise
