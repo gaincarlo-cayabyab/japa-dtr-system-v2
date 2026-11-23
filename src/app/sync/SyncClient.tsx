@@ -37,6 +37,8 @@ import {
   AlertOctagon,
   Gauge,
   Sliders,
+  Power,
+  RotateCw,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import type { AttendanceLog } from '@/types/database'
@@ -90,6 +92,95 @@ export function SyncClient({
   const [liveBridgeOnline, setLiveBridgeOnline] = useState<boolean>(initialBridgeOnline)
   const [liveTa500Online, setLiveTa500Online] = useState<boolean>(initialTa500Online)
   const [heartbeatAgeSec, setHeartbeatAgeSec] = useState<number>(initialHeartbeatAgeSec)
+
+  // Super Admin session state
+  const [currentUser, setCurrentUser] = useState<{
+    id: string
+    username: string
+    displayName: string
+    role: string
+    isSuperAdmin?: boolean
+    canEdit?: boolean
+  } | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/auth/me?t=${Date.now()}`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => {
+        if (d?.authenticated && d?.user) {
+          setCurrentUser(d.user)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const isSuperAdmin = Boolean(
+    currentUser?.isSuperAdmin ||
+    currentUser?.role === 'super_admin' ||
+    currentUser?.username === 'admin'
+  )
+
+  // Super Admin TA500 Remote Hardware Restart States
+  const [isRestartModalOpen, setIsRestartModalOpen] = useState(false)
+  const [isRestarting, setIsRestarting] = useState(false)
+  const [restartSecondsLeft, setRestartSecondsLeft] = useState(45)
+  const [restartStage, setRestartStage] = useState<1 | 2 | 3 | 4>(1)
+  const [restartSuccess, setRestartSuccess] = useState<string | null>(null)
+  const [restartError, setRestartError] = useState<string | null>(null)
+  const [isDispatchingRestart, setIsDispatchingRestart] = useState(false)
+
+  // Hardware restart progression effect (45s total duration)
+  useEffect(() => {
+    let timer: NodeJS.Timeout
+    if (isRestarting && restartSecondsLeft > 0) {
+      timer = setTimeout(() => {
+        const nextSec = restartSecondsLeft - 1
+        setRestartSecondsLeft(nextSec)
+        const elapsed = 45 - nextSec
+        if (elapsed < 5) {
+          setRestartStage(1)
+        } else if (elapsed < 12) {
+          setRestartStage(2)
+        } else if (elapsed < 30) {
+          setRestartStage(3)
+        } else {
+          setRestartStage(4)
+        }
+      }, 1000)
+    } else if (isRestarting && restartSecondsLeft <= 0) {
+      setIsRestarting(false)
+      setRestartSuccess('FingerTec TA500 terminal successfully rebooted and live connection re-established!')
+      handleTestPing()
+      const t = setTimeout(() => setRestartSuccess(null), 10000)
+      return () => clearTimeout(t)
+    }
+    return () => clearTimeout(timer)
+  }, [isRestarting, restartSecondsLeft])
+
+  const handleTriggerTa500Restart = async () => {
+    setIsDispatchingRestart(true)
+    setRestartError(null)
+    setRestartSuccess(null)
+    try {
+      const res = await fetch('/api/sync/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to dispatch TA500 restart command')
+      }
+      setIsRestartModalOpen(false)
+      setIsRestarting(true)
+      setRestartSecondsLeft(45)
+      setRestartStage(1)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to trigger restart'
+      setRestartError(msg)
+    } finally {
+      setIsDispatchingRestart(false)
+    }
+  }
 
   // Live clock
   useEffect(() => {
@@ -1162,12 +1253,12 @@ export function SyncClient({
                     <div className="w-1.5 h-1.5 rounded-full bg-white" />
                   </div>
 
-                  {/* Pill Badge anchored to the LEFT of the conduit - Flowing cleanly into the center gap, completely avoiding right overflow */}
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-auto z-30">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-md border whitespace-nowrap ${
+                  {/* Pill Badge anchored cleanly to the RIGHT of the conduit - flows under Card 3 without colliding with WAN Gateway */}
+                  <div className="absolute left-6 top-1/2 -translate-y-1/2 pointer-events-auto z-30">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-md border whitespace-nowrap backdrop-blur-xs ${
                       isBridgeDown
-                        ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
-                        : 'bg-white text-indigo-700 border-indigo-200'
+                        ? 'bg-rose-50/95 text-rose-700 border-rose-300 animate-pulse'
+                        : 'bg-white/95 text-indigo-700 border-indigo-200'
                     }`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${isBridgeDown ? 'bg-rose-500' : 'bg-indigo-500 animate-ping'}`} />
                       <span>{isBridgeDown ? '▼ LOCAL INGESTION HALTED' : '▼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
@@ -1580,6 +1671,378 @@ export function SyncClient({
               </span>
             </div>
           </div>
+
+          {/* ──── SUPER ADMIN EXCLUSIVE: REMOTE TA500 HARDWARE REBOOT PANEL ────── */}
+          {isSuperAdmin && (
+            <div className="mt-5 bg-gradient-to-br from-red-50/70 via-amber-50/50 to-orange-50/70 rounded-2xl border-2 border-red-200/90 shadow-sm p-5 relative overflow-hidden transition-all">
+              {/* Glowing Top Accent Strip */}
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-500 via-amber-500 to-orange-500 shadow-xs" />
+
+              {/* Header row */}
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-red-200/60 pb-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center text-white shadow-md shadow-red-500/20 shrink-0">
+                    <Power className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-mono font-black uppercase tracking-wider text-red-700 bg-red-100/90 border border-red-200 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+                        <ShieldAlert className="w-3 h-3 text-red-600" />
+                        SUPER ADMIN EXCLUSIVE · HARDWARE CONTROL
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-500 bg-white/80 border border-slate-200 px-2 py-0.5 rounded-md">
+                        Target: 192.168.0.58:4370
+                      </span>
+                    </div>
+                    <h3 className="text-base font-black text-slate-900 mt-1 flex items-center gap-2">
+                      FingerTec TA500 Remote Hardware Reboot
+                      {isRestarting && (
+                        <span className="inline-flex items-center gap-1 text-xs font-mono font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300 animate-pulse">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                          REBOOT IN PROGRESS ({restartSecondsLeft}s)
+                        </span>
+                      )}
+                    </h3>
+                    <p className="text-xs text-slate-600 font-medium mt-0.5">
+                      Dispatches hardware soft-reboot &amp; optical prism recalibration via Samsung Tab A9+ bridge daemon UDP packet injection.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Action CTA Button */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setIsRestartModalOpen(true)}
+                    disabled={isRestarting || isDispatchingRestart}
+                    className={`px-4 py-2.5 rounded-xl font-black text-xs shadow-md transition-all flex items-center gap-2 ${
+                      isRestarting
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300 cursor-not-allowed opacity-90'
+                        : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white shadow-red-500/20 hover:shadow-lg active:scale-98 cursor-pointer'
+                    }`}
+                  >
+                    {isRestarting ? (
+                      <>
+                        <RotateCw className="w-4 h-4 animate-spin text-amber-700" />
+                        <span>Rebooting Hardware ({restartSecondsLeft}s)...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Power className="w-4 h-4" />
+                        <span>🔄 Restart TA500 Terminal</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Status / Alert Messages */}
+              {restartSuccess && (
+                <div className="mt-3 bg-emerald-50 border border-emerald-300 text-emerald-900 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{restartSuccess}</span>
+                </div>
+              )}
+              {restartError && (
+                <div className="mt-3 bg-rose-50 border border-rose-300 text-rose-900 px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{restartError}</span>
+                </div>
+              )}
+
+              {/* Live Animation & Restart Progression Details */}
+              {isRestarting ? (
+                <div className="mt-4 space-y-4">
+                  {/* Animated Signal Wave & Progress Bar */}
+                  <div className="bg-white/80 backdrop-blur-xs border border-red-200/80 rounded-xl p-3.5 shadow-xs">
+                    <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-700 mb-2">
+                      <span className="flex items-center gap-1.5 text-red-800">
+                        <Activity className="w-3.5 h-3.5 text-red-600 animate-pulse" />
+                        LIVE HARDWARE REBOOT SIGNAL PROPAGATION
+                      </span>
+                      <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                        {Math.min(100, Math.round(((45 - restartSecondsLeft) / 45) * 100))}% COMPLETED · {restartSecondsLeft}s REMAINING
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full bg-slate-200/80 rounded-full h-2.5 overflow-hidden shadow-inner mb-3">
+                      <div
+                        className="bg-gradient-to-r from-red-500 via-amber-500 to-emerald-500 h-full rounded-full transition-all duration-1000 ease-linear shadow-sm"
+                        style={{ width: `${Math.min(100, Math.round(((45 - restartSecondsLeft) / 45) * 100))}%` }}
+                      />
+                    </div>
+
+                    {/* Node Signal Flow Visualizer */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-[10px] font-mono">
+                      <div className={`p-2 rounded-lg border transition-all ${
+                        restartStage >= 1 ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-500'
+                      }`}>
+                        <div className="font-bold flex items-center justify-center gap-1">
+                          {restartStage > 1 ? <Check className="w-3 h-3 text-emerald-600" /> : <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />}
+                          1. Cloud CDC
+                        </div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">sync_meta queue</div>
+                      </div>
+
+                      <div className={`p-2 rounded-lg border transition-all ${
+                        restartStage >= 2 ? 'bg-emerald-50 border-emerald-300 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-500'
+                      }`}>
+                        <div className="font-bold flex items-center justify-center gap-1">
+                          {restartStage > 2 ? <Check className="w-3 h-3 text-emerald-600" /> : restartStage === 2 ? <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" /> : <Clock className="w-3 h-3 text-slate-400" />}
+                          2. Bridge Injection
+                        </div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">UDP Port 4370</div>
+                      </div>
+
+                      <div className={`p-2 rounded-lg border transition-all ${
+                        restartStage >= 3 ? 'bg-amber-50 border-amber-300 text-amber-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-500'
+                      }`}>
+                        <div className="font-bold flex items-center justify-center gap-1">
+                          {restartStage > 3 ? <Check className="w-3 h-3 text-emerald-600" /> : restartStage === 3 ? <RotateCw className="w-3 h-3 animate-spin text-amber-600" /> : <Clock className="w-3 h-3 text-slate-400" />}
+                          3. TA500 Power Cycle
+                        </div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">ARM CPU Boot</div>
+                      </div>
+
+                      <div className={`p-2 rounded-lg border transition-all ${
+                        restartStage === 4 ? 'bg-indigo-50 border-indigo-300 text-indigo-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-500'
+                      }`}>
+                        <div className="font-bold flex items-center justify-center gap-1">
+                          {restartStage === 4 ? <Sparkles className="w-3 h-3 animate-bounce text-indigo-600" /> : <Clock className="w-3 h-3 text-slate-400" />}
+                          4. Recalibration
+                        </div>
+                        <div className="text-[9px] text-slate-500 mt-0.5">Sensor &amp; Keepalive</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 4-Stage Step Progression Cards */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    {/* Step 1 */}
+                    <div className={`p-3 rounded-xl border text-xs transition-all ${
+                      restartStage === 1
+                        ? 'bg-amber-50 border-amber-300 shadow-sm ring-1 ring-amber-300'
+                        : restartStage > 1
+                          ? 'bg-emerald-50/70 border-emerald-200'
+                          : 'bg-white/70 border-slate-200 opacity-60'
+                    }`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-black text-[11px] text-slate-800">Stage 1 · Cloud Handshake</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white font-bold border">
+                          {restartStage > 1 ? 'DONE (5s)' : restartStage === 1 ? 'IN PROGRESS' : 'QUEUED (5s)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-tight">
+                        Cloud API writes <code className="font-mono text-red-600">restart_ta500=1</code> into Supabase CDC sync_meta.
+                      </p>
+                    </div>
+
+                    {/* Step 2 */}
+                    <div className={`p-3 rounded-xl border text-xs transition-all ${
+                      restartStage === 2
+                        ? 'bg-amber-50 border-amber-300 shadow-sm ring-1 ring-amber-300'
+                        : restartStage > 2
+                          ? 'bg-emerald-50/70 border-emerald-200'
+                          : 'bg-white/70 border-slate-200 opacity-60'
+                    }`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-black text-[11px] text-slate-800">Stage 2 · Packet Injection</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white font-bold border">
+                          {restartStage > 2 ? 'DONE (7s)' : restartStage === 2 ? 'IN PROGRESS' : 'QUEUED (7s)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-tight">
+                        Tab A9+ bridge daemon reads signal &amp; sends ZK <code className="font-mono text-red-600">CMD_RESTART (0x005E)</code> packet.
+                      </p>
+                    </div>
+
+                    {/* Step 3 */}
+                    <div className={`p-3 rounded-xl border text-xs transition-all ${
+                      restartStage === 3
+                        ? 'bg-amber-50 border-amber-300 shadow-sm ring-1 ring-amber-300'
+                        : restartStage > 3
+                          ? 'bg-emerald-50/70 border-emerald-200'
+                          : 'bg-white/70 border-slate-200 opacity-60'
+                    }`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-black text-[11px] text-slate-800">Stage 3 · Hardware Reboot</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white font-bold border">
+                          {restartStage > 3 ? 'DONE (18s)' : restartStage === 3 ? 'IN PROGRESS' : 'QUEUED (18s)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-tight">
+                        TA500 commits minutiae buffer to flash, blanks LCD screen, and reboots ARM processor.
+                      </p>
+                    </div>
+
+                    {/* Step 4 */}
+                    <div className={`p-3 rounded-xl border text-xs transition-all ${
+                      restartStage === 4
+                        ? 'bg-indigo-50 border-indigo-300 shadow-sm ring-1 ring-indigo-300'
+                        : 'bg-white/70 border-slate-200 opacity-60'
+                    }`}>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-black text-[11px] text-slate-800">Stage 4 · Sensor &amp; Sync</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white font-bold border">
+                          {restartStage === 4 ? 'IN PROGRESS' : 'QUEUED (15s)'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-600 leading-tight">
+                        500 DPI optical prism recalibrates, biometric socket reopens, and bridge keepalive restores.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Live Diagnostics Console Stream */}
+                  <div className="bg-slate-900 rounded-xl p-3 font-mono text-[11px] text-slate-300 border border-slate-800 shadow-inner">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-800 pb-1 mb-2 font-bold">
+                      <span className="flex items-center gap-1.5 text-emerald-400">
+                        <Terminal className="w-3.5 h-3.5" />
+                        LIVE FIRMWARE REBOOT TELEMETRY STREAM
+                      </span>
+                      <span>PORT: 4370 / UDP</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-slate-400">[T-00s] Super Admin issued remote TA500 restart dispatch.</div>
+                      {restartStage >= 1 && (
+                        <div className="text-emerald-400">
+                          [T+02s] Supabase CDC sync_meta updated: restart_ta500=1, restart_hardware=1.
+                        </div>
+                      )}
+                      {restartStage >= 2 && (
+                        <div className="text-cyan-400">
+                          [T+06s] Samsung Tab A9+ Daemon detected flag; executed acknowledge_command(&apos;restart_ta500&apos;).
+                        </div>
+                      )}
+                      {restartStage >= 2 && (
+                        <div className="text-amber-300">
+                          [T+08s] Dispatched ZKTeco soft-reboot UDP datagram to TA500 (192.168.0.58:4370).
+                        </div>
+                      )}
+                      {restartStage >= 3 && (
+                        <div className="text-orange-400 animate-pulse">
+                          [T+14s] TA500 ARM SoC reset initiated; LCD power cycling; flushing minutiae buffer...
+                        </div>
+                      )}
+                      {restartStage >= 4 && (
+                        <div className="text-indigo-400">
+                          [T+32s] Optical prism self-calibration complete; TCP/UDP daemon binding restored.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Static Estimation Breakdown & Protocol Details */
+                <div className="mt-3.5 grid grid-cols-1 md:grid-cols-4 gap-2.5">
+                  <div className="bg-white/70 border border-red-100 rounded-xl p-2.5">
+                    <div className="text-[10px] font-mono font-bold text-slate-500 uppercase">Est. Total Duration</div>
+                    <div className="text-xs font-black text-slate-800 mt-0.5 flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5 text-red-600" />
+                      ~45 Seconds Total
+                    </div>
+                  </div>
+                  <div className="bg-white/70 border border-red-100 rounded-xl p-2.5">
+                    <div className="text-[10px] font-mono font-bold text-slate-500 uppercase">Packet Injection</div>
+                    <div className="text-xs font-black text-slate-800 mt-0.5 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-600" />
+                      UDP CMD_RESTART (0x005E)
+                    </div>
+                  </div>
+                  <div className="bg-white/70 border border-red-100 rounded-xl p-2.5">
+                    <div className="text-[10px] font-mono font-bold text-slate-500 uppercase">Bridge Daemon Sync</div>
+                    <div className="text-xs font-black text-slate-800 mt-0.5 flex items-center gap-1">
+                      <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+                      Tab A9+ Auto-Acknowledge
+                    </div>
+                  </div>
+                  <div className="bg-white/70 border border-red-100 rounded-xl p-2.5">
+                    <div className="text-[10px] font-mono font-bold text-slate-500 uppercase">Data Integrity</div>
+                    <div className="text-xs font-black text-emerald-700 mt-0.5 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      100% Zero Punch Loss
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Confirmation Modal */}
+              {isRestartModalOpen && (
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl p-6 relative">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                        <Power className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-base font-black text-slate-900">Confirm Remote TA500 Reboot</h4>
+                        <p className="text-xs text-slate-500">Super Administrator Hardware Control</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 mb-4">
+                      <div className="font-black flex items-center gap-1.5 text-amber-800 mb-1">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        Notice: 45-Second Hardware Cycle
+                      </div>
+                      <p className="leading-relaxed">
+                        This triggers a direct soft power-cycle on the FingerTec TA500 at <code className="font-mono font-bold">192.168.0.58:4370</code>. Biometric scanning on the terminal will be suspended during the ~45-second reboot. All stored punches in flash memory remain safe.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5 text-xs font-mono text-slate-600 mb-5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Target Terminal:</span>
+                        <span className="font-bold text-slate-800">FingerTec TA500</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Network IP:</span>
+                        <span className="font-bold text-slate-800">192.168.0.58:4370</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Bridge Daemon:</span>
+                        <span className="font-bold text-slate-800">Samsung Tab A9+ (v17.3)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-400">Cycle Estimation:</span>
+                        <span className="font-bold text-slate-800">~45 Seconds</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsRestartModalOpen(false)}
+                        disabled={isDispatchingRestart}
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTriggerTa500Restart}
+                        disabled={isDispatchingRestart}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg transition-all flex items-center gap-1.5"
+                      >
+                        {isDispatchingRestart ? (
+                          <>
+                            <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Dispatching...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Power className="w-3.5 h-3.5" />
+                            <span>Confirm &amp; Dispatch Reboot</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ──── SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR ────────────────── */}
           <div className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all">

@@ -955,10 +955,21 @@ def main():
 
 # v17.3: Continuous session — no periodic disconnect
 
-                # Cloud portal commands check (~20s)
-                if now - last_cloud_check >= 20:
+                # Cloud portal commands check (~6s for rapid Super Admin response)
+                if now - last_cloud_check >= 6:
                     last_cloud_check = now
                     meta = fetch_cloud_meta()
+
+                    # ── Super Admin Remote TA500 Hardware Restart ───
+                    if meta.get('restart_ta500') == 1 or meta.get('restart_hardware') == 1:
+                        logger.warning('🚨 Remote TA500 RESTART command received from Super Admin web portal!')
+                        acknowledge_command('restart_ta500')
+                        acknowledge_command('restart_hardware')
+                        logger.info(f'Transmitting soft-reboot signal to TA500 ({ZK_IP})...')
+                        restart_ta500_soft(ZK_IP)
+                        time.sleep(2)
+                        # Reconnect cleanly as TA500 begins hardware boot cycle
+                        raise ConnectionResetError("Remote restart commanded by Super Admin")
 
                     if meta.get('clear_hardware') == 1:
                         logger.info('🧹 Remote clear requested from web portal!')
