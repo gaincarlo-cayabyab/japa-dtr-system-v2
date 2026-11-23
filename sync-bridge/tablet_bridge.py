@@ -661,11 +661,58 @@ def sync_device_users(conn) -> int:
         logger.warning(f'Device user sync notice: {e}')
     return 0
 
+def ensure_employee_in_supabase(uid: str, conn=None, force: bool = False) -> None:
+    """
+    Guarantees that an employee record exists in Supabase so the attendance_logs
+    foreign key constraint (references public.employees.device_user_id) is satisfied.
+    Auto-fetches the real enrolled name from the TA500 terminal if connected.
+    """
+    global _employee_cache
+    if not force and uid in _employee_cache:
+        return
+
+    emp_name = f'Employee #{uid}'
+    if conn:
+        try:
+            users = conn.get_users()
+            if users:
+                for u in users:
+                    raw_u = str(u.user_id)
+                    mapped = TA500_TO_SYSTEM_MAP.get(raw_u, raw_u)
+                    if mapped == uid or raw_u == uid:
+                        if u.name and u.name.strip():
+                            emp_name = u.name.strip()
+                        break
+        except Exception:
+            pass
+
+    try:
+        url = f'{SUPABASE_URL}/rest/v1/employees?on_conflict=device_user_id'
+        payload = [{
+            'device_user_id': uid,
+            'full_name': emp_name,
+            'branch': 'Dagupan Main',
+        }]
+        res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(3, 5))
+        if res.status_code in (200, 201):
+            _employee_cache[uid] = emp_name
+            logger.info(f'👤 Auto-enrolled employee #{uid} ({emp_name}) into cloud database!')
+        else:
+            refresh_employee_cache()
+    except Exception as e:
+        logger.warning(f'Auto-enrollment notice for employee #{uid}: {e}')
+
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
-def flush_upload_queue(seen: Set[str]) -> bool:
-    global _pending_upload_queue
+def flush_upload_queue(seen: Set[str], conn=None) -> bool:
+    global _pending_upload_queue, _employee_cache
     if not _pending_upload_queue:
         return True
+
+    # Pre-flight: Ensure every employee in the upload queue exists in Supabase
+    for r in _pending_upload_queue:
+        uid = str(r['device_user_id'])
+        if uid not in _employee_cache:
+            ensure_employee_in_supabase(uid, conn)
 
     payload = [{k: v for k, v in r.items() if k != '_key'} for r in _pending_upload_queue]
     url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
@@ -682,10 +729,27 @@ def flush_upload_queue(seen: Set[str]) -> bool:
             logger.info(f'✅ SYNCED: {len(_pending_upload_queue)} punch(es) to cloud! (Latest: {emp_name})')
             _pending_upload_queue.clear()
             return True
+        elif res.status_code == 409 or 'violates foreign key' in res.text.lower():
+            logger.warning('Foreign key constraint on punch upload: auto-enrolling missing employee(s)...')
+            for r in _pending_upload_queue:
+                ensure_employee_in_supabase(str(r['device_user_id']), conn, force=True)
+            # Immediate retry after provisioning missing employee
+            res2 = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(4, 8))
+            if res2.status_code in (200, 201):
+                for r in _pending_upload_queue:
+                    seen.add(r['_key'])
+                save_seen_set(seen)
+                latest_uid = _pending_upload_queue[-1]['device_user_id']
+                emp_name = _employee_cache.get(latest_uid, f'ID #{latest_uid}')
+                logger.info(f'✅ SYNCED (after auto-registering employee): {len(_pending_upload_queue)} punch(es) to cloud! (Latest: {emp_name})')
+                _pending_upload_queue.clear()
+                return True
+            else:
+                logger.warning(f'Supabase retry returned HTTP {res2.status_code} — kept in queue')
         else:
-            logger.warning(f'Supabase returned HTTP {res.status_code} — kept in queue')
-    except Exception:
-        logger.warning(f'Slow network: upload queued ({len(_pending_upload_queue)} punch(es)). Retrying...')
+            logger.warning(f'Supabase returned HTTP {res.status_code} ({res.text[:120]}) — kept in queue')
+    except Exception as e:
+        logger.warning(f'Slow network: upload queued ({len(_pending_upload_queue)} punch(es)). Retrying... ({e})')
 
     return False
 
@@ -806,7 +870,7 @@ def main():
     while True:
         # Flush pending offline punches if any
         if _pending_upload_queue:
-            flush_upload_queue(seen)
+            flush_upload_queue(seen, conn)
 
         # ── 1. Connect Device Socket ─────────────────────────────────────────
         conn = connect_heartbeat_socket()
@@ -886,6 +950,11 @@ def main():
             if not isinstance(known_record_count, int) or known_record_count < 0 or known_record_count > 500000:
                 raise ValueError(f"Invalid record counter from hardware: {known_record_count}")
             logger.info(f'📊 TA500 reports {known_record_count} total attendance records on device.')
+            known_user_count = getattr(conn, 'users', 0)
+            try:
+                sync_device_users(conn)
+            except Exception:
+                pass
             update_live_heartbeat(True, known_record_count)
 
             # Sync cloud hashes on startup so punches already in DB aren't re-inserted
@@ -903,7 +972,7 @@ def main():
                 caught_up = process_punches_batch(atts, seen)
                 if caught_up > 0:
                     logger.info(f'✅ Caught up {caught_up} punch(es) from TA500 memory!')
-                    flush_upload_queue(seen)
+                    flush_upload_queue(seen, conn)
                 else:
                     logger.info('✅ All attendance records verified. Sensor ready for punches!')
         except Exception as e_init:
@@ -924,7 +993,7 @@ def main():
                 now = time.time()
 
                 if _pending_upload_queue:
-                    flush_upload_queue(seen)
+                    flush_upload_queue(seen, conn)
 
 # v16.8: Continuous session — no periodic disconnect
 
@@ -956,6 +1025,14 @@ def main():
                 try:
                     conn.read_sizes()
                     current_count = conn.records
+                    current_users = getattr(conn, 'users', 0)
+                    if 'known_user_count' in locals() and current_users > known_user_count:
+                        logger.info(f'👤 New employee registered on TA500 ({known_user_count} -> {current_users})! Auto-syncing...')
+                        try:
+                            sync_device_users(conn)
+                        except Exception:
+                            pass
+                        known_user_count = current_users
                     if not isinstance(current_count, int) or current_count < 0 or current_count > 500000:
                         raise ValueError(f"Invalid record counter from hardware: {current_count}")
                     read_sizes_fail_streak = 0
@@ -984,7 +1061,7 @@ def main():
                             known_record_count = current_count
                             empty_punch_retries = 0
                             logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
-                            flush_upload_queue(seen)
+                            flush_upload_queue(seen, conn)
                         else:
                             empty_punch_retries += 1
                             if empty_punch_retries >= 3:

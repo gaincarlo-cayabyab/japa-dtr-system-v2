@@ -1162,15 +1162,15 @@ export function SyncClient({
                     <div className="w-1.5 h-1.5 rounded-full bg-white" />
                   </div>
 
-                  {/* Pill Badge anchored to the LEFT of the conduit */}
-                  <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-auto z-30">
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-mono font-bold shadow-md border whitespace-nowrap ${
+                  {/* Pill Badge anchored to the RIGHT of the conduit - COMPLETELY CLEAR OF WAN BEAM */}
+                  <div className="absolute left-5 top-1/2 -translate-y-1/2 pointer-events-auto z-30">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-md border whitespace-nowrap ${
                       isBridgeDown
                         ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
                         : 'bg-white text-indigo-700 border-indigo-200'
                     }`}>
-                      <span className={`w-2 h-2 rounded-full ${isBridgeDown ? 'bg-rose-500' : 'bg-indigo-500 animate-ping'}`} />
-                      <span>{isBridgeDown ? '▼ LOCAL INGESTION HALTED (DAEMON DOWN)' : '▼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full ${isBridgeDown ? 'bg-rose-500' : 'bg-indigo-500 animate-ping'}`} />
+                      <span>{isBridgeDown ? '▼ LOCAL INGESTION HALTED' : '▼ Local Ingestion Stream (HTTPS / TLS 1.3)'}</span>
                     </span>
                   </div>
                 </div>
@@ -1338,7 +1338,7 @@ export function SyncClient({
           </div>
 
           {/* ──── HORIZONTAL WAN BEAM / CLOUD CORRIDOR (INTERNET BOUNDARY) ──────────── */}
-          <div className="relative my-6 lg:my-8">
+          <div className="relative mt-12 mb-8 lg:mt-14 lg:mb-10">
             <div className="relative flex items-center justify-center">
               <div
                 className={`w-full h-3 rounded-full border relative overflow-hidden shadow-sm ${
