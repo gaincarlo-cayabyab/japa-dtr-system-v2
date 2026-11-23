@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { useState, useEffect } from 'react'
 import {
@@ -1018,25 +1018,6 @@ export function SyncClient({
                     <p className="text-xs text-slate-500 font-medium">300Mbps Wi-Fi Range Extender &amp; Bridge</p>
                   </div>
 
-                  {/* Informative Hardware Specs Matrix */}
-                  <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
-                      <span className="text-slate-400 font-semibold">Security:</span>
-                      <span className="font-bold text-slate-700">WPA2-PSK (AES)</span>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
-                      <span className="text-slate-400 font-semibold">Fast Ethernet:</span>
-                      <span className="font-bold text-emerald-600">100M Auto-MDIX</span>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
-                      <span className="text-slate-400 font-semibold">Signal RSSI:</span>
-                      <span className="font-bold text-blue-600">-52 dBm (Strong)</span>
-                    </div>
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
-                      <span className="text-slate-400 font-semibold">Bridge Mode:</span>
-                      <span className="font-bold text-purple-600">Range Extender</span>
-                    </div>
-                  </div>
                 </div>
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
