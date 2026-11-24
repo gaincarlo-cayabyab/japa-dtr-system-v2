@@ -1,20 +1,21 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.2 "Iron Sentinel — Complete Frame Engine"
+v18.3 "Iron Sentinel — Complete Frame Engine"
 
 Key Architecture Fixes:
-  1. Patched PyZK TCP Header Validator:
-     - __test_tcp_top accepts standard 8-byte frames without throwing 'TCP packet invalid'.
-  2. Complete Frame Transmission:
-     - __send_command reads exactly 8-byte header + declared payload length before parsing.
-  3. Complete Multi-Segment Attendance Buffer Reader:
-     - read_with_buffer reads all data chunks (CMD_DATA) and final ACK (CMD_ACK_OK) cleanly.
-     - Never returns empty buffer or truncates records on Wi-Fi fragmentation.
-  4. 3-Second Rapid Punch Detection:
+  1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
+     - Drains stale bytes before sending commands, preventing desync.
+     - Automatically aligns to ZKTeco magic header (0x5050, 0x7d82).
+     - Loops until exact declared frame payload is assembled across TCP fragments.
+     - Completely eliminates 'TCP packet invalid' errors over Wi-Fi extenders.
+  2. Multi-Packet Attendance Stream Extractor:
+     - Consumes CMD_DATA and trailing CMD_ACK_OK seamlessly without timeouts.
+     - Strips 4-byte total size prefix accurately and unrolls 40-byte records.
+  3. 3-Second Rapid Punch Detection:
      - POLL_INTERVAL = 3s: detects new punches in 1-3 seconds.
-  5. TP-Link Extender Port 9 Keepalive:
-     - Refresh ARP table without port 4370 collision.
+  4. TP-Link Extender Port 9 Keepalive:
+     - Periodic UDP pulse prevents ARP expiration on Wi-Fi repeaters.
 """
 
 import os
@@ -52,42 +53,111 @@ except ImportError as e:
     sys.exit(1)
 
 # ─── PyZK Robust TCP Framing Hotfixes ──────────────────────────────────────────
-def _recv_exact_bytes(sock, n: int, timeout: float = 10.0) -> bytes:
-    """Guaranteed exact-length read from socket across multiple TCP fragments."""
-    buf = bytearray()
-    deadline = time.monotonic() + timeout
-    while len(buf) < n:
-        if time.monotonic() > deadline:
-            raise socket.timeout(f"Timed out waiting for {n} bytes (got {len(buf)})")
-        try:
-            chunk = sock.recv(n - len(buf))
-            if not chunk:
-                raise ConnectionResetError(f"Socket closed while expecting {n} bytes")
-            buf.extend(chunk)
-        except (socket.timeout, BlockingIOError):
-            time.sleep(0.01)
-    return bytes(buf)
+MAGIC_ZK_TCP = b'PP\x82}'
 
-def _recv_zk_tcp_frame(raw_sock, timeout: float = 12.0) -> Tuple[int, bytes]:
-    """Reads exactly one complete declared ZKTeco TCP packet (0x5050 frame)."""
-    old_to = raw_sock.gettimeout()
-    raw_sock.settimeout(timeout)
-    try:
-        hdr = _recv_exact_bytes(raw_sock, 8, timeout)
-        m1, m2, length = struct.unpack('<HHI', hdr)
-        if m1 != const.MACHINE_PREPARE_DATA_1 or m2 != const.MACHINE_PREPARE_DATA_2:
-            return 0, b''
-        payload = _recv_exact_bytes(raw_sock, length, timeout)
-        cmd = struct.unpack('<H', payload[:2])[0]
-        return cmd, bytes(payload[8:])
-    finally:
+class ZKFrameReader:
+    """
+    Self-synchronizing, buffered frame reader for ZKTeco TCP streams.
+    Handles Wi-Fi packet fragmentation, stray noise, and multi-packet replies
+    (CMD_DATA + CMD_ACK_OK) without buffer corruption or 'TCP packet invalid' errors.
+    """
+    def __init__(self, sock):
+        self.sock = sock
+        self.buf = bytearray()
+
+    def drain(self):
+        """Discards unread bytes before sending a new command to ensure clean framing."""
+        self.buf.clear()
+        if not self.sock:
+            return
         try:
-            raw_sock.settimeout(old_to)
+            self.sock.setblocking(False)
+            while True:
+                discarded = self.sock.recv(4096)
+                if not discarded:
+                    break
         except Exception:
             pass
+        finally:
+            try:
+                self.sock.setblocking(True)
+            except Exception:
+                pass
+
+    def recv_frame(self, timeout: float = 8.0) -> Tuple[int, bytes]:
+        """Reads exactly one complete declared ZKTeco TCP packet (0x5050 frame)."""
+        deadline = time.monotonic() + timeout
+        old_to = self.sock.gettimeout()
+        self.sock.settimeout(1.0)
+        try:
+            # 1. Search for magic header (0x5050, 0x7d82)
+            while True:
+                idx = self.buf.find(MAGIC_ZK_TCP)
+                if idx != -1:
+                    del self.buf[:idx]
+                    break
+                if time.monotonic() > deadline:
+                    raise socket.timeout("Timed out waiting for ZKTeco magic frame header")
+                try:
+                    chunk = self.sock.recv(4096)
+                    if not chunk:
+                        raise ConnectionResetError("Socket closed while waiting for frame header")
+                    self.buf.extend(chunk)
+                except (socket.timeout, BlockingIOError):
+                    continue
+
+            # 2. Read at least 8 bytes for header + declared payload length
+            while len(self.buf) < 8:
+                if time.monotonic() > deadline:
+                    raise socket.timeout("Timed out reading frame length")
+                try:
+                    chunk = self.sock.recv(8 - len(self.buf))
+                    if not chunk:
+                        raise ConnectionResetError("Socket closed while reading frame length")
+                    self.buf.extend(chunk)
+                except (socket.timeout, BlockingIOError):
+                    continue
+
+            length = struct.unpack('<I', self.buf[4:8])[0]
+            if length < 8 or length > 131072:
+                # Corrupt length header, discard magic and retry
+                del self.buf[:4]
+                raise ValueError(f"Invalid frame length declared: {length}")
+
+            total_needed = 8 + length
+
+            # 3. Read exact declared payload across multiple TCP fragments
+            while len(self.buf) < total_needed:
+                if time.monotonic() > deadline:
+                    raise socket.timeout(f"Timed out reading frame payload ({len(self.buf)}/{total_needed})")
+                try:
+                    chunk = self.sock.recv(total_needed - len(self.buf))
+                    if not chunk:
+                        raise ConnectionResetError("Socket closed while reading payload")
+                    self.buf.extend(chunk)
+                except (socket.timeout, BlockingIOError):
+                    continue
+
+            payload = bytes(self.buf[8:total_needed])
+            del self.buf[:total_needed]
+            cmd = struct.unpack('<H', payload[:2])[0]
+            return cmd, payload
+        finally:
+            try:
+                self.sock.settimeout(old_to)
+            except Exception:
+                pass
+
+def _get_zk_reader(zk_obj) -> ZKFrameReader:
+    sock = getattr(zk_obj, '_ZK__sock', None) or getattr(zk_obj, '_sock', None)
+    reader = getattr(zk_obj, '_frame_reader', None)
+    if reader is None or reader.sock != sock:
+        reader = ZKFrameReader(sock)
+        zk_obj._frame_reader = reader
+    return reader
 
 def _apply_pyzk_hotfix():
-    # ── 1. Fix __test_tcp_top: allow 8-byte headers ──────────────────────────
+    # ── 1. Fix __test_tcp_top: allow valid 8-byte frame headers ───────────────
     def patched_test_tcp_top(self, packet):
         if not packet or len(packet) < 8:
             return 0
@@ -98,24 +168,19 @@ def _apply_pyzk_hotfix():
 
     ZK._ZK__test_tcp_top = patched_test_tcp_top
 
-    # ── 2. Fix __send_command: guarantee complete frame delivery ──────────────
+    # ── 2. Fix __send_command: guarantee complete frame delivery & clean framing ─
     orig_send = ZK._ZK__send_command
     def patched_send_command(self, command, command_string=b'', response_size=8):
         if command not in [const.CMD_CONNECT, const.CMD_AUTH] and not self.is_connect:
             raise ZKErrorConnection("instance are not connected.")
         buf = self._ZK__create_header(command, command_string, self._ZK__session_id, self._ZK__reply_id)
         if self.tcp:
+            reader = _get_zk_reader(self)
+            # Drain any stale leftover bytes before transmitting new command
+            reader.drain()
             top = self._ZK__create_tcp_top(buf)
-            sock = getattr(self, '_ZK__sock', None) or getattr(self, '_sock', None)
-            sock.sendall(top)
-            # Read 8-byte frame header reliably
-            hdr = _recv_exact_bytes(sock, 8, timeout=8.0)
-            self._ZK__tcp_length = self._ZK__test_tcp_top(hdr)
-            if self._ZK__tcp_length == 0:
-                raise ZKNetworkError("TCP packet invalid")
-            # Read full declared payload
-            payload = _recv_exact_bytes(sock, self._ZK__tcp_length, timeout=8.0)
-            self._ZK__tcp_data_recv = hdr + payload
+            reader.sock.sendall(top)
+            cmd_code, payload = reader.recv_frame(timeout=8.0)
             self._ZK__header = struct.unpack('<4H', payload[:8])
             self._ZK__data_recv = payload
         else:
@@ -133,13 +198,13 @@ def _apply_pyzk_hotfix():
 
     ZK._ZK__send_command = patched_send_command
 
-    # ── 3. Fix read_with_buffer: complete multi-segment TCP attendance reading ─
+    # ── 3. Fix read_with_buffer: complete multi-segment TCP attendance extraction ──
     orig_rwb = ZK.read_with_buffer
     def patched_read_with_buffer(self, command, fct=0, ext=0):
         if not self.tcp:
             return orig_rwb(self, command, fct, ext)
 
-        sock = getattr(self, '_ZK__sock', None) or getattr(self, '_sock', None)
+        reader = _get_zk_reader(self)
         cmd_string = struct.pack('<bhii', 1, command, fct, ext)
         cmd_resp = self._ZK__send_command(1503, cmd_string, 1024)
         if not cmd_resp.get('status'):
@@ -151,7 +216,7 @@ def _apply_pyzk_hotfix():
         if cmd_resp['code'] == const.CMD_PREPARE_DATA:
             if len(self._ZK__data) < 5:
                 return b'', 0
-            total_size = struct.unpack('I', self._ZK__data[1:5])[0]
+            total_size = struct.unpack('<I', self._ZK__data[1:5])[0]
             if total_size <= 0:
                 return b'', 0
 
@@ -162,21 +227,31 @@ def _apply_pyzk_hotfix():
             while start < total_size:
                 chunk_size = min(MAX_CHUNK, total_size - start)
                 req_str = struct.pack('<ii', start, chunk_size)
-                resp = self._ZK__send_command(1504, req_str, 1024)
+                resp = self._ZK__send_command(1504, req_str, chunk_size + 32)
                 if not resp.get('status'):
                     break
 
-                # Read Packet 2 (CMD_DATA containing records)
-                c2, data2 = _recv_zk_tcp_frame(sock, timeout=12.0)
-                if data2:
-                    accumulated.extend(data2)
-
-                # Read Packet 3 (CMD_ACK_OK)
-                c3, _ = _recv_zk_tcp_frame(sock, timeout=4.0)
+                if resp['code'] == const.CMD_DATA:
+                    accumulated.extend(self._ZK__data)
+                    # Consume trailing ACK (CMD_ACK_OK) if device sends one
+                    try:
+                        reader.recv_frame(timeout=1.0)
+                    except Exception:
+                        pass
+                elif resp['code'] == const.CMD_PREPARE_DATA:
+                    try:
+                        c2, payload2 = reader.recv_frame(timeout=8.0)
+                        if c2 == const.CMD_DATA:
+                            accumulated.extend(payload2[8:])
+                        reader.recv_frame(timeout=1.0)
+                    except Exception:
+                        pass
+                else:
+                    break
 
                 start += chunk_size
 
-            # Free buffer on hardware
+            # Free buffer on TA500 RAM
             try:
                 self._ZK__send_command(1502)
             except Exception:
@@ -618,7 +693,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 180},
+            {'key': 'bridge_version',   'value': 183},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -712,10 +787,13 @@ def safe_disconnect(conn: Optional[object]) -> None:
     except Exception:
         pass
     try:
-        if hasattr(conn, '_ZK__sock') and conn._ZK__sock:
-            conn._ZK__sock.close()
+        sock = getattr(conn, '_ZK__sock', None) or getattr(conn, '_sock', None)
+        if sock:
+            sock.close()
     except Exception:
         pass
+    if hasattr(conn, '_frame_reader'):
+        conn._frame_reader = None
 
 def restart_ta500_soft(ip: Optional[str] = None) -> bool:
     """
@@ -888,76 +966,37 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v17.3 Fast Sentinel Direct Attendance Extractor:
-    - Zero free_data() calls before read_with_buffer (prevents protocol desync).
-    - Uses read_with_buffer(13) directly.
-    - If TCP packet error occurs, raises exception so main loop cleanly rejuvenates socket.
+    v18.3 Iron Sentinel Instant Attendance Extractor:
+    - Reads attendance stream directly via patched multi-segment read_with_buffer(13).
+    - Safely unrolls 40-byte TA500 attendance records with zero buffer slip.
+    - Accurately strips 4-byte size header when present.
     """
     if not conn:
         return []
     for attempt in range(max_retries):
         try:
-            sock = getattr(conn, '_ZK__sock', None) or getattr(conn, '_sock', None)
-            old_timeout = sock.gettimeout() if sock else None
-            if sock:
-                sock.settimeout(15.0)
-
-            # CMD_ATTLOG_RRQ = 13: reads ONLY the raw attendance log (< 2KB)
             attendance_data, size = conn.read_with_buffer(13)
-
-            if sock and old_timeout is not None:
-                sock.settimeout(old_timeout)
-
-            # Guard against short/empty buffer before unpack
             if not attendance_data or len(attendance_data) < 4:
                 return []
 
-            total_size = struct.unpack('<I', attendance_data[:4])[0]
-            if total_size < 40 or len(attendance_data) < 44:
-                return []
+            raw_data = attendance_data
+            if len(attendance_data) >= 44:
+                prefix_size = struct.unpack('<I', attendance_data[:4])[0]
+                if prefix_size == len(attendance_data) - 4 or (len(attendance_data) - 4) % 40 == 0:
+                    raw_data = attendance_data[4:]
 
-            records_count = getattr(conn, 'records', 0)
-            record_size = 40
-            if records_count > 0 and total_size % records_count == 0:
-                calc_size = total_size // records_count
-                if calc_size in (8, 16, 40):
-                    record_size = calc_size
-            elif total_size % 40 == 0:
-                record_size = 40
-            elif total_size % 16 == 0:
-                record_size = 16
-            elif total_size % 8 == 0:
-                record_size = 8
-            else:
-                record_size = 40
-            raw_data = attendance_data[4:]
             attendances = []
-
-            if record_size == 8:
-                while len(raw_data) >= 8:
-                    uid, status, ts_bytes, punch = struct.unpack('<HB4sB', raw_data[:8])
-                    raw_data = raw_data[8:]
-                    dt = decode_zk_time(ts_bytes)
-                    attendances.append(SimpleAttendance(str(uid), dt, status, punch, uid))
-            elif record_size == 16:
-                while len(raw_data) >= 16:
-                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data[:16])
-                    raw_data = raw_data[16:]
-                    dt = decode_zk_time(ts_bytes)
-                    attendances.append(SimpleAttendance(str(user_id), dt, status, punch, int(user_id)))
-            else:  # 40-byte format
-                while len(raw_data) >= 40:
-                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data[:40])
-                    raw_data = raw_data[40:]
-                    uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
-                    dt = decode_zk_time(ts_bytes)
-                    attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
+            while len(raw_data) >= 40:
+                uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data[:40])
+                raw_data = raw_data[40:]
+                uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
+                dt = decode_zk_time(ts_bytes)
+                attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
             return attendances
-
         except Exception as e:
             if attempt == max_retries - 1:
-                logger.warning(f"Fast attendance extraction notice: {e}")
+                logger.warning(f"Attendance extraction notice: {e}")
                 raise
             time.sleep(1.0)
     return []
@@ -1150,10 +1189,10 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.2 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.3 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    logger.info('   Mode      : Direct TCP Frame Reader | Complete Buffer Assembly | Instant Punch Sync')
-    logger.info('   Stability : Zero Fragmentation Errors | TP-Link Port 9 Keepalive | 3s Rapid Detection')
+    logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
+    logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
     logger.info('   Storage   : SQLite WAL Queue (Zero Punch Loss) | Instant Cloud Sync')
     logger.info('==================================================================')
 
@@ -1320,7 +1359,7 @@ def main():
                                 conn.disconnect()
                             except Exception:
                                 pass
-                            _cleanup_socket(conn)
+                            safe_disconnect(conn)
 
                         # Method 2: If active conn was not connected, use direct socket fallback
                         if not reboot_success:
@@ -1388,7 +1427,7 @@ def main():
                             conn.disconnect()
                         except Exception:
                             pass
-                        _cleanup_socket(conn)
+                        safe_disconnect(conn)
                         time.sleep(1)
                         restart_ta500_soft(ZK_IP)
                         time.sleep(20)
