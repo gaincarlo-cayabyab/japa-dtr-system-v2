@@ -232,33 +232,8 @@ def ensure_employee_exists(uid: str, full_name: Optional[str] = None) -> bool:
     s_uid = str(uid).strip()
     if not s_uid or s_uid == '0':
         return False
-    if s_uid in _employee_cache:
-        return True
-
-    name = full_name or f'Enrolled #{s_uid}'
-    logger.info(f'Auto-registering missing employee slot #{s_uid} ({name}) to Supabase...')
-    payload = {
-        'device_user_id': s_uid,
-        'full_name': name,
-        'branch': 'Dagupan Main',
-        'position': 'Staff',
-        'department': 'Operations',
-    }
-    url = f'{SUPABASE_URL}/rest/v1/employees?on_conflict=device_user_id'
-    try:
-        res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(3, 5))
-        if res.status_code in (200, 201):
-            _employee_cache[s_uid] = name
-            logger.info(f'✅ Auto-registered employee #{s_uid} ({name}) successfully!')
-            return True
-        elif res.status_code == 409:
-            _employee_cache[s_uid] = name
-            return True
-        else:
-            logger.warning(f'Auto-register employee #{s_uid} returned HTTP {res.status_code}: {res.text}')
-    except Exception as e:
-        logger.warning(f'Error auto-registering employee #{s_uid}: {e}')
-    return False
+    # Strict read-only: never insert fake or unverified employees from the bridge
+    return s_uid in _employee_cache
 
 def _parse_ts(ts_val) -> datetime:
     if isinstance(ts_val, datetime):
@@ -685,44 +660,18 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     return []
 
 def sync_device_users(conn) -> int:
-    """Sync enrolled users over the active single connection (v17.3: no disable_device)."""
+    """Read enrolled users from TA500 without modifying the official database roster."""
     global _employee_cache
     if not conn:
         return 0
     try:
-        # v17.3: NO disable_device() before get_users() — avoids screen lock.
-        # get_users() itself is safe; only get_attendance() wrapping get_users() causes issues.
         users = conn.get_users()
         if not users:
             return 0
-
-        new_or_updated = []
-        for u in users:
-            raw_uid = str(u.user_id)
-            uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
-            raw_name = (u.name or '').strip()
-            name = raw_name if raw_name else f'NN-{uid}'
-
-            if uid in _employee_cache and not _employee_cache[uid].startswith('NN-'):
-                continue
-
-            if uid not in _employee_cache:
-                new_or_updated.append({
-                    'device_user_id': uid,
-                    'full_name': name,
-                    'branch': 'Dagupan Main',
-                })
-
-        if new_or_updated:
-            logger.info(f'👤 Detected {len(new_or_updated)} new employee(s) on TA500: {[e["full_name"] for e in new_or_updated]}')
-            url = f'{SUPABASE_URL}/rest/v1/employees?on_conflict=device_user_id'
-            res = session.post(url, headers=_HEADERS_INSERT, json=new_or_updated, timeout=(3, 5))
-            if res.status_code in (200, 201):
-                logger.info(f'✅ Successfully auto-registered {len(new_or_updated)} employee(s) in cloud!')
-                refresh_employee_cache()
-                return len(new_or_updated)
+        logger.info(f'TA500 reports {len(users)} enrolled template slots on device.')
+        return len(users)
     except Exception as e:
-        logger.warning(f'Device user sync notice: {e}')
+        logger.warning(f'Device user read notice: {e}')
     return 0
 
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
@@ -808,6 +757,13 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         raw_uid = str(att.user_id)
         uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
         local_dt = _parse_ts(att.timestamp)
+        if not (2024 <= local_dt.year <= 2030):
+            logger.warning(f'Discarding corrupted punch timestamp year {local_dt.year} for slot {raw_uid}')
+            continue
+
+        if uid not in _employee_cache:
+            continue
+
         utc_iso = local_dt.astimezone(timezone.utc).isoformat()
 
         key = _punch_key(uid, utc_iso)
@@ -831,10 +787,6 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         status_val = getattr(att, 'punch', None)
         if status_val is None:
             status_val = int(att.status or 0)
-
-        # Proactively ensure employee exists in database before accepting punch into queue!
-        if uid not in _employee_cache:
-            ensure_employee_exists(uid)
 
         _pending_upload_queue.append({
             'device_user_id': uid,
