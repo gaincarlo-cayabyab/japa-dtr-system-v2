@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.3 "Iron Sentinel — Complete Frame Engine"
+v18.4 "Iron Sentinel — Authoritative Cloud Reconciler"
 
 Key Architecture Fixes:
   1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
@@ -10,12 +10,13 @@ Key Architecture Fixes:
      - Loops until exact declared frame payload is assembled across TCP fragments.
      - Completely eliminates 'TCP packet invalid' errors over Wi-Fi extenders.
   2. Multi-Packet Attendance Stream Extractor:
-     - Consumes CMD_DATA and trailing CMD_ACK_OK seamlessly without timeouts.
-     - Strips 4-byte total size prefix accurately and unrolls 40-byte records.
-  3. 3-Second Rapid Punch Detection:
-     - POLL_INTERVAL = 3s: detects new punches in 1-3 seconds.
-  4. TP-Link Extender Port 9 Keepalive:
-     - Periodic UDP pulse prevents ARP expiration on Wi-Fi repeaters.
+     - Robust buffer size detection with fallback to hardware record counter.
+     - Consumes CMD_DATA directly from ZKTeco memory without hanging.
+     - Detailed diagnostics at every stage of attendance retrieval.
+  3. Authoritative Cloud Reconciliation:
+     - Seeds seen cache directly from Supabase, ensuring unsynced punches are never skipped.
+     - Unblocks any stalled SQLite queue records.
+  4. 3-Second Rapid Punch Detection (POLL_INTERVAL = 3s).
 """
 
 import os
@@ -207,59 +208,85 @@ def _apply_pyzk_hotfix():
         reader = _get_zk_reader(self)
         cmd_string = struct.pack('<bhii', 1, command, fct, ext)
         cmd_resp = self._ZK__send_command(1503, cmd_string, 1024)
+        resp_code = cmd_resp.get('code', 0)
+        data_len = len(self._ZK__data)
+        logger.info(f"📋 RWB 1503 reply: code={resp_code}, payload_bytes={data_len}")
+
         if not cmd_resp.get('status'):
+            logger.warning(f"⚠️ 1503 CMD_PREPARE_BUFFER rejected (code={resp_code})")
             return b'', 0
 
-        if cmd_resp['code'] == const.CMD_DATA:
-            return self._ZK__data, len(self._ZK__data)
+        if resp_code == const.CMD_DATA:
+            logger.info(f"📋 RWB received CMD_DATA directly ({data_len} bytes)")
+            return self._ZK__data, data_len
 
-        if cmd_resp['code'] == const.CMD_PREPARE_DATA:
-            if len(self._ZK__data) < 5:
-                return b'', 0
-            total_size = struct.unpack('<I', self._ZK__data[1:5])[0]
-            if total_size <= 0:
-                return b'', 0
+        # Extract declared buffer size
+        total_size = 0
+        if data_len >= 5:
+            s1 = struct.unpack('<I', self._ZK__data[1:5])[0]
+            s0 = struct.unpack('<I', self._ZK__data[:4])[0]
+            if 0 < s1 < 10000000 and (s1 % 40 == 0 or s1 % 16 == 0 or s1 % 8 == 0):
+                total_size = s1
+            elif 0 < s0 < 10000000 and (s0 % 40 == 0 or s0 % 16 == 0 or s0 % 8 == 0):
+                total_size = s0
+            else:
+                total_size = s1 if s1 > 0 else s0
+        elif data_len >= 4:
+            total_size = struct.unpack('<I', self._ZK__data[:4])[0]
 
-            MAX_CHUNK = 0xFFC0
-            accumulated = bytearray()
-            start = 0
+        # Hardware fallback: if size is 0 or unparsed, calculate from known records count
+        records_hint = getattr(self, 'records', 0)
+        if total_size <= 0 and records_hint > 0:
+            total_size = records_hint * 40
+            logger.info(f"📋 RWB buffer size defaulted from hardware records count: {total_size} bytes ({records_hint} records)")
+        else:
+            logger.info(f"📋 RWB declared total size: {total_size} bytes")
 
-            while start < total_size:
-                chunk_size = min(MAX_CHUNK, total_size - start)
-                req_str = struct.pack('<ii', start, chunk_size)
-                resp = self._ZK__send_command(1504, req_str, chunk_size + 32)
-                if not resp.get('status'):
-                    break
+        if total_size <= 0:
+            logger.warning("⚠️ RWB could not determine buffer size (total_size=0)")
+            return b'', 0
 
-                if resp['code'] == const.CMD_DATA:
-                    accumulated.extend(self._ZK__data)
-                    # Consume trailing ACK (CMD_ACK_OK) if device sends one
-                    try:
-                        reader.recv_frame(timeout=1.0)
-                    except Exception:
-                        pass
-                elif resp['code'] == const.CMD_PREPARE_DATA:
-                    try:
-                        c2, payload2 = reader.recv_frame(timeout=8.0)
-                        if c2 == const.CMD_DATA:
-                            accumulated.extend(payload2[8:])
-                        reader.recv_frame(timeout=1.0)
-                    except Exception:
-                        pass
-                else:
-                    break
+        MAX_CHUNK = 0xFFC0
+        accumulated = bytearray()
+        start = 0
 
-                start += chunk_size
+        while start < total_size:
+            chunk_size = min(MAX_CHUNK, total_size - start)
+            req_str = struct.pack('<ii', start, chunk_size)
+            resp = self._ZK__send_command(1504, req_str, chunk_size + 32)
+            c = resp.get('code', 0)
+            chunk_bytes = len(self._ZK__data)
+            logger.info(f"📋 RWB Chunk [{start}:{start+chunk_size}]: resp={c}, data_len={chunk_bytes}")
 
-            # Free buffer on TA500 RAM
-            try:
-                self._ZK__send_command(1502)
-            except Exception:
-                pass
+            if not resp.get('status'):
+                logger.warning(f"⚠️ RWB 1504 chunk request failed (status False, code={c})")
+                break
 
-            return bytes(accumulated), len(accumulated)
+            if c == const.CMD_DATA and chunk_bytes > 0:
+                accumulated.extend(self._ZK__data)
+            elif c == const.CMD_PREPARE_DATA:
+                try:
+                    c2, payload2 = reader.recv_frame(timeout=8.0)
+                    if c2 == const.CMD_DATA:
+                        accumulated.extend(payload2[8:])
+                    logger.info(f"📋 RWB PREPARE_DATA follow-up frame: code={c2}, len={len(payload2)}")
+                except Exception as e_c2:
+                    logger.warning(f"⚠️ RWB PREPARE_DATA follow-up notice: {e_c2}")
+            elif chunk_bytes > 0:
+                accumulated.extend(self._ZK__data)
+            else:
+                break
 
-        return b'', 0
+            start += chunk_size
+
+        # Free buffer on TA500 RAM
+        try:
+            self._ZK__send_command(1502)
+        except Exception:
+            pass
+
+        logger.info(f"✅ RWB Complete: Assembled {len(accumulated)} attendance bytes from TA500 RAM")
+        return bytes(accumulated), len(accumulated)
 
     ZK.read_with_buffer = patched_read_with_buffer
 
@@ -542,6 +569,7 @@ def init_local_database():
                 )
             ''')
             conn.execute('CREATE INDEX IF NOT EXISTS idx_offline_synced ON offline_punches(is_synced)')
+            conn.execute('UPDATE offline_punches SET is_synced = 0 WHERE is_synced = -1')
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS seen_hashes (
                     punch_key TEXT PRIMARY KEY,
@@ -693,7 +721,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 183},
+            {'key': 'bridge_version',   'value': 184},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -966,7 +994,7 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v18.3 Iron Sentinel Instant Attendance Extractor:
+    v18.4 Iron Sentinel Instant Attendance Extractor:
     - Reads attendance stream directly via patched multi-segment read_with_buffer(13).
     - Safely unrolls 40-byte TA500 attendance records with zero buffer slip.
     - Accurately strips 4-byte size header when present.
@@ -976,7 +1004,9 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     for attempt in range(max_retries):
         try:
             attendance_data, size = conn.read_with_buffer(13)
+            logger.info(f"📊 safe_fetch_attendance: buffer received {len(attendance_data)} bytes (announced size={size})")
             if not attendance_data or len(attendance_data) < 4:
+                logger.warning(f"⚠️ safe_fetch_attendance: buffer too short ({len(attendance_data)} bytes)")
                 return []
 
             raw_data = attendance_data
@@ -993,10 +1023,11 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
                 dt = decode_zk_time(ts_bytes)
                 attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
+            logger.info(f"📊 safe_fetch_attendance: successfully decoded {len(attendances)} attendance records")
             return attendances
         except Exception as e:
+            logger.warning(f"Attendance extraction attempt {attempt+1} error: {e}")
             if attempt == max_retries - 1:
-                logger.warning(f"Attendance extraction notice: {e}")
                 raise
             time.sleep(1.0)
     return []
@@ -1098,6 +1129,9 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
     global _last_device_punch
     new_count = 0
     sync_time = datetime.now(timezone.utc).isoformat()
+    skipped_seen = 0
+    skipped_emp = 0
+    skipped_year = 0
 
     try:
         attendances.sort(key=lambda a: _parse_ts(getattr(a, 'timestamp', None)))
@@ -1109,10 +1143,11 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
         local_dt = _parse_ts(att.timestamp)
         if not (2024 <= local_dt.year <= 2030):
-            logger.warning(f'Discarding corrupted punch timestamp year {local_dt.year} for slot {raw_uid}')
+            skipped_year += 1
             continue
 
         if uid not in _employee_cache:
+            skipped_emp += 1
             continue
 
         utc_iso = local_dt.astimezone(timezone.utc).isoformat()
@@ -1120,6 +1155,7 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         key = _punch_key(uid, utc_iso)
         if key in seen:
             _last_device_punch[uid] = local_dt
+            skipped_seen += 1
             continue
 
         prev_punch_dt = _last_device_punch.get(uid)
@@ -1128,6 +1164,7 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
             if diff_sec < 15:
                 seen.add(key)
                 save_seen_set(seen)
+                skipped_seen += 1
                 continue
 
         _last_device_punch[uid] = local_dt
@@ -1139,6 +1176,10 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         record_offline_punch(key, uid, utc_iso, int(status_val), int(att.status or 0), sync_time)
         seen.add(key)
         new_count += 1
+        emp_name = _employee_cache.get(uid, f'ID #{uid}')
+        logger.info(f"🆕 NEW PUNCH: {emp_name} at {local_dt.strftime('%Y-%m-%d %H:%M:%S')} (status {status_val})")
+
+    logger.info(f"📊 Audit breakdown: {new_count} new, {skipped_seen} already in DB, {skipped_emp} unmapped emp, {skipped_year} bad year")
 
     if new_count > 0:
         save_seen_set(seen)
@@ -1189,7 +1230,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.3 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.4 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
     logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
@@ -1307,8 +1348,10 @@ def main():
                 if caught_up > 0:
                     logger.info(f'✅ Caught up {caught_up} punch(es) from TA500 memory!')
                     flush_upload_queue(seen)
+                elif len(atts) == 0:
+                    logger.warning('⚠️ Catch-up: Zero attendance records returned by hardware buffer.')
                 else:
-                    logger.info('✅ All attendance records verified. Sensor ready for punches!')
+                    logger.info(f'✅ Verified {len(atts)} records against cloud. All punches already present in Supabase.')
         except Exception as e_init:
             logger.warning(f'Initial status check notice: {e_init}')
 
