@@ -71,15 +71,54 @@ def _apply_pyzk_hotfix():
             return b"", 0
         except TypeError as e:
             if "NoneType" in str(e) or "bytes-like" in str(e):
-                try:
-                    d = getattr(self, "_ZK__data", b"") or b""
-                    return d, len(d)
-                except Exception:
-                    return b"", 0
+                return b"", 0
             raise
     ZK.read_with_buffer = safe_rwb
 
 _apply_pyzk_hotfix()
+
+class GuardedSocket:
+    """Guarantees complete TCP framing over Wi-Fi / TP-Link repeater to prevent partial-packet desync."""
+    def __init__(self, sock):
+        self.sock = sock
+
+    def __getattr__(self, name):
+        return getattr(self.sock, name)
+
+    def send(self, data):
+        return self.sock.send(data)
+
+    def sendto(self, data, addr):
+        return self.sock.sendto(data, addr)
+
+    def recv(self, size):
+        if size <= 0:
+            return b''
+        chunk = self.sock.recv(size)
+        if not chunk:
+            return b''
+        res = bytearray(chunk)
+
+        # For small protocol packets (<= 32 bytes like 16-byte ACKs and 8-byte headers), guarantee full assembly
+        if size <= 32:
+            while len(res) < size:
+                more = self.sock.recv(size - len(res))
+                if not more:
+                    break
+                res.extend(more)
+            return bytes(res)
+
+        # For TCP packets with 0x5050 magic header, assemble the complete declared frame
+        if len(res) >= 8:
+            first, second, length = struct.unpack_from('<HHI', res[:8])
+            if first == const.MACHINE_PREPARE_DATA_1 and second == const.MACHINE_PREPARE_DATA_2:
+                target = min(size, 8 + length)
+                while len(res) < target:
+                    more = self.sock.recv(target - len(res))
+                    if not more:
+                        break
+                    res.extend(more)
+        return bytes(res)
 
 # ─── Configuration & Dynamic IP Discovery ──────────────────────────────────────
 _SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
@@ -215,7 +254,32 @@ TA500_TO_SYSTEM_MAP: Dict[str, str] = {
     '24': '24',  # CAYABYAB, GAIN CARLO G.
 }
 
-_employee_cache: Dict[str, str] = {}
+_employee_cache: Dict[str, str] = {
+    '1': 'Dennis P. Ardiente',
+    '2': 'Jeffrey D. Baniqued',
+    '3': 'Carlo C. Caoile',
+    '4': 'Pearly B. De Vera',
+    '5': 'Ivan De Vera',
+    '6': 'Jerwin B. Dee',
+    '7': 'Lyca Estacio',
+    '8': 'Larry L. Estacio',
+    '9': 'Janine Kyle Galvan',
+    '10': 'Joanne Kryshelle C. Galvan',
+    '11': 'Jamaica Soriano',
+    '12': 'Enrolled #12',
+    '13': 'Rowena Romero',
+    '14': 'Randolf J. Galzote',
+    '15': 'Juvell Luna',
+    '16': 'Henry M. Tiozon',
+    '17': 'Melanie P. Tiu',
+    '18': 'Robert Luna',
+    '19': 'Asky Sentenillar',
+    '20': 'Barbara Ellaine S. Costales',
+    '21': 'Marie Stefi S. Costales',
+    '22': 'Jocelyn Luteria',
+    '23': 'Harim Lagao',
+    '24': 'Gain Carlo G. Cayabyab',
+}
 _pending_upload_queue: List[Dict[str, Any]] = []
 _last_device_punch: Dict[str, datetime] = {}
 
@@ -275,11 +339,11 @@ def init_recent_punches() -> None:
 # ─── Phase 1: Network & TP-Link Extender Keepalive ────────────────────────────
 _extender_pulse_running = False
 
-def _extender_keepalive_worker(ip: str, port: int = 4370, interval: int = 15):
+def _extender_keepalive_worker(ip: str, port: int = 9, interval: int = 15):
     """Sends periodic low-overhead UDP pulses to TA500 to keep TP-Link extender ARP cache fresh."""
     logger.info(f"⚡ TP-Link Extender Keepalive active ({interval}s UDP pulse to {ip}:{port})")
     udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    probe = b'\x00\x00\x00\x00'
+    probe = b'\x00'
     while _extender_pulse_running:
         try:
             udp_sock.sendto(probe, (ip, port))
@@ -709,6 +773,13 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
             conn = zk.connect()
             if conn:
                 sock = getattr(conn, '_ZK__sock', None) or getattr(conn, '_sock', None)
+                if sock and not isinstance(sock, GuardedSocket):
+                    guarded = GuardedSocket(sock)
+                    if hasattr(conn, '_ZK__sock'):
+                        conn._ZK__sock = guarded
+                    if hasattr(conn, '_sock'):
+                        conn._sock = guarded
+                    sock = guarded
                 configure_socket_keepalive(sock)
                 if use_udp:
                     logger.info('🟡 Heartbeat connected via UDP fallback.')
@@ -779,13 +850,15 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
                 return []
 
             total_size = struct.unpack('<I', attendance_data[:4])[0]
-            records_count = getattr(conn, 'records', 0)
-            if records_count <= 0:
+            if total_size < 40 or len(attendance_data) < 44:
                 return []
 
-            # Robust record format detection
+            records_count = getattr(conn, 'records', 0)
+            record_size = 40
             if records_count > 0 and total_size % records_count == 0:
-                record_size = total_size // records_count
+                calc_size = total_size // records_count
+                if calc_size in (8, 16, 40):
+                    record_size = calc_size
             elif total_size % 40 == 0:
                 record_size = 40
             elif total_size % 16 == 0:
@@ -799,21 +872,21 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
 
             if record_size == 8:
                 while len(raw_data) >= 8:
-                    uid, status, ts_bytes, punch = struct.unpack('HB4sB', raw_data.ljust(8, bytes(1))[:8])
+                    uid, status, ts_bytes, punch = struct.unpack('<HB4sB', raw_data[:8])
                     raw_data = raw_data[8:]
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(str(uid), dt, status, punch, uid))
             elif record_size == 16:
                 while len(raw_data) >= 16:
-                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data.ljust(16, bytes(1))[:16])
+                    user_id, ts_bytes, status, punch, reserved, workcode = struct.unpack('<I4sBB2sI', raw_data[:16])
                     raw_data = raw_data[16:]
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(str(user_id), dt, status, punch, int(user_id)))
             else:  # 40-byte format
                 while len(raw_data) >= 40:
-                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data.ljust(40, bytes(1))[:40])
+                    uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data[:40])
                     raw_data = raw_data[40:]
-                    uid_str = user_id_bytes.split(bytes(1))[0].decode(errors='ignore').strip()
+                    uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
                     dt = decode_zk_time(ts_bytes)
                     attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
@@ -1014,11 +1087,11 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v17.4')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v17.5')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    logger.info('   Mode      : Sensor-First Engine | Unthrottled Scanner CPU | Flash Grace Period')
-    logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
-    logger.info('   Storage   : SQLite WAL Queue (Zero Punch Loss) | TP-Link Keepalive Active')
+    logger.info('   Mode      : Guarded TCP Framing | Sensor-First Engine | Flash Grace Period')
+    logger.info('   Stability : Zero-Timeout Log Reader | TP-Link Port 9 Keepalive | 30d Window')
+    logger.info('   Storage   : SQLite WAL Queue (Zero Punch Loss) | Instant Cloud Sync')
     logger.info('==================================================================')
 
     start_extender_keepalive(ZK_IP)
@@ -1255,7 +1328,6 @@ def main():
                         time.sleep(20)
                         read_sizes_fail_streak = 0
                         raise ConnectionResetError("Proactive reboot cycle completed")
-                        read_sizes_fail_streak = 0
                     logger.warning(f'⚠️ TA500 connection lost ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
                     raise
 
