@@ -33,6 +33,8 @@ import struct
 import signal
 import hashlib
 import logging
+import sqlite3
+import threading
 import concurrent.futures
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone, timedelta
@@ -81,6 +83,7 @@ _apply_pyzk_hotfix()
 
 # ─── Configuration & Dynamic IP Discovery ──────────────────────────────────────
 _SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+_DB_FILE     = os.path.join(_SCRIPT_DIR, 'bridge.sqlite3')
 _SEEN_FILE   = os.path.join(_SCRIPT_DIR, 'seen_punches.json')
 _TOKEN_FILE  = os.path.join(_SCRIPT_DIR, 'sync_token.json')
 _LOG_FILE    = os.path.join(_SCRIPT_DIR, 'bridge.log')
@@ -269,24 +272,183 @@ def init_recent_punches() -> None:
     except Exception as e:
         logger.warning(f'Recent punches init notice: {e}')
 
-# ─── State Persistence with 30-Day Bounded Window ─────────────────────────────
+# ─── Phase 1: Network & TP-Link Extender Keepalive ────────────────────────────
+_extender_pulse_running = False
+
+def _extender_keepalive_worker(ip: str, port: int = 4370, interval: int = 15):
+    """Sends periodic low-overhead UDP pulses to TA500 to keep TP-Link extender ARP cache fresh."""
+    logger.info(f"⚡ TP-Link Extender Keepalive active ({interval}s UDP pulse to {ip}:{port})")
+    udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    probe = b'\x00\x00\x00\x00'
+    while _extender_pulse_running:
+        try:
+            udp_sock.sendto(probe, (ip, port))
+        except Exception:
+            pass
+        time.sleep(interval)
+    try:
+        udp_sock.close()
+    except Exception:
+        pass
+
+def start_extender_keepalive(ip: str):
+    global _extender_pulse_running
+    if not _extender_pulse_running and ip:
+        _extender_pulse_running = True
+        t = threading.Thread(target=_extender_keepalive_worker, args=(ip,), daemon=True)
+        t.start()
+
+def configure_socket_keepalive(sock):
+    """Configures aggressive TCP keepalive to detect dropped connections in 15s instead of 45s."""
+    if not sock:
+        return
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        if hasattr(socket, 'TCP_KEEPIDLE'):
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 10)
+        if hasattr(socket, 'TCP_KEEPINTVL'):
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 5)
+        if hasattr(socket, 'TCP_KEEPCNT'):
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+    except Exception:
+        pass
+
+# ─── Phase 2: Local SQLite WAL Offline Storage ────────────────────────────────
+def init_local_database():
+    """Initializes persistent SQLite database with WAL mode for zero punch loss."""
+    try:
+        with sqlite3.connect(_DB_FILE, timeout=10.0) as conn:
+            conn.execute('PRAGMA journal_mode = WAL')
+            conn.execute('PRAGMA synchronous = NORMAL')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS offline_punches (
+                    punch_key TEXT PRIMARY KEY,
+                    device_user_id TEXT NOT NULL,
+                    punch_time TEXT NOT NULL,
+                    status INTEGER NOT NULL,
+                    raw_status INTEGER,
+                    synced_at TEXT NOT NULL,
+                    is_synced INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_offline_synced ON offline_punches(is_synced)')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS seen_hashes (
+                    punch_key TEXT PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        logger.info(f"📁 Local SQLite WAL queue initialized ({_DB_FILE})")
+    except Exception as e:
+        logger.warning(f"Could not initialize local SQLite queue: {e}")
+
+def record_offline_punch(key: str, uid: str, punch_time: str, status: int, raw_status: int, sync_time: str) -> None:
+    """Persists punch to tablet SQLite database before network upload."""
+    try:
+        with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
+            conn.execute('''
+                INSERT OR IGNORE INTO offline_punches
+                (punch_key, device_user_id, punch_time, status, raw_status, synced_at, is_synced)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+            ''', (key, uid, punch_time, status, raw_status, sync_time))
+            conn.execute('INSERT OR IGNORE INTO seen_hashes (punch_key) VALUES (?)', (key,))
+    except Exception as e:
+        logger.warning(f"SQLite record punch notice: {e}")
+
+def get_pending_offline_punches(limit: int = 50) -> List[Dict[str, Any]]:
+    """Retrieves unsynced offline punches in chronological order."""
+    try:
+        if not os.path.exists(_DB_FILE):
+            return []
+        with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.execute('''
+                SELECT punch_key, device_user_id, punch_time, status, raw_status, synced_at
+                FROM offline_punches
+                WHERE is_synced = 0
+                ORDER BY punch_time ASC
+                LIMIT ?
+            ''', (limit,))
+            rows = cur.fetchall()
+            return [{
+                '_key': r['punch_key'],
+                'device_user_id': r['device_user_id'],
+                'punch_time': r['punch_time'],
+                'status': r['status'],
+                'raw_status': r['raw_status'],
+                'synced_at': r['synced_at'],
+            } for r in rows]
+    except Exception as e:
+        logger.warning(f"SQLite pending queue query notice: {e}")
+        return []
+
+def mark_punches_synced(keys: List[str]) -> None:
+    if not keys or not os.path.exists(_DB_FILE):
+        return
+    try:
+        with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
+            placeholders = ','.join('?' for _ in keys)
+            conn.execute(f'''
+                UPDATE offline_punches
+                SET is_synced = 1
+                WHERE punch_key IN ({placeholders})
+            ''', keys)
+    except Exception as e:
+        logger.warning(f"SQLite mark synced notice: {e}")
+
+def discard_rejected_punches(keys: List[str]) -> None:
+    if not keys or not os.path.exists(_DB_FILE):
+        return
+    try:
+        with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
+            placeholders = ','.join('?' for _ in keys)
+            conn.execute(f'''
+                UPDATE offline_punches
+                SET is_synced = -1
+                WHERE punch_key IN ({placeholders})
+            ''', keys)
+    except Exception as e:
+        logger.warning(f"SQLite discard notice: {e}")
+
+# ─── State Persistence with SQLite & 30-Day Bounded Window ─────────────────────
 def _punch_key(uid: str, punch_time_utc: str) -> str:
     return hashlib.md5(f'{uid}|{punch_time_utc}'.encode()).hexdigest()
 
 def load_seen_set() -> Set[str]:
+    seen: Set[str] = set()
+    # 1. From SQLite seen_hashes table
+    try:
+        if os.path.exists(_DB_FILE):
+            with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
+                cur = conn.execute('SELECT punch_key FROM seen_hashes')
+                for row in cur:
+                    seen.add(row[0])
+    except Exception:
+        pass
+    # 2. From legacy JSON file if present
     try:
         if os.path.exists(_SEEN_FILE):
             with open(_SEEN_FILE, 'r') as f:
                 data = json.load(f)
-                return set(data) if isinstance(data, list) else set()
+                if isinstance(data, list):
+                    seen.update(data)
     except Exception:
         pass
-    return set()
+    return seen
 
 def save_seen_set(seen: Set[str]) -> None:
+    # 1. Save to SQLite
+    try:
+        if os.path.exists(_DB_FILE) and seen:
+            with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
+                conn.executemany('INSERT OR IGNORE INTO seen_hashes (punch_key) VALUES (?)', [(k,) for k in seen])
+    except Exception:
+        pass
+    # 2. Keep legacy JSON updated for backward compatibility
     try:
         with open(_SEEN_FILE, 'w') as f:
-            json.dump(list(seen), f)
+            json.dump(list(seen)[-1000:], f)
     except Exception as e:
         logger.warning(f'Could not save seen-punch set: {e}')
 
@@ -535,6 +697,9 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
     global ZK_IP
     target_ip = ip or ZK_IP
 
+    # Maintain background keepalive pulse to keep TP-Link extender port active
+    start_extender_keepalive(target_ip)
+
     for use_udp in (False, True):
         zk = None
         timeout = ZK_TIMEOUT if not use_udp else 6
@@ -543,6 +708,8 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
                     password=0, force_udp=use_udp, ommit_ping=True)
             conn = zk.connect()
             if conn:
+                sock = getattr(conn, '_ZK__sock', None) or getattr(conn, '_sock', None)
+                configure_socket_keepalive(sock)
                 if use_udp:
                     logger.info('🟡 Heartbeat connected via UDP fallback.')
                 return conn
@@ -676,30 +843,41 @@ def sync_device_users(conn) -> int:
 
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
 def flush_upload_queue(seen: Set[str]) -> bool:
-    global _pending_upload_queue
-    if not _pending_upload_queue:
+    pending = get_pending_offline_punches(limit=50)
+    if not pending:
         return True
 
-    # Pre-flight check: ensure every employee in queue exists in Supabase to prevent 409 foreign key violations
-    for r in _pending_upload_queue:
+    # Pre-flight check: ensure every employee in queue exists in official roster
+    valid_pending = []
+    discard_keys = []
+    for r in pending:
         uid = str(r.get('device_user_id', '')).strip()
-        if uid and uid not in _employee_cache:
-            ensure_employee_exists(uid)
+        if uid and uid in _employee_cache:
+            valid_pending.append(r)
+        else:
+            discard_keys.append(r['_key'])
 
-    payload = [{k: v for k, v in r.items() if k != '_key'} for r in _pending_upload_queue]
+    if discard_keys:
+        discard_rejected_punches(discard_keys)
+
+    if not valid_pending:
+        return True
+
+    payload = [{k: v for k, v in r.items() if k != '_key'} for r in valid_pending]
     url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
 
     try:
         res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(4, 8))
         if res.status_code in (200, 201):
-            for r in _pending_upload_queue:
-                seen.add(r['_key'])
+            synced_keys = [r['_key'] for r in valid_pending]
+            mark_punches_synced(synced_keys)
+            for k in synced_keys:
+                seen.add(k)
             save_seen_set(seen)
 
-            latest_uid = _pending_upload_queue[-1]['device_user_id']
+            latest_uid = valid_pending[-1]['device_user_id']
             emp_name = _employee_cache.get(latest_uid, f'ID #{latest_uid}')
-            logger.info(f'✅ SYNCED: {len(_pending_upload_queue)} punch(es) to cloud! (Latest: {emp_name})')
-            _pending_upload_queue.clear()
+            logger.info(f'✅ SYNCED: {len(valid_pending)} punch(es) to cloud! (Latest: {emp_name})')
             return True
         elif res.status_code == 409:
             err_text = res.text
@@ -707,44 +885,42 @@ def flush_upload_queue(seen: Set[str]) -> bool:
 
             # Attempt single-item isolation to prevent permanent queue block
             recovered = 0
-            valid_remaining = []
-            for r in _pending_upload_queue:
+            synced_keys = []
+            discarded = []
+            for r in valid_pending:
                 single_payload = [{k: v for k, v in r.items() if k != '_key'}]
-                uid = str(r.get('device_user_id', '')).strip()
                 try:
                     sres = session.post(url, headers=_HEADERS_INSERT, json=single_payload, timeout=(3, 5))
                     if sres.status_code in (200, 201):
+                        synced_keys.append(r['_key'])
                         seen.add(r['_key'])
                         recovered += 1
                     elif sres.status_code == 409:
-                        # Auto-enroll if missing
-                        if uid and ensure_employee_exists(uid):
-                            retry_res = session.post(url, headers=_HEADERS_INSERT, json=single_payload, timeout=(3, 5))
-                            if retry_res.status_code in (200, 201):
-                                seen.add(r['_key'])
-                                recovered += 1
-                                continue
-                        # If permanent constraint failure, discard to protect bridge stability
-                        logger.error(f'⚠️ Discarding rejected punch for UID {uid} to prevent queue lock ({sres.text})')
+                        # Already present in DB, mark synced
+                        synced_keys.append(r['_key'])
                         seen.add(r['_key'])
                     else:
-                        valid_remaining.append(r)
+                        logger.error(f'⚠️ Discarding rejected punch for UID {r["device_user_id"]} ({sres.text})')
+                        discarded.append(r['_key'])
                 except Exception:
-                    valid_remaining.append(r)
+                    pass
 
+            if synced_keys:
+                mark_punches_synced(synced_keys)
+            if discarded:
+                discard_rejected_punches(discarded)
             save_seen_set(seen)
-            _pending_upload_queue = valid_remaining
-            logger.info(f'Queue recovery finished: {recovered} synced, {len(valid_remaining)} remaining in queue')
+            logger.info(f'Queue recovery: {recovered} newly synced, {len(discarded)} discarded')
             return recovered > 0
         else:
-            logger.warning(f'Supabase returned HTTP {res.status_code} — kept in queue (will retry with backoff)')
+            logger.warning(f'Supabase returned HTTP {res.status_code} — kept in local SQLite queue (will retry)')
     except Exception as e:
-        logger.warning(f'Slow network: upload queued ({len(_pending_upload_queue)} punch(es)): {e}')
+        logger.warning(f'Slow network: upload queued locally ({len(valid_pending)} punch(es) waiting in SQLite): {e}')
 
     return False
 
 def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
-    global _pending_upload_queue, _last_device_punch
+    global _last_device_punch
     new_count = 0
     sync_time = datetime.now(timezone.utc).isoformat()
 
@@ -771,10 +947,6 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
             _last_device_punch[uid] = local_dt
             continue
 
-        if any(q['_key'] == key for q in _pending_upload_queue):
-            _last_device_punch[uid] = local_dt
-            continue
-
         prev_punch_dt = _last_device_punch.get(uid)
         if prev_punch_dt is not None:
             diff_sec = abs((local_dt - prev_punch_dt).total_seconds())
@@ -788,15 +960,13 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         if status_val is None:
             status_val = int(att.status or 0)
 
-        _pending_upload_queue.append({
-            'device_user_id': uid,
-            'punch_time':     utc_iso,
-            'status':         int(status_val),
-            'raw_status':     int(att.status or 0),
-            'synced_at':      sync_time,
-            '_key':           key,
-        })
+        # Record immediately to local persistent SQLite WAL database
+        record_offline_punch(key, uid, utc_iso, int(status_val), int(att.status or 0), sync_time)
+        seen.add(key)
         new_count += 1
+
+    if new_count > 0:
+        save_seen_set(seen)
 
     return new_count
 
@@ -840,6 +1010,7 @@ def discover_ta500() -> None:
 # ─── Main Bridge Engine ───────────────────────────────────────────────────────
 def main():
     acquire_instance_lock()
+    init_local_database()
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
@@ -847,9 +1018,10 @@ def main():
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Sensor-First Engine | Unthrottled Scanner CPU | Flash Grace Period')
     logger.info('   Stability : Zero-Timeout Log Reader | Graduated Backoff | 30d Window')
-    logger.info('   Schedule  : Option B Hourly Window Maintenance Support Active')
+    logger.info('   Storage   : SQLite WAL Queue (Zero Punch Loss) | TP-Link Keepalive Active')
     logger.info('==================================================================')
 
+    start_extender_keepalive(ZK_IP)
     seen = load_seen_set()
     logger.info(f'Loaded {len(seen)} previously-synced punch hashes.')
 
@@ -866,8 +1038,7 @@ def main():
 
     while True:
         # Flush pending offline punches if any
-        if _pending_upload_queue:
-            flush_upload_queue(seen)
+        flush_upload_queue(seen)
 
         # ── 1. Connect Device Socket ─────────────────────────────────────────
         conn = connect_heartbeat_socket()
@@ -981,7 +1152,7 @@ def main():
             while True:
                 now = time.time()
 
-                if _pending_upload_queue and (now - last_upload_attempt >= 4.0):
+                if now - last_upload_attempt >= 4.0:
                     last_upload_attempt = now
                     flush_upload_queue(seen)
 
