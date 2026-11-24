@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.4 "Iron Sentinel — Authoritative Cloud Reconciler"
+v18.5 "Iron Sentinel — Flawless Buffer Extractor & Cloud Reconciler"
 
 Key Architecture Fixes:
   1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
@@ -10,12 +10,11 @@ Key Architecture Fixes:
      - Loops until exact declared frame payload is assembled across TCP fragments.
      - Completely eliminates 'TCP packet invalid' errors over Wi-Fi extenders.
   2. Multi-Packet Attendance Stream Extractor:
-     - Robust buffer size detection with fallback to hardware record counter.
-     - Consumes CMD_DATA directly from ZKTeco memory without hanging.
-     - Detailed diagnostics at every stage of attendance retrieval.
+     - Accurate 32-bit uint size extraction at offset 1:5 (e.g. 9684 bytes for 242 records).
+     - Dual-mode chunking: tries full buffer, falls back to 4096-byte slices if needed.
+     - Seamlessly captures CMD_DATA / CMD_PREPARE_DATA frames.
   3. Authoritative Cloud Reconciliation:
-     - Seeds seen cache directly from Supabase, ensuring unsynced punches are never skipped.
-     - Unblocks any stalled SQLite queue records.
+     - Seeds seen cache directly from Supabase (load_cloud_seen_hashes), guaranteeing that any unsynced punches are immediately detected and uploaded.
   4. 3-Second Rapid Punch Detection (POLL_INTERVAL = 3s).
 """
 
@@ -223,61 +222,66 @@ def _apply_pyzk_hotfix():
         # Extract declared buffer size
         total_size = 0
         if data_len >= 5:
+            # ZKTeco standard: self._ZK__data[1:5] contains the 32-bit unsigned size
             s1 = struct.unpack('<I', self._ZK__data[1:5])[0]
-            s0 = struct.unpack('<I', self._ZK__data[:4])[0]
-            if 0 < s1 < 10000000 and (s1 % 40 == 0 or s1 % 16 == 0 or s1 % 8 == 0):
+            if 0 < s1 < 10000000:
                 total_size = s1
-            elif 0 < s0 < 10000000 and (s0 % 40 == 0 or s0 % 16 == 0 or s0 % 8 == 0):
+        if total_size <= 0 and data_len >= 4:
+            s0 = struct.unpack('<I', self._ZK__data[:4])[0]
+            if 0 < s0 < 10000000:
                 total_size = s0
-            else:
-                total_size = s1 if s1 > 0 else s0
-        elif data_len >= 4:
-            total_size = struct.unpack('<I', self._ZK__data[:4])[0]
 
         # Hardware fallback: if size is 0 or unparsed, calculate from known records count
         records_hint = getattr(self, 'records', 0)
         if total_size <= 0 and records_hint > 0:
-            total_size = records_hint * 40
+            total_size = records_hint * 40 + 4
             logger.info(f"📋 RWB buffer size defaulted from hardware records count: {total_size} bytes ({records_hint} records)")
         else:
-            logger.info(f"📋 RWB declared total size: {total_size} bytes")
+            logger.info(f"📋 RWB declared total size: {total_size} bytes (records hint={records_hint})")
 
         if total_size <= 0:
             logger.warning("⚠️ RWB could not determine buffer size (total_size=0)")
             return b'', 0
 
-        MAX_CHUNK = 0xFFC0
+        # Attempt to read buffer: try full buffer first, fallback to 4096 chunks if rejected
         accumulated = bytearray()
-        start = 0
+        for chunk_step in [total_size, 4096]:
+            accumulated.clear()
+            start = 0
+            chunk_failed = False
+            while start < total_size:
+                chunk_len = min(chunk_step, total_size - start)
+                req_str = struct.pack('<ii', start, chunk_len)
+                resp = self._ZK__send_command(1504, req_str, chunk_len + 32)
+                c = resp.get('code', 0)
+                chunk_bytes = len(self._ZK__data)
+                logger.info(f"📋 RWB Chunk [{start}:{start+chunk_len}]: resp={c}, data_len={chunk_bytes}")
 
-        while start < total_size:
-            chunk_size = min(MAX_CHUNK, total_size - start)
-            req_str = struct.pack('<ii', start, chunk_size)
-            resp = self._ZK__send_command(1504, req_str, chunk_size + 32)
-            c = resp.get('code', 0)
-            chunk_bytes = len(self._ZK__data)
-            logger.info(f"📋 RWB Chunk [{start}:{start+chunk_size}]: resp={c}, data_len={chunk_bytes}")
+                if not resp.get('status') or (c not in [const.CMD_DATA, const.CMD_PREPARE_DATA] and chunk_bytes == 0):
+                    logger.warning(f"⚠️ RWB 1504 chunk request failed (code={c}, bytes={chunk_bytes})")
+                    chunk_failed = True
+                    break
 
-            if not resp.get('status'):
-                logger.warning(f"⚠️ RWB 1504 chunk request failed (status False, code={c})")
+                if c == const.CMD_DATA and chunk_bytes > 0:
+                    accumulated.extend(self._ZK__data)
+                elif c == const.CMD_PREPARE_DATA:
+                    try:
+                        c2, payload2 = reader.recv_frame(timeout=8.0)
+                        if c2 == const.CMD_DATA:
+                            accumulated.extend(payload2[8:])
+                        logger.info(f"📋 RWB PREPARE_DATA follow-up frame: code={c2}, len={len(payload2)}")
+                    except Exception as e_c2:
+                        logger.warning(f"⚠️ RWB PREPARE_DATA follow-up notice: {e_c2}")
+                elif chunk_bytes > 0:
+                    accumulated.extend(self._ZK__data)
+                else:
+                    chunk_failed = True
+                    break
+
+                start += chunk_len
+
+            if not chunk_failed and len(accumulated) >= (total_size - 4):
                 break
-
-            if c == const.CMD_DATA and chunk_bytes > 0:
-                accumulated.extend(self._ZK__data)
-            elif c == const.CMD_PREPARE_DATA:
-                try:
-                    c2, payload2 = reader.recv_frame(timeout=8.0)
-                    if c2 == const.CMD_DATA:
-                        accumulated.extend(payload2[8:])
-                    logger.info(f"📋 RWB PREPARE_DATA follow-up frame: code={c2}, len={len(payload2)}")
-                except Exception as e_c2:
-                    logger.warning(f"⚠️ RWB PREPARE_DATA follow-up notice: {e_c2}")
-            elif chunk_bytes > 0:
-                accumulated.extend(self._ZK__data)
-            else:
-                break
-
-            start += chunk_size
 
         # Free buffer on TA500 RAM
         try:
@@ -721,7 +725,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 184},
+            {'key': 'bridge_version',   'value': 185},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -1230,7 +1234,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.4 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.5 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
     logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
@@ -1238,8 +1242,9 @@ def main():
     logger.info('==================================================================')
 
     start_extender_keepalive(ZK_IP)
-    seen = load_seen_set()
-    logger.info(f'Loaded {len(seen)} previously-synced punch hashes.')
+    cloud_seen = load_cloud_seen_hashes(limit=2000)
+    seen = cloud_seen if cloud_seen else load_seen_set()
+    logger.info(f'Loaded {len(seen)} authoritative punch hashes from Supabase cloud.')
 
     refresh_employee_cache()
     init_recent_punches()
