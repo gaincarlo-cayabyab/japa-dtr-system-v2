@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.5 "Iron Sentinel — Flawless Buffer Extractor & Cloud Reconciler"
+v18.6 "Iron Sentinel — Auto-Aligning Record Scanner"
 
 Key Architecture Fixes:
   1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
@@ -11,11 +11,13 @@ Key Architecture Fixes:
      - Completely eliminates 'TCP packet invalid' errors over Wi-Fi extenders.
   2. Multi-Packet Attendance Stream Extractor:
      - Accurate 32-bit uint size extraction at offset 1:5 (e.g. 9684 bytes for 242 records).
-     - Dual-mode chunking: tries full buffer, falls back to 4096-byte slices if needed.
-     - Seamlessly captures CMD_DATA / CMD_PREPARE_DATA frames.
-  3. Authoritative Cloud Reconciliation:
+     - Streams all CMD_DATA frames until CMD_ACK_OK — assembles complete buffer.
+  3. Auto-Aligning Record Scanner (v18.6):
+     - Probes offsets 0-8 and selects the one yielding the most valid timestamps (2024-2027).
+     - Eliminates 'bad year / unmapped emp' caused by TA500 prepending a 4-byte size header.
+  4. Authoritative Cloud Reconciliation:
      - Seeds seen cache directly from Supabase (load_cloud_seen_hashes), guaranteeing that any unsynced punches are immediately detected and uploaded.
-  4. 3-Second Rapid Punch Detection (POLL_INTERVAL = 3s).
+  5. 3-Second Rapid Punch Detection (POLL_INTERVAL = 3s).
 """
 
 import os
@@ -727,7 +729,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 185},
+            {'key': 'bridge_version',   'value': 186},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -998,12 +1000,51 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
     year = t + 2000
     return datetime(year, month, day, hour, minute, second)
 
+def _zk_timestamp_valid(ts_bytes: bytes) -> bool:
+    """Returns True if a 4-byte ZKTeco timestamp decodes to a sane date (2024–2027)."""
+    try:
+        t = struct.unpack('<I', ts_bytes)[0]
+        sec  = t % 60; t //= 60
+        mn   = t % 60; t //= 60
+        hr   = t % 24; t //= 24
+        day  = t % 31 + 1; t //= 31
+        mon  = t % 12 + 1; t //= 12
+        yr   = t + 2000
+        return 2024 <= yr <= 2027 and 1 <= mon <= 12 and 1 <= day <= 31 and 0 <= hr <= 23
+    except Exception:
+        return False
+
+
+def _auto_align_records(data: bytes, rec_size: int = 40) -> int:
+    """
+    Probes offsets 0–8 and returns the one where the most 40-byte records
+    have valid ZKTeco timestamps (year 2024–2027). Used to skip TA500's
+    optional 4-byte size-prefix header that may or may not be present.
+    """
+    best_offset = 0
+    best_valid  = -1
+    # Timestamp bytes in a 40-byte record are at positions 27-31
+    ts_start = 27
+    for probe in range(0, min(9, len(data) - rec_size + 1)):
+        valid = 0
+        pos   = probe
+        while pos + rec_size <= len(data):
+            if _zk_timestamp_valid(data[pos + ts_start: pos + ts_start + 4]):
+                valid += 1
+            pos += rec_size
+        if valid > best_valid:
+            best_valid  = valid
+            best_offset = probe
+    logger.info(f"📊 Auto-alignment: best_offset={best_offset}, valid_timestamps={best_valid}/{((len(data) - best_offset) // rec_size)}")
+    return best_offset
+
+
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v18.4 Iron Sentinel Instant Attendance Extractor:
-    - Reads attendance stream directly via patched multi-segment read_with_buffer(13).
-    - Safely unrolls 40-byte TA500 attendance records with zero buffer slip.
-    - Accurately strips 4-byte size header when present.
+    v18.6 Iron Sentinel — Auto-Aligning Attendance Extractor:
+    - Reads attendance stream via patched multi-segment read_with_buffer(13).
+    - Auto-detects correct record byte-offset (handles TA500's optional 4-byte size prefix).
+    - Safely unrolls 40-byte attendance records with zero buffer slip.
     """
     if not conn:
         return []
@@ -1011,15 +1052,13 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
         try:
             attendance_data, size = conn.read_with_buffer(13)
             logger.info(f"📊 safe_fetch_attendance: buffer received {len(attendance_data)} bytes (announced size={size})")
-            if not attendance_data or len(attendance_data) < 4:
+            if not attendance_data or len(attendance_data) < 40:
                 logger.warning(f"⚠️ safe_fetch_attendance: buffer too short ({len(attendance_data)} bytes)")
                 return []
 
-            raw_data = attendance_data
-            if len(attendance_data) >= 44:
-                prefix_size = struct.unpack('<I', attendance_data[:4])[0]
-                if prefix_size == len(attendance_data) - 4 or (len(attendance_data) - 4) % 40 == 0:
-                    raw_data = attendance_data[4:]
+            # Auto-detect correct record alignment offset (handles 0- or 4-byte prefix)
+            best_offset = _auto_align_records(attendance_data)
+            raw_data = attendance_data[best_offset:]
 
             attendances = []
             while len(raw_data) >= 40:
@@ -1236,7 +1275,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.5 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.6 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
     logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
