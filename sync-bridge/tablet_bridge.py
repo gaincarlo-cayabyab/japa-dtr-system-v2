@@ -243,44 +243,46 @@ def _apply_pyzk_hotfix():
             logger.warning("⚠️ RWB could not determine buffer size (total_size=0)")
             return b'', 0
 
-        # Attempt to read buffer: try full buffer first, fallback to 4096 chunks if rejected
+        # Request stream using 1504 (CMD_READ_BUFFER)
+        # The TA500 streams multiple CMD_DATA (1501) frames until terminating with CMD_ACK_OK (2000)
+        req_str = struct.pack('<ii', 0, total_size)
+        resp_1504 = self._ZK__send_command(1504, req_str, 1024)
+        c_1504 = resp_1504.get('code', 0)
+        logger.info(f"📋 RWB 1504 stream initiated: resp={c_1504}")
+
         accumulated = bytearray()
-        for chunk_step in [total_size, 4096]:
-            accumulated.clear()
-            start = 0
-            chunk_failed = False
-            while start < total_size:
-                chunk_len = min(chunk_step, total_size - start)
-                req_str = struct.pack('<ii', start, chunk_len)
-                resp = self._ZK__send_command(1504, req_str, chunk_len + 32)
-                c = resp.get('code', 0)
-                chunk_bytes = len(self._ZK__data)
-                logger.info(f"📋 RWB Chunk [{start}:{start+chunk_len}]: resp={c}, data_len={chunk_bytes}")
+        if c_1504 == const.CMD_DATA and len(self._ZK__data) > 0:
+            accumulated.extend(self._ZK__data)
 
-                if not resp.get('status') or (c not in [const.CMD_DATA, const.CMD_PREPARE_DATA] and chunk_bytes == 0):
-                    logger.warning(f"⚠️ RWB 1504 chunk request failed (code={c}, bytes={chunk_bytes})")
-                    chunk_failed = True
+        # Loop receiving all CMD_DATA frames until CMD_ACK_OK
+        frame_count = 1 if len(accumulated) > 0 else 0
+        while True:
+            if total_size > 0 and len(accumulated) >= total_size:
+                try:
+                    c_end, _ = reader.recv_frame(timeout=0.8)
+                    if c_end == const.CMD_ACK_OK:
+                        pass
+                except Exception:
+                    pass
+                break
+            try:
+                cmd, payload = reader.recv_frame(timeout=5.0)
+                if cmd == const.CMD_DATA:
+                    accumulated.extend(payload[8:])
+                    frame_count += 1
+                elif cmd == const.CMD_ACK_OK:
+                    logger.info(f"📋 RWB stream completed cleanly via CMD_ACK_OK ({frame_count} frames)")
                     break
-
-                if c == const.CMD_DATA and chunk_bytes > 0:
-                    accumulated.extend(self._ZK__data)
-                elif c == const.CMD_PREPARE_DATA:
-                    try:
-                        c2, payload2 = reader.recv_frame(timeout=8.0)
-                        if c2 == const.CMD_DATA:
-                            accumulated.extend(payload2[8:])
-                        logger.info(f"📋 RWB PREPARE_DATA follow-up frame: code={c2}, len={len(payload2)}")
-                    except Exception as e_c2:
-                        logger.warning(f"⚠️ RWB PREPARE_DATA follow-up notice: {e_c2}")
-                elif chunk_bytes > 0:
-                    accumulated.extend(self._ZK__data)
+                elif cmd == const.CMD_PREPARE_DATA:
+                    continue
                 else:
-                    chunk_failed = True
+                    logger.warning(f"⚠️ RWB unexpected frame {cmd} during stream, breaking")
                     break
-
-                start += chunk_len
-
-            if not chunk_failed and len(accumulated) >= (total_size - 4):
+            except socket.timeout:
+                logger.warning(f"⚠️ RWB stream timeout (got {len(accumulated)}/{total_size} bytes)")
+                break
+            except Exception as e_stream:
+                logger.warning(f"⚠️ RWB stream error: {e_stream}")
                 break
 
         # Free buffer on TA500 RAM
@@ -289,7 +291,7 @@ def _apply_pyzk_hotfix():
         except Exception:
             pass
 
-        logger.info(f"✅ RWB Complete: Assembled {len(accumulated)} attendance bytes from TA500 RAM")
+        logger.info(f"✅ RWB Complete: Assembled {len(accumulated)} attendance bytes from TA500 RAM ({frame_count} frames)")
         return bytes(accumulated), len(accumulated)
 
     ZK.read_with_buffer = patched_read_with_buffer
