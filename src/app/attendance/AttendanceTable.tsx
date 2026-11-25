@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { AttendanceLog, Employee } from '@/types/database'
 import { PUNCH_STATUS, PUNCH_STATUS_COLOR } from '@/types/database'
@@ -11,6 +11,7 @@ import {
   Filter,
   Trash2,
   Radio,
+  RefreshCw,
   Calendar,
   Users,
   AlertTriangle,
@@ -194,6 +195,15 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   const [deleteTarget, setDeleteTarget] = useState<AttendanceLog | null>(null)
   const [isDeletingSingle, setIsDeletingSingle] = useState(false)
 
+  // Live timing & adaptive estimated duration for ASAP updates + background auto-reload
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [syncActivityLabel, setSyncActivityLabel] = useState<string | null>(null)
+  const [syncElapsedMs, setSyncElapsedMs] = useState(0)
+  const [estimatedSyncMs, setEstimatedSyncMs] = useState(600)
+  const [lastSyncedAt, setLastSyncedAt] = useState<number>(() => Date.now())
+  const [secondsSinceSync, setSecondsSinceSync] = useState(0)
+  const syncStartedAtRef = useRef<number | null>(null)
+
   // Filters
   const [dateFilter, setDateFilter] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState('')
@@ -201,43 +211,101 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   const [nameSearch, setNameSearch] = useState('')
   const [page, setPage] = useState(0)
 
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ type, text })
-    setTimeout(() => setToastMessage(null), 3000)
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current)
+    toastTimerRef.current = setTimeout(() => setToastMessage(null), 3500)
   }
 
-  // Fetch Latest Logs
-  const fetchLatest = async () => {
+  // Track elapsed loading time smoothly every 100ms while any save or background reload is active
+  useEffect(() => {
+    if (!isRefreshing && !savingPunch && !isDeletingSingle) {
+      syncStartedAtRef.current = null
+      setSyncElapsedMs(0)
+      return
+    }
+    if (!syncStartedAtRef.current) {
+      syncStartedAtRef.current = performance.now()
+    }
+    const timer = setInterval(() => {
+      if (syncStartedAtRef.current) {
+        setSyncElapsedMs(Math.round(performance.now() - syncStartedAtRef.current))
+      }
+    }, 100)
+    return () => clearInterval(timer)
+  }, [isRefreshing, savingPunch, isDeletingSingle])
+
+  // Update "Synced Xs ago" readout every second
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSecondsSinceSync(Math.max(0, Math.floor((Date.now() - lastSyncedAt) / 1000)))
+    }, 1000)
+    return () => clearInterval(t)
+  }, [lastSyncedAt])
+
+  const recordLatencyEstimate = useCallback((durationMs: number) => {
+    const clamped = Math.max(150, Math.min(durationMs, 10000))
+    setEstimatedSyncMs((prev) => Math.round(prev * 0.6 + clamped * 0.4))
+  }, [])
+
+  // Fetch Latest Logs in background without blocking UI
+  const fetchLatest = useCallback(async (label: string = 'Background sync') => {
+    const t0 = performance.now()
+    setIsRefreshing(true)
+    setSyncActivityLabel(label)
     const supabase = createClient()
-    const [{ data: freshLogs, count: freshCount }, { data: freshEmps }] = await Promise.all([
-      supabase.from('attendance_logs').select('*', { count: 'exact' }).order('punch_time', { ascending: false }).limit(2500),
-      supabase.from('employees').select('*').order('full_name', { ascending: true }),
-    ])
-    if (freshLogs) setLogs(freshLogs)
-    if (typeof freshCount === 'number') setTotalCount(freshCount)
-    if (freshEmps) setEmployeesList(freshEmps)
-  }
+    try {
+      const [{ data: freshLogs, count: freshCount }, { data: freshEmps }] = await Promise.all([
+        supabase
+          .from('attendance_logs')
+          .select('id, device_user_id, punch_time, status, raw_status, synced_at, created_at', { count: 'exact' })
+          .order('punch_time', { ascending: false })
+          .limit(2500),
+        supabase.from('employees').select('*').order('full_name', { ascending: true }),
+      ])
+      if (freshLogs) setLogs(freshLogs as AttendanceLog[])
+      if (typeof freshCount === 'number') setTotalCount(freshCount)
+      if (freshEmps) setEmployeesList(freshEmps)
+      setLastSyncedAt(Date.now())
+      setSecondsSinceSync(0)
+      recordLatencyEstimate(performance.now() - t0)
+    } finally {
+      setIsRefreshing(false)
+      setSyncActivityLabel(null)
+    }
+  }, [recordLatencyEstimate])
 
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
       .channel('attendance-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-        fetchLatest()
+        fetchLatest('Live change detected')
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
-        fetchLatest()
+        fetchLatest('Employee update detected')
       })
       .subscribe((status) => {
         setIsLive(status === 'SUBSCRIBED')
       })
 
-    const interval = setInterval(fetchLatest, 15000)
+    // Silent automatic background reload every 5 seconds + on tab focus
+    const interval = setInterval(() => fetchLatest('Auto-reloading in background'), 5000)
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchLatest('Syncing tab')
+    }
+    const onFocus = () => fetchLatest('Syncing background')
+    document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('focus', onFocus)
+
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('focus', onFocus)
     }
-  }, [])
+  }, [fetchLatest])
 
   // Smart Clear logs handler
   const handleClearAll = async () => {
@@ -254,8 +322,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to clear')
-      // Refresh logs
-      await fetchLatest()
+      await fetchLatest('Refreshing after clear')
       showToast(`Cleared ${json.deleted ?? 0} attendance record(s).`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
@@ -266,88 +333,166 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
     }
   }
 
-  // Open Add Punch Modal
+  // Helper: Manila YYYY-MM-DD and HH:mm
+  const getManilaFormParts = (dateObj: Date) => {
+    const manilaDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Manila',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(dateObj)
+    const manilaTime = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Manila',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(dateObj)
+    return { manilaDate, manilaTime }
+  }
+
+  // Open Add Punch Modal (defaults to today in Asia/Manila)
   const openAddModal = () => {
+    const { manilaDate } = getManilaFormParts(new Date())
     setPunchModalMode('add')
     setTargetPunchId(null)
     setSelectedEmpId(employeesList[0]?.device_user_id || '1')
-    setPunchDate('2026-11-02')
+    setPunchDate(manilaDate)
     setPunchTime('09:00')
     setPunchStatus(0)
     setPunchModalOpen(true)
   }
 
-  // Open Edit Punch Modal
+  // Open Edit Punch Modal — always show time in Asia/Manila regardless of browser timezone
   const openEditModal = (log: AttendanceLog) => {
     setPunchModalMode('edit')
     setTargetPunchId(log.id)
     setSelectedEmpId(log.device_user_id)
-    const pDate = new Date(log.punch_time)
-    setPunchDate(format(pDate, 'yyyy-MM-dd'))
-    setPunchTime(format(pDate, 'HH:mm'))
+    const { manilaDate, manilaTime } = getManilaFormParts(new Date(log.punch_time))
+    setPunchDate(manilaDate)
+    setPunchTime(manilaTime)
     setPunchStatus(log.status)
     setPunchModalOpen(true)
   }
 
-  // Submit Add / Edit Punch
+  // Submit Add / Edit Punch — ASAP 0ms optimistic state update + instant sort + background verification
   const handleSavePunch = async (e: React.FormEvent) => {
     e.preventDefault()
+    const t0 = performance.now()
+    const fullIso = `${punchDate}T${punchTime}:00+08:00`
+    const mode = punchModalMode
+    const editId = targetPunchId
+    const empId = selectedEmpId
+    const stVal = punchStatus
+    const previousLogs = logs
+    const previousCount = totalCount
+
+    // Close modal & update table ASAP (0ms!) while cloud write completes with live timer
     setSavingPunch(true)
+    setSyncActivityLabel(mode === 'add' ? 'Saving new punch' : 'Saving punch edit')
+    setPunchModalOpen(false)
+
+    const sortDesc = (items: AttendanceLog[]) =>
+      [...items].sort((a, b) => new Date(b.punch_time).getTime() - new Date(a.punch_time).getTime())
+
+    const tempId = `temp-${Date.now()}`
+    if (mode === 'add') {
+      const tempLog: AttendanceLog = {
+        id: tempId,
+        device_user_id: empId,
+        punch_time: fullIso,
+        status: stVal,
+        synced_at: new Date().toISOString(),
+        raw_status: null,
+        created_at: new Date().toISOString(),
+      } as unknown as AttendanceLog
+      setLogs((prev) => sortDesc([tempLog, ...prev]))
+      setTotalCount((c) => c + 1)
+    } else {
+      setLogs((prev) =>
+        sortDesc(
+          prev.map((l) =>
+            l.id === editId
+              ? { ...l, device_user_id: empId, punch_time: fullIso, status: stVal }
+              : l
+          )
+        )
+      )
+    }
+
     try {
-      const fullIso = `${punchDate}T${punchTime}:00+08:00`
-      if (punchModalMode === 'add') {
+      if (mode === 'add') {
         const res = await fetch('/api/attendance', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            device_user_id: selectedEmpId,
-            punch_time: fullIso,
-            status: punchStatus,
-          }),
+          body: JSON.stringify({ device_user_id: empId, punch_time: fullIso, status: stVal }),
         })
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error)
-        showToast('Attendance punch added successfully!')
+        if (!res.ok) throw new Error(json.error || 'Failed to add punch')
+        const elapsed = Math.round(performance.now() - t0)
+        recordLatencyEstimate(elapsed)
+        if (json.data) {
+          setLogs((prev) => sortDesc(prev.map((l) => (l.id === tempId ? (json.data as AttendanceLog) : l))))
+        }
+        showToast(`Punch added in ${(elapsed / 1000).toFixed(2)}s! Syncing in background…`)
       } else {
         const res = await fetch('/api/attendance', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: targetPunchId,
-            device_user_id: selectedEmpId,
-            punch_time: fullIso,
-            status: punchStatus,
-          }),
+          body: JSON.stringify({ id: editId, device_user_id: empId, punch_time: fullIso, status: stVal }),
         })
         const json = await res.json()
-        if (!res.ok) throw new Error(json.error)
-        showToast('Attendance punch updated successfully!')
+        if (!res.ok) throw new Error(json.error || 'Failed to update punch')
+        const elapsed = Math.round(performance.now() - t0)
+        recordLatencyEstimate(elapsed)
+        if (json.data) {
+          setLogs((prev) => sortDesc(prev.map((l) => (l.id === editId ? (json.data as AttendanceLog) : l))))
+        }
+        showToast(`Updated in ${(elapsed / 1000).toFixed(2)}s! Background sync active.`)
       }
-      setPunchModalOpen(false)
-      fetchLatest()
+      setLastSyncedAt(Date.now())
+      setSecondsSinceSync(0)
+      // Trigger non-blocking background refresh so all derived views stay authoritative
+      fetchLatest('Verifying in background')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error saving punch'
+      setLogs(previousLogs)
+      setTotalCount(previousCount)
       showToast(msg, 'error')
+      fetchLatest('Recovering state')
     } finally {
       setSavingPunch(false)
+      if (!isRefreshing) setSyncActivityLabel(null)
     }
   }
 
-  // Confirm Single Delete
+  // Confirm Single Delete — ASAP removal + background reconciliation
   const handleDeleteSingle = async () => {
     if (!deleteTarget) return
+    const target = deleteTarget
+    const t0 = performance.now()
+    const previousLogs = logs
+    const previousCount = totalCount
+
     setIsDeletingSingle(true)
+    setSyncActivityLabel('Deleting punch')
+    setDeleteTarget(null)
+    setLogs((prev) => prev.filter((l) => l.id !== target.id))
+    setTotalCount((c) => Math.max(0, c - 1))
+
     try {
-      const res = await fetch(`/api/attendance?id=${deleteTarget.id}`, {
+      const res = await fetch(`/api/attendance?id=${target.id}`, {
         method: 'DELETE',
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
-      showToast('Attendance record deleted.')
-      setDeleteTarget(null)
-      fetchLatest()
+      if (!res.ok) throw new Error(json.error || 'Error deleting punch')
+      const elapsed = Math.round(performance.now() - t0)
+      recordLatencyEstimate(elapsed)
+      showToast(`Deleted in ${(elapsed / 1000).toFixed(2)}s.`)
+      fetchLatest('Refreshing in background')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error deleting punch'
+      setLogs(previousLogs)
+      setTotalCount(previousCount)
       showToast(msg, 'error')
     } finally {
       setIsDeletingSingle(false)
@@ -440,6 +585,29 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Floating Non-Blocking Sync / Save Timer Banner (shown during save or reload >= 200ms) */}
+      {(savingPunch || isDeletingSingle || (isRefreshing && syncElapsedMs >= 200)) && (
+        <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 min-w-[260px] max-w-xs space-y-2 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3 text-xs font-bold">
+            <span className="flex items-center gap-2 text-blue-300">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              {syncActivityLabel || 'Syncing logs…'}
+            </span>
+            <span className="font-mono text-[11px] text-slate-300">
+              {(syncElapsedMs / 1000).toFixed(1)}s / est. ~{Math.max(0.2, estimatedSyncMs / 1000).toFixed(1)}s
+            </span>
+          </div>
+          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-blue-500 to-emerald-400 h-1.5 rounded-full transition-all duration-150"
+              style={{
+                width: `${Math.min(95, Math.max(12, Math.round((syncElapsedMs / Math.max(estimatedSyncMs, 300)) * 100)))}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Toast Alert (Middle Top) */}
       {toastMessage && (
         <div
@@ -501,6 +669,25 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
               Request Edit Access
             </button>
           ) : null}
+
+          <button
+            type="button"
+            onClick={() => fetchLatest('Manual refresh')}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
+            title="Auto-reloads in background every 5s. Click to force refresh now."
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : 'text-slate-400'}`} />
+            {isRefreshing || savingPunch || isDeletingSingle ? (
+              <span className="text-blue-700 font-mono">
+                {syncActivityLabel || 'Syncing'} {(syncElapsedMs / 1000).toFixed(1)}s / est. ~{(estimatedSyncMs / 1000).toFixed(1)}s
+              </span>
+            ) : (
+              <span>
+                Auto-Sync · {secondsSinceSync === 0 ? 'Just now' : `${secondsSinceSync}s ago`}
+              </span>
+            )}
+          </button>
 
           <span
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${

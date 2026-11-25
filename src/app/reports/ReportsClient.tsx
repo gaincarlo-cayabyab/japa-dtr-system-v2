@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import type { DailyDtr } from '@/types/database'
 import { format, startOfWeek, endOfWeek } from 'date-fns'
@@ -32,6 +32,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Info,
+  RefreshCw,
 } from 'lucide-react'
 import { getHolidayForDate, getHolidayTypeBadge } from '@/lib/holidays'
 
@@ -84,9 +85,28 @@ function getInitials(name: string) {
 function formatTime(ts: string | null) {
   if (!ts) return '—'
   try {
-    return format(new Date(ts), 'hh:mm aa')
+    return new Date(ts).toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Manila',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    })
   } catch {
     return ts
+  }
+}
+
+function getManilaHHmm(ts: string | null, fallback: string) {
+  if (!ts) return fallback
+  try {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Manila',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(ts))
+  } catch {
+    return fallback
   }
 }
 
@@ -181,8 +201,17 @@ export function ReportsClient({
     }
   }, [])
 
+  const [isRefreshingDtr, setIsRefreshingDtr] = useState(false)
+  const [dtrSyncLabel, setDtrSyncLabel] = useState<string | null>(null)
+  const [dtrElapsedMs, setDtrElapsedMs] = useState(0)
+  const [dtrEstimatedMs, setDtrEstimatedMs] = useState(650)
+  const dtrStartedAtRef = useRef<number | null>(null)
+
   // Background Auto-Refresh & Realtime Subscription for DTR Reports
-  const fetchFreshDtr = useCallback(async () => {
+  const fetchFreshDtr = useCallback(async (label: string = 'Background sync') => {
+    const t0 = performance.now()
+    setIsRefreshingDtr(true)
+    setDtrSyncLabel(label)
     try {
       const supabase = createClient()
       const { data: freshDtr } = await supabase
@@ -193,8 +222,13 @@ export function ReportsClient({
       if (freshDtr) {
         setData(freshDtr as DailyDtr[])
       }
+      const dur = Math.max(150, Math.min(Math.round(performance.now() - t0), 10000))
+      setDtrEstimatedMs((prev) => Math.round(prev * 0.6 + dur * 0.4))
     } catch (e) {
       console.error('Error refreshing DTR reports:', e)
+    } finally {
+      setIsRefreshingDtr(false)
+      setDtrSyncLabel(null)
     }
   }, [])
 
@@ -203,20 +237,28 @@ export function ReportsClient({
     const channel = supabase
       .channel('reports-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-        fetchFreshDtr()
+        fetchFreshDtr('Live change detected')
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_notes' }, () => {
-        fetchFreshDtr()
+        fetchFreshDtr('Note update detected')
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
-        fetchFreshDtr()
+        fetchFreshDtr('Employee update detected')
       })
       .subscribe()
 
-    const interval = setInterval(fetchFreshDtr, 15000)
+    const interval = setInterval(() => fetchFreshDtr('Auto-syncing background'), 6000)
+    const onFocus = () => fetchFreshDtr('Syncing tab')
+    const onVis = () => {
+      if (document.visibilityState === 'visible') fetchFreshDtr('Syncing tab')
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
     return () => {
       supabase.removeChannel(channel)
       clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
     }
   }, [fetchFreshDtr])
 
@@ -353,6 +395,24 @@ export function ReportsClient({
     }, 3000)
     return () => clearTimeout(timer)
   }, [toast])
+
+  // Track elapsed loading time while saving/syncing DTR
+  useEffect(() => {
+    if (!isRefreshingDtr && !savingShift && !deletingShift) {
+      dtrStartedAtRef.current = null
+      setDtrElapsedMs(0)
+      return
+    }
+    if (!dtrStartedAtRef.current) {
+      dtrStartedAtRef.current = performance.now()
+    }
+    const timer = setInterval(() => {
+      if (dtrStartedAtRef.current) {
+        setDtrElapsedMs(Math.round(performance.now() - dtrStartedAtRef.current))
+      }
+    }, 100)
+    return () => clearInterval(timer)
+  }, [isRefreshingDtr, savingShift, deletingShift])
 
   const filtered = useMemo(() => {
     const weekRange = viewMode === 'weekly' ? getWeekRange(weekAnchor) : null
@@ -798,11 +858,7 @@ export function ReportsClient({
 
     if (row.first_check_in) {
       setHasInTime(true)
-      try {
-        setEditInTime(format(new Date(row.first_check_in), 'HH:mm'))
-      } catch {
-        setEditInTime('09:00')
-      }
+      setEditInTime(getManilaHHmm(row.first_check_in, '09:00'))
     } else {
       setHasInTime(true)
       setEditInTime('09:00')
@@ -810,11 +866,7 @@ export function ReportsClient({
 
     if (row.last_check_out) {
       setHasOutTime(true)
-      try {
-        setEditOutTime(format(new Date(row.last_check_out), 'HH:mm'))
-      } catch {
-        setEditOutTime('18:00')
-      }
+      setEditOutTime(getManilaHHmm(row.last_check_out, '18:00'))
     } else {
       setHasOutTime(Boolean(row.last_check_out))
       setEditOutTime('18:00')
@@ -843,49 +895,113 @@ export function ReportsClient({
     openEditShift(row, note)
   }
 
-  // Handle Save Shift (No Page Reload, Instant State Update)
+  // Handle Save Shift — Instant ASAP Optimistic UI + Background Reconciliation
   const handleSaveShift = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editRow) return
+    const targetRow = editRow
+    const statusVal = editAttendanceStatus
+    const notesVal = editNotes
+    const inVal = hasInTime ? editInTime : null
+    const outVal = hasOutTime ? editOutTime : null
+    const previousData = data
+    const previousNotes = shiftNotes
+    const t0 = performance.now()
+
     setSavingShift(true)
+    setDtrSyncLabel('Saving shift edit')
+
+    const toManilaIso = (hm: string, wd: string) => {
+      const hh = parseInt(hm.split(':')[0] || '0', 10)
+      if (hh < 4) {
+        const [y, m, d] = wd.split('-').map(Number)
+        const nextWd = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
+        return `${nextWd}T${hm}:00+08:00`
+      }
+      return `${wd}T${hm}:00+08:00`
+    }
+
+    // Apply optimistic state immediately (0ms) and close modal ASAP
+    const noteKey = `${targetRow.device_user_id}_${targetRow.work_date}`
+    setShiftNotes((prev) => ({
+      ...prev,
+      [noteKey]: {
+        device_user_id: targetRow.device_user_id,
+        work_date: targetRow.work_date,
+        ot_reason: notesVal,
+        attendance_status: statusVal,
+        notes: notesVal,
+        created_by_username: currentUser?.username || 'admin',
+        updated_at: new Date().toISOString(),
+      },
+    }))
+
+    if (statusVal !== 'present' || (!inVal && !outVal)) {
+      setData((prev) =>
+        prev.filter((r) => !(String(r.device_user_id) === String(targetRow.device_user_id) && r.work_date === targetRow.work_date))
+      )
+    } else {
+      const optIn = inVal ? toManilaIso(inVal, targetRow.work_date) : null
+      const optOut = outVal ? toManilaIso(outVal, targetRow.work_date) : null
+      let optHours = 0
+      let optOt = 0
+      if (optIn && optOut) {
+        const diffHrs = Math.max(0, (new Date(optOut).getTime() - new Date(optIn).getTime()) / 3600000)
+        optHours = Math.max(0, Math.round((diffHrs > 5 ? diffHrs - 1 : diffHrs) * 10) / 10)
+        optOt = Math.max(0, Math.round(Math.max(0, optHours - 8) * 10) / 10)
+      }
+      const optimisticDtr: DailyDtr = {
+        ...targetRow,
+        first_check_in: optIn,
+        last_check_out: optOut,
+        total_punches: (optIn ? 1 : 0) + (optOut ? 1 : 0),
+        hours_worked: optHours,
+        overtime_hours: optOt,
+        shift_status: optOut ? 'Completed' : 'On Duty',
+      }
+      setData((prev) => {
+        const idx = prev.findIndex(
+          (r) => String(r.device_user_id) === String(targetRow.device_user_id) && r.work_date === targetRow.work_date
+        )
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = optimisticDtr
+          return next
+        }
+        return [...prev, optimisticDtr]
+      })
+    }
+
+    try {
+      localStorage.setItem('japa_dtr_selected_date', targetRow.work_date)
+    } catch {}
+    setEditModalOpen(false)
+
     try {
       const res = await fetch('/api/reports/shift', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          device_user_id: editRow.device_user_id,
-          work_date: editRow.work_date,
-          first_check_in: editAttendanceStatus === 'present' && hasInTime ? editInTime : null,
-          last_check_out: editAttendanceStatus === 'present' && hasOutTime ? editOutTime : null,
-          has_in_time: editAttendanceStatus === 'present' && hasInTime,
-          has_out_time: editAttendanceStatus === 'present' && hasOutTime,
-          attendance_status: editAttendanceStatus,
-          notes: editNotes,
+          device_user_id: targetRow.device_user_id,
+          work_date: targetRow.work_date,
+          first_check_in: statusVal === 'present' && inVal ? inVal : null,
+          last_check_out: statusVal === 'present' && outVal ? outVal : null,
+          has_in_time: statusVal === 'present' && Boolean(inVal),
+          has_out_time: statusVal === 'present' && Boolean(outVal),
+          attendance_status: statusVal,
+          notes: notesVal,
         }),
       })
 
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error)
+      if (!res.ok) throw new Error(json.error || 'Error updating shift')
 
-      // Update shift notes map locally
-      const noteKey = `${editRow.device_user_id}_${editRow.work_date}`
-      setShiftNotes((prev) => ({
-        ...prev,
-        [noteKey]: {
-          device_user_id: editRow.device_user_id,
-          work_date: editRow.work_date,
-          ot_reason: editNotes,
-          attendance_status: editAttendanceStatus,
-          notes: editNotes,
-          created_by_username: currentUser?.username || 'admin',
-          updated_at: new Date().toISOString(),
-        },
-      }))
+      const elapsed = Math.round(performance.now() - t0)
+      setDtrEstimatedMs((prev) => Math.round(prev * 0.6 + Math.max(150, Math.min(elapsed, 10000)) * 0.4))
 
-      // Update data rows locally without needing page reload
       setData((prev) => {
         const idx = prev.findIndex(
-          (r) => String(r.device_user_id) === String(editRow.device_user_id) && r.work_date === editRow.work_date
+          (r) => String(r.device_user_id) === String(targetRow.device_user_id) && r.work_date === targetRow.work_date
         )
         if (json.updatedDtr) {
           if (idx >= 0) {
@@ -894,30 +1010,23 @@ export function ReportsClient({
             return next
           }
           return [...prev, json.updatedDtr]
-        } else {
-          // If updatedDtr is null (cleared punches / marked absent or leave), remove from data
-          if (idx >= 0) {
-            const next = [...prev]
-            next.splice(idx, 1)
-            return next
-          }
+        } else if (idx >= 0) {
+          const next = [...prev]
+          next.splice(idx, 1)
+          return next
         }
         return prev
       })
 
-      // Background re-sync shift notes
-      fetchShiftNotes([editRow.work_date])
-
-      // Persist active date so the view remains on this exact date
-      try {
-        localStorage.setItem('japa_dtr_selected_date', editRow.work_date)
-      } catch {}
-
-      setToast({ message: `Updated shift for ${editRow.full_name} on ${editRow.work_date}!`, type: 'success' })
-      setEditModalOpen(false)
+      fetchShiftNotes([targetRow.work_date])
+      fetchFreshDtr('Verifying DTR in background')
+      setToast({ message: `Updated ${targetRow.full_name} in ${(elapsed / 1000).toFixed(2)}s!`, type: 'success' })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error updating shift'
+      setData(previousData)
+      setShiftNotes(previousNotes)
       setToast({ message: msg, type: 'error' })
+      fetchFreshDtr('Reverting')
     } finally {
       setSavingShift(false)
     }
@@ -1874,6 +1983,29 @@ export function ReportsClient({
 
   return (
     <div className="space-y-6">
+      {/* Floating Non-Blocking Sync / Save Timer Banner */}
+      {(savingShift || deletingShift || (isRefreshingDtr && dtrElapsedMs >= 200)) && (
+        <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 min-w-[260px] max-w-xs space-y-2 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3 text-xs font-bold">
+            <span className="flex items-center gap-2 text-blue-300">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              {dtrSyncLabel || 'Syncing DTR…'}
+            </span>
+            <span className="font-mono text-[11px] text-slate-300">
+              {(dtrElapsedMs / 1000).toFixed(1)}s / est. ~{Math.max(0.2, dtrEstimatedMs / 1000).toFixed(1)}s
+            </span>
+          </div>
+          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-blue-500 to-emerald-400 h-1.5 rounded-full transition-all duration-150"
+              style={{
+                width: `${Math.min(95, Math.max(12, Math.round((dtrElapsedMs / Math.max(dtrEstimatedMs, 300)) * 100)))}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Toast Alert — Middle Top */}
       {toast && (
         <div

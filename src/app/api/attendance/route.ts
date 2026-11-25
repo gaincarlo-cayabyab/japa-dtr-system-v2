@@ -75,9 +75,17 @@ export async function POST(request: NextRequest) {
       .select('*, employees(full_name, branch)')
       .single()
 
-    if (error) throw error
+    if (error) {
+      if ((error as { code?: string }).code === '23505') {
+        return NextResponse.json(
+          { error: 'A punch already exists for this employee at that exact timestamp.' },
+          { status: 409 }
+        )
+      }
+      throw error
+    }
 
-    return NextResponse.json({ success: true, data })
+    return NextResponse.json({ success: true, data }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to add punch'
     return NextResponse.json({ error: msg }, { status: 500 })
@@ -118,9 +126,17 @@ export async function PUT(request: NextRequest) {
       .select('*, employees(full_name, branch)')
       .single()
 
-    if (error) throw error
+    if (error) {
+      if ((error as { code?: string }).code === '23505') {
+        return NextResponse.json(
+          { error: 'Another punch already exists for this employee at that exact timestamp.' },
+          { status: 409 }
+        )
+      }
+      throw error
+    }
 
-    return NextResponse.json({ success: true, data })
+    return NextResponse.json({ success: true, data }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Failed to update punch'
     return NextResponse.json({ error: msg }, { status: 500 })

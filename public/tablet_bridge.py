@@ -1,25 +1,22 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.7 "Iron Sentinel — Chunked Buffer Reader"
+v18.8 "Iron Sentinel — Sub-1KB Reliable Chunker & Integrity Gate"
 
 Key Architecture Fixes:
   1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
      - Drains stale bytes before sending commands, preventing desync.
      - Automatically aligns to ZKTeco magic header (0x5050, 0x7d82).
      - Loops until exact declared frame payload is assembled across TCP fragments.
-     - Completely eliminates 'TCP packet invalid' errors over Wi-Fi extenders.
-  2. Chunked 4096-byte Buffer Reader (v18.7 KEY FIX):
-     - Sends multiple CMD_READ_BUFFER (1504) requests with incrementing offsets.
-     - Each chunk collects its own CMD_DATA frames until CMD_ACK_OK.
-     - Guarantees ALL 242+ records are read — the TA500 firmware terminates each
-       single large request early (after ~7 frames), so chunked reads are mandatory.
-  3. Auto-Aligning Record Scanner (v18.6):
-     - Probes offsets 0-8 and selects the one yielding the most valid timestamps (2024-2027).
-     - Eliminates 'bad year / unmapped emp' caused by TA500's optional 4-byte size header.
-  4. Authoritative Cloud Reconciliation:
-     - Seeds seen cache directly from Supabase (load_cloud_seen_hashes).
-  5. 3-Second Rapid Punch Detection (POLL_INTERVAL = 3s).
+  2. Sub-1KB Atomic Chunk Buffer Reader (v18.8 KEY FIX):
+     - Requests 1000-byte chunks (25 x 40-byte records) fitting inside a single 1008B CMD_DATA packet.
+     - Handles direct CMD_DATA (1501) immediately with zero 5s CMD_ACK_OK timeout hang.
+     - Fixes v18.7 early exit bug (which broke out after 1008 bytes on 4096B chunks) AND
+       eliminates v18.5/v18.6 middle-frame drops on large bursts.
+  3. Strict Date Sanity & Batch Integrity Gate (v18.8):
+     - Rejects out-of-range dates (< 2026-10-01 or > now + 24h), blocking phantom 2030 / Feb-2026 rows.
+     - Discards any stream read with < 70% valid timestamps so corrupted buffers never reach cloud.
+  4. Authoritative Cloud Reconciliation & 3-Second Rapid Punch Detection.
 """
 
 import os
@@ -174,7 +171,7 @@ def _apply_pyzk_hotfix():
 
     # ── 2. Fix __send_command: guarantee complete frame delivery & clean framing ─
     orig_send = ZK._ZK__send_command
-    def patched_send_command(self, command, command_string=b'', response_size=8):
+    def patched_send_command(self, command, command_string=b'', response_size=8, timeout=8.0):
         if command not in [const.CMD_CONNECT, const.CMD_AUTH] and not self.is_connect:
             raise ZKErrorConnection("instance are not connected.")
         buf = self._ZK__create_header(command, command_string, self._ZK__session_id, self._ZK__reply_id)
@@ -184,7 +181,7 @@ def _apply_pyzk_hotfix():
             reader.drain()
             top = self._ZK__create_tcp_top(buf)
             reader.sock.sendall(top)
-            cmd_code, payload = reader.recv_frame(timeout=8.0)
+            cmd_code, payload = reader.recv_frame(timeout=timeout)
             self._ZK__header = struct.unpack('<4H', payload[:8])
             self._ZK__data_recv = payload
         else:
@@ -202,7 +199,7 @@ def _apply_pyzk_hotfix():
 
     ZK._ZK__send_command = patched_send_command
 
-    # ── 3. Fix read_with_buffer: chunked 4096-byte reads for complete buffer extraction ──
+    # ── 3. Fix read_with_buffer: Sub-1KB atomic chunked reads for complete 100% RAM extraction ──
     orig_rwb = ZK.read_with_buffer
     def patched_read_with_buffer(self, command, fct=0, ext=0):
         if not self.tcp:
@@ -246,69 +243,83 @@ def _apply_pyzk_hotfix():
             logger.warning("⚠️ RWB could not determine buffer size (total_size=0)")
             return b'', 0
 
-        # ── CHUNKED READ LOOP ────────────────────────────────────────────────────
-        # The TA500 firmware sends CMD_ACK_OK after each chunk request regardless
-        # of whether more data remains. We must issue multiple 1504 requests with
-        # incrementing offsets (4096 bytes each) until we have the full buffer.
-        CHUNK_SIZE = 4096
+        # ── SUB-1KB ATOMIC CHUNKED READ LOOP ────────────────────────────────────
+        # TA500 caps single CMD_DATA (1501) packets at 1008 bytes and sends NO trailing
+        # CMD_ACK_OK after a direct CMD_DATA reply. Requesting 1000-byte chunks fits each
+        # slice cleanly inside a single reliable packet, avoiding BOTH v18.5/v18.6 burst
+        # frame drops AND v18.7's 4096B early-exit / 5s timeout hang.
+        CHUNK_SIZE = 1000
         accumulated = bytearray()
         chunk_num = 0
+        max_chunks = (total_size // 200) + 25
 
-        while len(accumulated) < total_size:
+        while len(accumulated) < total_size and chunk_num < max_chunks:
             offset = len(accumulated)
             remaining = total_size - offset
             req_size = min(CHUNK_SIZE, remaining)
 
             req_str = struct.pack('<ii', offset, req_size)
             try:
-                resp_chunk = self._ZK__send_command(1504, req_str, 1024)
+                resp_chunk = self._ZK__send_command(1504, req_str, 1024, timeout=6.0)
                 c_chunk = resp_chunk.get('code', 0)
             except Exception as e_cmd:
-                logger.warning(f"⚠️ RWB chunk {chunk_num} CMD send error: {e_cmd}")
+                logger.warning(f"⚠️ RWB chunk {chunk_num + 1} CMD send error at offset {offset}: {e_cmd}")
                 break
 
             chunk_data = bytearray()
 
-            # Collect the first data from __send_command if it returned CMD_DATA directly
-            if c_chunk == const.CMD_DATA and len(self._ZK__data) > 0:
-                chunk_data.extend(self._ZK__data)
-
-            # Drain remaining CMD_DATA frames for this chunk until CMD_ACK_OK
-            while True:
-                try:
-                    cmd, payload = reader.recv_frame(timeout=5.0)
-                    if cmd == const.CMD_DATA:
-                        chunk_data.extend(payload[8:])
-                    elif cmd == const.CMD_ACK_OK:
+            if c_chunk == const.CMD_DATA:
+                # Single-packet CMD_DATA reply is already complete in self._ZK__data
+                if len(self._ZK__data) > 0:
+                    chunk_data.extend(self._ZK__data)
+            elif c_chunk == const.CMD_PREPARE_DATA:
+                expected_chunk = req_size
+                if len(self._ZK__data) >= 4:
+                    decl = struct.unpack('<I', self._ZK__data[:4])[0]
+                    if 0 < decl <= 65536:
+                        expected_chunk = decl
+                while True:
+                    try:
+                        cmd, payload = reader.recv_frame(timeout=4.0)
+                        if cmd == const.CMD_DATA:
+                            chunk_data.extend(payload[8:])
+                            if len(chunk_data) >= expected_chunk:
+                                try:
+                                    c_end, _ = reader.recv_frame(timeout=0.4)
+                                    if c_end == const.CMD_ACK_OK:
+                                        break
+                                except Exception:
+                                    break
+                        elif cmd == const.CMD_ACK_OK:
+                            break
+                        elif cmd == const.CMD_PREPARE_DATA:
+                            continue
+                        else:
+                            logger.warning(f"⚠️ RWB unexpected frame {cmd} in chunk {chunk_num + 1}")
+                            break
+                    except socket.timeout:
+                        if len(chunk_data) == 0:
+                            logger.warning(f"⚠️ RWB chunk {chunk_num + 1} timeout with 0 bytes")
                         break
-                    elif cmd == const.CMD_PREPARE_DATA:
-                        continue
-                    else:
-                        logger.warning(f"⚠️ RWB unexpected frame {cmd} in chunk {chunk_num}")
+                    except Exception as e_frame:
+                        logger.warning(f"⚠️ RWB chunk {chunk_num + 1} frame error: {e_frame}")
                         break
-                except socket.timeout:
-                    logger.warning(f"⚠️ RWB chunk {chunk_num} timeout after {len(chunk_data)} bytes")
-                    break
-                except Exception as e_frame:
-                    logger.warning(f"⚠️ RWB chunk {chunk_num} frame error: {e_frame}")
-                    break
+            else:
+                logger.warning(f"⚠️ RWB chunk {chunk_num + 1} rejected (code={c_chunk}) at offset {offset}")
+                break
 
             if not chunk_data:
-                logger.warning(f"⚠️ RWB chunk {chunk_num} returned 0 bytes at offset {offset} — stopping")
+                logger.warning(f"⚠️ RWB chunk {chunk_num + 1} returned 0 bytes at offset {offset} — stopping")
                 break
 
             accumulated.extend(chunk_data)
             chunk_num += 1
-            logger.info(f"📋 RWB chunk {chunk_num}: +{len(chunk_data)} bytes → {len(accumulated)}/{total_size} total")
+            if chunk_num == 1 or chunk_num % 4 == 0 or len(accumulated) >= total_size:
+                logger.info(f"📋 RWB chunk {chunk_num}: +{len(chunk_data)} bytes → {len(accumulated)}/{total_size} total")
 
-            if len(chunk_data) < req_size:
-                # Device sent less than requested — it has no more data
-                logger.info(f"📋 RWB device signalled end of data (sent {len(chunk_data)} < requested {req_size})")
-                break
-
-        # Free buffer on TA500 RAM
+        # Free buffer on TA500 RAM (short timeout so it never stalls 8s)
         try:
-            self._ZK__send_command(1502)
+            self._ZK__send_command(1502, timeout=1.5)
         except Exception:
             pass
 
@@ -748,7 +759,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 187},
+            {'key': 'bridge_version',   'value': 188},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -1019,8 +1030,23 @@ def decode_zk_time(t_bytes: bytes) -> datetime:
     year = t + 2000
     return datetime(year, month, day, hour, minute, second)
 
+_MIN_PUNCH_DT_NAIVE = datetime(2026, 10, 1, 0, 0, 0)
+
+def _is_sane_punch_dt(dt_naive: datetime) -> bool:
+    """
+    Validates that a decoded naive Manila datetime falls within JAPA DTR's real operating window
+    (Oct 1, 2026 through tomorrow Manila time). Prevents misaligned bytes from sneaking in as
+    phantom years like 2030 or Feb 2026.
+    """
+    try:
+        max_dt = datetime.now(TZ).replace(tzinfo=None) + timedelta(hours=24)
+        return _MIN_PUNCH_DT_NAIVE <= dt_naive <= max_dt
+    except Exception:
+        return False
+
+
 def _zk_timestamp_valid(ts_bytes: bytes) -> bool:
-    """Returns True if a 4-byte ZKTeco timestamp decodes to a sane date (2024–2027)."""
+    """Returns True if a 4-byte ZKTeco timestamp decodes to a valid calendar date within operating bounds."""
     try:
         t = struct.unpack('<I', ts_bytes)[0]
         sec  = t % 60; t //= 60
@@ -1029,20 +1055,19 @@ def _zk_timestamp_valid(ts_bytes: bytes) -> bool:
         day  = t % 31 + 1; t //= 31
         mon  = t % 12 + 1; t //= 12
         yr   = t + 2000
-        return 2024 <= yr <= 2027 and 1 <= mon <= 12 and 1 <= day <= 31 and 0 <= hr <= 23
+        dt = datetime(yr, mon, day, hr, mn, sec)
+        return _is_sane_punch_dt(dt)
     except Exception:
         return False
 
 
-def _auto_align_records(data: bytes, rec_size: int = 40) -> int:
+def _auto_align_records(data: bytes, rec_size: int = 40) -> Tuple[int, int, int]:
     """
-    Probes offsets 0–8 and returns the one where the most 40-byte records
-    have valid ZKTeco timestamps (year 2024–2027). Used to skip TA500's
-    optional 4-byte size-prefix header that may or may not be present.
+    Probes offsets 0–8 and returns (best_offset, best_valid, total_slots) where the most
+    40-byte records have valid timestamps. Handles TA500's optional 4-byte size-prefix header.
     """
     best_offset = 0
     best_valid  = -1
-    # Timestamp bytes in a 40-byte record are at positions 27-31
     ts_start = 27
     for probe in range(0, min(9, len(data) - rec_size + 1)):
         valid = 0
@@ -1054,16 +1079,17 @@ def _auto_align_records(data: bytes, rec_size: int = 40) -> int:
         if valid > best_valid:
             best_valid  = valid
             best_offset = probe
-    logger.info(f"📊 Auto-alignment: best_offset={best_offset}, valid_timestamps={best_valid}/{((len(data) - best_offset) // rec_size)}")
-    return best_offset
+    total_slots = max(0, (len(data) - best_offset) // rec_size)
+    logger.info(f"📊 Auto-alignment: best_offset={best_offset}, valid_timestamps={best_valid}/{total_slots}")
+    return best_offset, best_valid, total_slots
 
 
 def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
     """
-    v18.6 Iron Sentinel — Auto-Aligning Attendance Extractor:
-    - Reads attendance stream via patched multi-segment read_with_buffer(13).
-    - Auto-detects correct record byte-offset (handles TA500's optional 4-byte size prefix).
-    - Safely unrolls 40-byte attendance records with zero buffer slip.
+    v18.8 Iron Sentinel — Atomic Chunk Extractor & Integrity Gate:
+    - Reads attendance stream via sub-1KB reliable read_with_buffer(13).
+    - Auto-detects record alignment offset (handles TA500's optional 4-byte size prefix).
+    - Rejects any partially shifted buffer (< 70% valid dates) before decoding.
     """
     if not conn:
         return []
@@ -1076,18 +1102,37 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
                 return []
 
             # Auto-detect correct record alignment offset (handles 0- or 4-byte prefix)
-            best_offset = _auto_align_records(attendance_data)
-            raw_data = attendance_data[best_offset:]
+            best_offset, best_valid, total_slots = _auto_align_records(attendance_data)
+            if total_slots >= 10 and best_valid < max(1, int(total_slots * 0.70)):
+                logger.warning(
+                    f"⚠️ Integrity gate rejected read: only {best_valid}/{total_slots} valid dates "
+                    f"at offset={best_offset} (attempt {attempt + 1}/{max_retries})"
+                )
+                time.sleep(0.5)
+                continue
 
+            raw_data = attendance_data[best_offset:]
             attendances = []
+            corrupt_recs = 0
             while len(raw_data) >= 40:
                 uid, user_id_bytes, status, ts_bytes, punch, space = struct.unpack('<H24sB4sB8s', raw_data[:40])
                 raw_data = raw_data[40:]
                 uid_str = user_id_bytes.split(b'\x00')[0].decode(errors='ignore').strip()
-                dt = decode_zk_time(ts_bytes)
+                try:
+                    dt = decode_zk_time(ts_bytes)
+                except Exception:
+                    corrupt_recs += 1
+                    continue
                 attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
-            logger.info(f"📊 safe_fetch_attendance: successfully decoded {len(attendances)} attendance records")
+            if attendances:
+                dts = [a.timestamp for a in attendances if _is_sane_punch_dt(a.timestamp)]
+                span = f"{min(dts).strftime('%Y-%m-%d %H:%M')} .. {max(dts).strftime('%Y-%m-%d %H:%M')}" if dts else "none valid"
+                logger.info(
+                    f"📊 Decoded {len(attendances)} records (valid={len(dts)}, skipped_corrupt={corrupt_recs}, span={span})"
+                )
+            else:
+                logger.info("📊 safe_fetch_attendance: 0 records decoded")
             return attendances
         except Exception as e:
             logger.warning(f"Attendance extraction attempt {attempt+1} error: {e}")
@@ -1202,11 +1247,16 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
     except Exception:
         pass
 
+    now_mnl = datetime.now(TZ)
+    min_mnl = TZ.localize(_MIN_PUNCH_DT_NAIVE)
+    max_mnl = now_mnl + timedelta(hours=24)
+
     for att in attendances:
         raw_uid = str(att.user_id)
         uid = TA500_TO_SYSTEM_MAP.get(raw_uid, raw_uid)
         local_dt = _parse_ts(att.timestamp)
-        if not (2024 <= local_dt.year <= 2030):
+        if local_dt < min_mnl or local_dt > max_mnl:
+            logger.warning(f"🛡️ Rejected out-of-range punch {local_dt.strftime('%Y-%m-%d %H:%M:%S')} for slot {raw_uid}")
             skipped_year += 1
             continue
 
@@ -1294,7 +1344,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.7 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.8 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
     logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
