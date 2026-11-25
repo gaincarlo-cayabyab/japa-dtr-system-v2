@@ -1,34 +1,42 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.8 "Iron Sentinel — Sub-1KB Reliable Chunker & Integrity Gate"
+v18.9 "Iron Sentinel — Self-Healing Chunker & Zero-Miss Catchup"
 
 Key Architecture Fixes:
   1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
-     - Drains stale bytes before sending commands, preventing desync.
+     - Preserves socket timeouts on drain() (never resets socket to blocking=None).
      - Automatically aligns to ZKTeco magic header (0x5050, 0x7d82).
      - Loops until exact declared frame payload is assembled across TCP fragments.
-  2. Sub-1KB Atomic Chunk Buffer Reader (v18.8 KEY FIX):
-     - Requests 1000-byte chunks (25 x 40-byte records) fitting inside a single 1008B CMD_DATA packet.
-     - Handles direct CMD_DATA (1501) immediately with zero 5s CMD_ACK_OK timeout hang.
-     - Fixes v18.7 early exit bug (which broke out after 1008 bytes on 4096B chunks) AND
-       eliminates v18.5/v18.6 middle-frame drops on large bursts.
-  3. Strict Date Sanity & Batch Integrity Gate (v18.8):
+  2. Self-Healing Sub-1KB Atomic Chunk Buffer Reader (v18.9 KEY FIX):
+     - Requests 1000-byte chunks (25 x 40-byte records) fitting inside one 1008B CMD_DATA packet.
+     - Retries individual failed/timed-out chunks up to 4x at the exact same offset instead of
+       aborting the whole download mid-stream.
+     - Strictly rejects partial/truncated buffers (< total_size) so newer tail records are
+       NEVER silently skipped.
+  3. Zero-Miss Counter & Catch-Up State Machine (v18.9):
+     - Never advances known_record_count until a 100% complete buffer audit succeeds.
+     - Keeps catchup_pending active across failures/truncations and resets stuck TCP sessions
+       automatically after 2 failed extractions.
+     - Runs automatic 5-minute full-memory audits, 5-minute employee/cloud cache refreshes,
+       Termux CPU/Wi-Fi wake-lock acquisition, and HTTPS session auto-recycle for multi-day stability.
+  4. Strict Date Sanity & Batch Integrity Gate:
      - Rejects out-of-range dates (< 2026-10-01 or > now + 24h), blocking phantom 2030 / Feb-2026 rows.
      - Discards any stream read with < 70% valid timestamps so corrupted buffers never reach cloud.
-  4. Authoritative Cloud Reconciliation & 3-Second Rapid Punch Detection.
 """
 
 import os
 import sys
 import time
 import json
+import shutil
 import socket
 import struct
 import signal
 import hashlib
 import logging
 import sqlite3
+import subprocess
 import threading
 import concurrent.futures
 from logging.handlers import RotatingFileHandler
@@ -67,12 +75,16 @@ class ZKFrameReader:
         self.buf = bytearray()
 
     def drain(self):
-        """Discards unread bytes before sending a new command to ensure clean framing."""
+        """Discards unread bytes before sending a new command without wiping socket timeout."""
         self.buf.clear()
         if not self.sock:
             return
         try:
-            self.sock.setblocking(False)
+            prev_to = self.sock.gettimeout()
+        except Exception:
+            prev_to = 10.0
+        try:
+            self.sock.settimeout(0.0)
             while True:
                 discarded = self.sock.recv(4096)
                 if not discarded:
@@ -81,7 +93,7 @@ class ZKFrameReader:
             pass
         finally:
             try:
-                self.sock.setblocking(True)
+                self.sock.settimeout(prev_to if prev_to is not None else 10.0)
             except Exception:
                 pass
 
@@ -141,6 +153,8 @@ class ZKFrameReader:
 
             payload = bytes(self.buf[8:total_needed])
             del self.buf[:total_needed]
+            if len(payload) < 8:
+                raise ValueError(f"Truncated ZKTeco frame header: {len(payload)} bytes")
             cmd = struct.unpack('<H', payload[:2])[0]
             return cmd, payload
         finally:
@@ -199,25 +213,31 @@ def _apply_pyzk_hotfix():
 
     ZK._ZK__send_command = patched_send_command
 
-    # ── 3. Fix read_with_buffer: Sub-1KB atomic chunked reads for complete 100% RAM extraction ──
+    # ── 3. Fix read_with_buffer: Self-healing sub-1KB atomic chunked reads + completeness gate ──
     orig_rwb = ZK.read_with_buffer
     def patched_read_with_buffer(self, command, fct=0, ext=0):
         if not self.tcp:
+            records_hint = getattr(self, 'records', 0)
+            if records_hint > 25:
+                raise ConnectionResetError("UDP socket cannot reliably stream large TA500 buffer; switching to TCP")
             return orig_rwb(self, command, fct, ext)
 
         reader = _get_zk_reader(self)
         cmd_string = struct.pack('<bhii', 1, command, fct, ext)
-        cmd_resp = self._ZK__send_command(1503, cmd_string, 1024)
+        cmd_resp = self._ZK__send_command(1503, cmd_string, 1024, timeout=8.0)
         resp_code = cmd_resp.get('code', 0)
         data_len = len(self._ZK__data)
         logger.info(f"📋 RWB 1503 reply: code={resp_code}, payload_bytes={data_len}")
 
         if not cmd_resp.get('status'):
-            logger.warning(f"⚠️ 1503 CMD_PREPARE_BUFFER rejected (code={resp_code})")
-            return b'', 0
+            raise RuntimeError(f"1503 CMD_PREPARE_BUFFER rejected (code={resp_code})")
 
         if resp_code == const.CMD_DATA:
             logger.info(f"📋 RWB received CMD_DATA directly ({data_len} bytes)")
+            try:
+                self._ZK__send_command(1502, timeout=1.5)
+            except Exception:
+                pass
             return self._ZK__data, data_len
 
         # Extract declared total buffer size from CMD_PREPARE_DATA / CMD_ACK_OK response
@@ -240,88 +260,122 @@ def _apply_pyzk_hotfix():
             logger.info(f"📋 RWB declared total size: {total_size} bytes (records hint={records_hint})")
 
         if total_size <= 0:
-            logger.warning("⚠️ RWB could not determine buffer size (total_size=0)")
+            if records_hint > 0:
+                raise RuntimeError("RWB declared total_size=0 while records_hint > 0")
             return b'', 0
 
-        # ── SUB-1KB ATOMIC CHUNKED READ LOOP ────────────────────────────────────
+        # ── SUB-1KB ATOMIC CHUNKED READ LOOP WITH PER-CHUNK RECOVERY ──────────
         # TA500 caps single CMD_DATA (1501) packets at 1008 bytes and sends NO trailing
         # CMD_ACK_OK after a direct CMD_DATA reply. Requesting 1000-byte chunks fits each
-        # slice cleanly inside a single reliable packet, avoiding BOTH v18.5/v18.6 burst
-        # frame drops AND v18.7's 4096B early-exit / 5s timeout hang.
+        # slice cleanly inside a single reliable packet, and each failed/short chunk retries
+        # up to 4x at the exact same offset instead of truncating the newer tail records.
         CHUNK_SIZE = 1000
+        MAX_CHUNK_RETRIES = 4
         accumulated = bytearray()
         chunk_num = 0
-        max_chunks = (total_size // 200) + 25
+        max_chunks = (total_size // 200) + 30
 
-        while len(accumulated) < total_size and chunk_num < max_chunks:
-            offset = len(accumulated)
-            remaining = total_size - offset
-            req_size = min(CHUNK_SIZE, remaining)
-
-            req_str = struct.pack('<ii', offset, req_size)
-            try:
-                resp_chunk = self._ZK__send_command(1504, req_str, 1024, timeout=6.0)
-                c_chunk = resp_chunk.get('code', 0)
-            except Exception as e_cmd:
-                logger.warning(f"⚠️ RWB chunk {chunk_num + 1} CMD send error at offset {offset}: {e_cmd}")
-                break
-
-            chunk_data = bytearray()
-
-            if c_chunk == const.CMD_DATA:
-                # Single-packet CMD_DATA reply is already complete in self._ZK__data
-                if len(self._ZK__data) > 0:
-                    chunk_data.extend(self._ZK__data)
-            elif c_chunk == const.CMD_PREPARE_DATA:
-                expected_chunk = req_size
-                if len(self._ZK__data) >= 4:
-                    decl = struct.unpack('<I', self._ZK__data[:4])[0]
-                    if 0 < decl <= 65536:
-                        expected_chunk = decl
-                while True:
-                    try:
-                        cmd, payload = reader.recv_frame(timeout=4.0)
-                        if cmd == const.CMD_DATA:
-                            chunk_data.extend(payload[8:])
-                            if len(chunk_data) >= expected_chunk:
-                                try:
-                                    c_end, _ = reader.recv_frame(timeout=0.4)
-                                    if c_end == const.CMD_ACK_OK:
-                                        break
-                                except Exception:
-                                    break
-                        elif cmd == const.CMD_ACK_OK:
-                            break
-                        elif cmd == const.CMD_PREPARE_DATA:
-                            continue
-                        else:
-                            logger.warning(f"⚠️ RWB unexpected frame {cmd} in chunk {chunk_num + 1}")
-                            break
-                    except socket.timeout:
-                        if len(chunk_data) == 0:
-                            logger.warning(f"⚠️ RWB chunk {chunk_num + 1} timeout with 0 bytes")
-                        break
-                    except Exception as e_frame:
-                        logger.warning(f"⚠️ RWB chunk {chunk_num + 1} frame error: {e_frame}")
-                        break
-            else:
-                logger.warning(f"⚠️ RWB chunk {chunk_num + 1} rejected (code={c_chunk}) at offset {offset}")
-                break
-
-            if not chunk_data:
-                logger.warning(f"⚠️ RWB chunk {chunk_num + 1} returned 0 bytes at offset {offset} — stopping")
-                break
-
-            accumulated.extend(chunk_data)
-            chunk_num += 1
-            if chunk_num == 1 or chunk_num % 4 == 0 or len(accumulated) >= total_size:
-                logger.info(f"📋 RWB chunk {chunk_num}: +{len(chunk_data)} bytes → {len(accumulated)}/{total_size} total")
-
-        # Free buffer on TA500 RAM (short timeout so it never stalls 8s)
         try:
-            self._ZK__send_command(1502, timeout=1.5)
-        except Exception:
-            pass
+            while len(accumulated) < total_size and chunk_num < max_chunks:
+                offset = len(accumulated)
+                remaining = total_size - offset
+                req_size = min(CHUNK_SIZE, remaining)
+                req_str = struct.pack('<ii', offset, req_size)
+
+                chunk_data = None
+                last_err = None
+
+                for retry in range(1, MAX_CHUNK_RETRIES + 1):
+                    if retry > 1:
+                        time.sleep(min(1.5, 0.35 * (retry - 1)))
+                        reader.drain()
+
+                    attempt_buf = bytearray()
+                    try:
+                        resp_chunk = self._ZK__send_command(1504, req_str, 1024, timeout=8.0)
+                        c_chunk = resp_chunk.get('code', 0)
+                    except Exception as e_cmd:
+                        last_err = str(e_cmd)
+                        logger.warning(
+                            f"⚠️ RWB chunk {chunk_num + 1} (offset {offset}) error "
+                            f"[{retry}/{MAX_CHUNK_RETRIES}]: {e_cmd}"
+                        )
+                        continue
+
+                    if c_chunk == const.CMD_DATA:
+                        if len(self._ZK__data) > 0:
+                            attempt_buf.extend(self._ZK__data)
+                    elif c_chunk == const.CMD_PREPARE_DATA:
+                        expected_chunk = req_size
+                        if len(self._ZK__data) >= 4:
+                            decl = struct.unpack('<I', self._ZK__data[:4])[0]
+                            if 0 < decl <= 65536:
+                                expected_chunk = decl
+                        while len(attempt_buf) < expected_chunk:
+                            try:
+                                cmd, payload = reader.recv_frame(timeout=5.0)
+                                if cmd == const.CMD_DATA:
+                                    attempt_buf.extend(payload[8:])
+                                    if len(attempt_buf) >= expected_chunk:
+                                        try:
+                                            c_end, _ = reader.recv_frame(timeout=0.35)
+                                            if c_end == const.CMD_ACK_OK:
+                                                break
+                                        except Exception:
+                                            break
+                                elif cmd == const.CMD_ACK_OK:
+                                    break
+                                elif cmd == const.CMD_PREPARE_DATA:
+                                    continue
+                                else:
+                                    last_err = f"unexpected frame {cmd}"
+                                    break
+                            except socket.timeout:
+                                last_err = f"frame timeout ({len(attempt_buf)}/{expected_chunk} bytes)"
+                                break
+                            except Exception as e_frame:
+                                last_err = str(e_frame)
+                                break
+                    else:
+                        last_err = f"rejected code={c_chunk}"
+                        logger.warning(
+                            f"⚠️ RWB chunk {chunk_num + 1} rejected (code={c_chunk}) at offset {offset} "
+                            f"[{retry}/{MAX_CHUNK_RETRIES}]"
+                        )
+                        continue
+
+                    # Require a non-empty chunk; for PREPARE_DATA also verify expected size arrived
+                    if len(attempt_buf) >= req_size or (c_chunk == const.CMD_DATA and len(attempt_buf) > 0):
+                        chunk_data = attempt_buf
+                        break
+                    else:
+                        last_err = last_err or f"short chunk ({len(attempt_buf)}/{req_size} bytes)"
+                        logger.warning(
+                            f"⚠️ RWB chunk {chunk_num + 1} incomplete at offset {offset}: {last_err} "
+                            f"[{retry}/{MAX_CHUNK_RETRIES}]"
+                        )
+
+                if not chunk_data:
+                    raise RuntimeError(
+                        f"RWB chunk {chunk_num + 1} failed after {MAX_CHUNK_RETRIES} retries at offset {offset}: {last_err}"
+                    )
+
+                accumulated.extend(chunk_data)
+                chunk_num += 1
+                if chunk_num == 1 or chunk_num % 4 == 0 or len(accumulated) >= total_size:
+                    logger.info(f"📋 RWB chunk {chunk_num}: +{len(chunk_data)} bytes → {len(accumulated)}/{total_size} total")
+                if len(accumulated) < total_size:
+                    time.sleep(0.02)
+        finally:
+            # Free buffer on TA500 RAM cleanly so next read starts fresh
+            try:
+                self._ZK__send_command(1502, timeout=1.5)
+            except Exception:
+                pass
+
+        # Strict completeness gate: NEVER silently return a truncated prefix!
+        if len(accumulated) < (total_size - 8):
+            raise RuntimeError(f"Incomplete TA500 buffer: got {len(accumulated)}/{total_size} bytes ({chunk_num} chunks)")
 
         logger.info(f"✅ RWB Complete: Assembled {len(accumulated)}/{total_size} bytes from TA500 RAM ({chunk_num} chunks)")
         return bytes(accumulated), len(accumulated)
@@ -410,19 +464,41 @@ logging.basicConfig(
 logger = logging.getLogger('tablet-bridge')
 logging.getLogger('urllib3').setLevel(logging.ERROR)
 
-# ─── Persistent HTTP Session for Supabase Cloud ───────────────────────────────
-session = requests.Session()
-if Retry is not None:
-    retry_strategy = Retry(
-        total=2,
-        backoff_factor=0.3,
-        status_forcelist=[500, 502, 503, 504],
-    )
-    adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=retry_strategy)
-else:
-    adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=2)
-session.mount('https://', adapter)
-session.mount('http://', adapter)
+# ─── Persistent HTTP Session for Supabase Cloud (Auto-Recycling) ───────────────
+def _build_http_session() -> requests.Session:
+    s = requests.Session()
+    if Retry is not None:
+        retry_strategy = Retry(
+            total=2,
+            backoff_factor=0.3,
+            status_forcelist=[500, 502, 503, 504],
+        )
+        adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=retry_strategy)
+    else:
+        adapter = HTTPAdapter(pool_connections=5, pool_maxsize=5, max_retries=2)
+    s.mount('https://', adapter)
+    s.mount('http://', adapter)
+    return s
+
+session = _build_http_session()
+
+def reset_http_session() -> None:
+    global session
+    try:
+        session.close()
+    except Exception:
+        pass
+    session = _build_http_session()
+
+def acquire_termux_wakelock() -> None:
+    """Keeps Android CPU & Wi-Fi awake on Termux even if started directly without watchdog.sh."""
+    try:
+        wl_bin = shutil.which('termux-wake-lock')
+        if wl_bin:
+            subprocess.run([wl_bin], timeout=3, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            logger.info('🔋 Termux wake-lock acquired (CPU & Wi-Fi kept active across screen-off).')
+    except Exception:
+        pass
 
 _HEADERS_AUTH = {
     'apikey':        SUPABASE_KEY,
@@ -618,18 +694,20 @@ def init_local_database():
     except Exception as e:
         logger.warning(f"Could not initialize local SQLite queue: {e}")
 
-def record_offline_punch(key: str, uid: str, punch_time: str, status: int, raw_status: int, sync_time: str) -> None:
-    """Persists punch to tablet SQLite database before network upload."""
+def record_offline_punch(key: str, uid: str, punch_time: str, status: int, raw_status: int, sync_time: str) -> bool:
+    """Persists punch to tablet SQLite database before network upload. Returns True if newly queued."""
     try:
         with sqlite3.connect(_DB_FILE, timeout=5.0) as conn:
-            conn.execute('''
+            cur = conn.execute('''
                 INSERT OR IGNORE INTO offline_punches
                 (punch_key, device_user_id, punch_time, status, raw_status, synced_at, is_synced)
                 VALUES (?, ?, ?, ?, ?, ?, 0)
             ''', (key, uid, punch_time, status, raw_status, sync_time))
             conn.execute('INSERT OR IGNORE INTO seen_hashes (punch_key) VALUES (?)', (key,))
+            return cur.rowcount > 0
     except Exception as e:
         logger.warning(f"SQLite record punch notice: {e}")
+        return False
 
 def get_pending_offline_punches(limit: int = 50) -> List[Dict[str, Any]]:
     """Retrieves unsynced offline punches in chronological order."""
@@ -728,14 +806,21 @@ def save_seen_set(seen: Set[str]) -> None:
         logger.warning(f'Could not save seen-punch set: {e}')
 
 # ─── Cloud Meta Commands & Heartbeat ──────────────────────────────────────────
+_http_fail_streak = 0
+
 def fetch_cloud_meta() -> Dict[str, int]:
+    global _http_fail_streak
     try:
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?select=key,value'
         res = session.get(url, headers=_HEADERS_AUTH, timeout=(2, 4))
         if res.status_code == 200:
+            _http_fail_streak = 0
             return {r['key']: int(r['value']) for r in res.json()}
     except Exception:
-        pass
+        _http_fail_streak += 1
+        if _http_fail_streak >= 3:
+            _http_fail_streak = 0
+            reset_http_session()
     return {}
 
 def acknowledge_command(key: str) -> None:
@@ -749,7 +834,7 @@ _last_ta500_seen_ts = 0
 
 def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
     """Updates cloud heartbeat in sync_meta so web portal detects real-time status."""
-    global _last_ta500_seen_ts
+    global _last_ta500_seen_ts, _http_fail_streak
     try:
         now_ts = int(time.time())
         if ta500_online:
@@ -759,12 +844,16 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 188},
+            {'key': 'bridge_version',   'value': 189},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
+        _http_fail_streak = 0
     except Exception:
-        pass
+        _http_fail_streak += 1
+        if _http_fail_streak >= 3:
+            _http_fail_streak = 0
+            reset_http_session()
 
 def handle_bridge_exit(*args):
     """Gracefully terminates active TA500 hardware session and marks bridge offline in cloud."""
@@ -978,7 +1067,8 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
     # Maintain background keepalive pulse to keep TP-Link extender port active
     start_extender_keepalive(target_ip)
 
-    for use_udp in (False, True):
+    # Try reliable TCP twice (tearing down any stale hardware lock between attempts) before UDP fallback
+    for attempt_idx, use_udp in enumerate((False, False, True)):
         zk = None
         timeout = ZK_TIMEOUT if not use_udp else 6
         try:
@@ -996,10 +1086,16 @@ def connect_heartbeat_socket(ip: Optional[str] = None) -> Optional[object]:
             if not use_udp:
                 err_str = str(e_tcp)
                 if '104' in err_str or '10054' in err_str or 'reset' in err_str.lower():
-                    logger.warning('TA500 LAN busy (hardware holding previous session). Attempting auto-clear...')
-                    teardown_stale_session(target_ip)
+                    if attempt_idx == 0:
+                        logger.warning('TA500 LAN busy (hardware holding previous session). Attempting auto-clear...')
+                        teardown_stale_session(target_ip)
+                        time.sleep(1.0)
                 elif 'timed out' in err_str.lower() or 'timeout' in err_str.lower():
-                    logger.warning(f'TA500 LAN connect notice ({target_ip}): timed out')
+                    if attempt_idx == 0:
+                        teardown_stale_session(target_ip)
+                        time.sleep(0.8)
+                    else:
+                        logger.warning(f'TA500 LAN connect notice ({target_ip}): timed out')
                 else:
                     logger.warning(f'TA500 LAN connect notice ({target_ip}): {e_tcp}')
     return None
@@ -1084,21 +1180,30 @@ def _auto_align_records(data: bytes, rec_size: int = 40) -> Tuple[int, int, int]
     return best_offset, best_valid, total_slots
 
 
-def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
+def safe_fetch_attendance(conn, max_retries: int = 3) -> list:
     """
-    v18.8 Iron Sentinel — Atomic Chunk Extractor & Integrity Gate:
-    - Reads attendance stream via sub-1KB reliable read_with_buffer(13).
+    v18.9 Iron Sentinel — Self-Healing Atomic Chunk Extractor & Completeness Gate:
+    - Reads complete attendance stream via retrying sub-1KB read_with_buffer(13).
     - Auto-detects record alignment offset (handles TA500's optional 4-byte size prefix).
-    - Rejects any partially shifted buffer (< 70% valid dates) before decoding.
+    - Rejects truncated buffers (missing tail records) AND misaligned reads (< 70% valid dates).
     """
     if not conn:
         return []
     for attempt in range(max_retries):
         try:
+            if attempt > 0:
+                try:
+                    _get_zk_reader(conn).drain()
+                except Exception:
+                    pass
+                time.sleep(0.8)
+
             attendance_data, size = conn.read_with_buffer(13)
             logger.info(f"📊 safe_fetch_attendance: buffer received {len(attendance_data)} bytes (announced size={size})")
             if not attendance_data or len(attendance_data) < 40:
-                logger.warning(f"⚠️ safe_fetch_attendance: buffer too short ({len(attendance_data)} bytes)")
+                records_hint = getattr(conn, 'records', 0)
+                if records_hint > 0:
+                    raise RuntimeError(f"Hardware buffer too short ({len(attendance_data)} bytes) for {records_hint} records")
                 return []
 
             # Auto-detect correct record alignment offset (handles 0- or 4-byte prefix)
@@ -1108,7 +1213,8 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
                     f"⚠️ Integrity gate rejected read: only {best_valid}/{total_slots} valid dates "
                     f"at offset={best_offset} (attempt {attempt + 1}/{max_retries})"
                 )
-                time.sleep(0.5)
+                if attempt == max_retries - 1:
+                    raise RuntimeError(f"Integrity gate rejected shifted read ({best_valid}/{total_slots} valid dates)")
                 continue
 
             raw_data = attendance_data[best_offset:]
@@ -1125,6 +1231,12 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
                     continue
                 attendances.append(SimpleAttendance(uid_str or str(uid), dt, status, punch, uid))
 
+            records_hint = getattr(conn, 'records', 0)
+            if records_hint >= 5 and len(attendances) < max(1, records_hint - 2):
+                raise RuntimeError(
+                    f"Completeness gate rejected partial read: decoded {len(attendances)}/{records_hint} records"
+                )
+
             if attendances:
                 dts = [a.timestamp for a in attendances if _is_sane_punch_dt(a.timestamp)]
                 span = f"{min(dts).strftime('%Y-%m-%d %H:%M')} .. {max(dts).strftime('%Y-%m-%d %H:%M')}" if dts else "none valid"
@@ -1135,10 +1247,9 @@ def safe_fetch_attendance(conn, max_retries: int = 2) -> list:
                 logger.info("📊 safe_fetch_attendance: 0 records decoded")
             return attendances
         except Exception as e:
-            logger.warning(f"Attendance extraction attempt {attempt+1} error: {e}")
+            logger.warning(f"Attendance extraction attempt {attempt+1}/{max_retries} error: {e}")
             if attempt == max_retries - 1:
                 raise
-            time.sleep(1.0)
     return []
 
 def sync_device_users(conn) -> int:
@@ -1157,82 +1268,97 @@ def sync_device_users(conn) -> int:
     return 0
 
 # ─── Flush Local Queue to Supabase ────────────────────────────────────────────
-def flush_upload_queue(seen: Set[str]) -> bool:
-    pending = get_pending_offline_punches(limit=50)
-    if not pending:
-        return True
-
-    # Pre-flight check: ensure every employee in queue exists in official roster
-    valid_pending = []
-    discard_keys = []
-    for r in pending:
-        uid = str(r.get('device_user_id', '')).strip()
-        if uid and uid in _employee_cache:
-            valid_pending.append(r)
-        else:
-            discard_keys.append(r['_key'])
-
-    if discard_keys:
-        discard_rejected_punches(discard_keys)
-
-    if not valid_pending:
-        return True
-
-    payload = [{k: v for k, v in r.items() if k != '_key'} for r in valid_pending]
-    url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
-
+def _post_supabase_batch(url: str, payload: List[Dict[str, Any]], timeout=(5, 10)):
+    """Executes Supabase POST with automatic session recycle if idle keep-alive socket broke."""
     try:
-        res = session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(4, 8))
-        if res.status_code in (200, 201):
-            synced_keys = [r['_key'] for r in valid_pending]
-            mark_punches_synced(synced_keys)
-            for k in synced_keys:
-                seen.add(k)
-            save_seen_set(seen)
+        return session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=timeout)
+    except Exception:
+        reset_http_session()
+        return session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=timeout)
 
-            latest_uid = valid_pending[-1]['device_user_id']
-            emp_name = _employee_cache.get(latest_uid, f'ID #{latest_uid}')
-            logger.info(f'✅ SYNCED: {len(valid_pending)} punch(es) to cloud! (Latest: {emp_name})')
+def flush_upload_queue(seen: Set[str]) -> bool:
+    for _batch_idx in range(25):
+        pending = get_pending_offline_punches(limit=50)
+        if not pending:
             return True
-        elif res.status_code == 409:
-            err_text = res.text
-            logger.warning(f'Supabase returned HTTP 409 Conflict: {err_text}')
 
-            # Attempt single-item isolation to prevent permanent queue block
-            recovered = 0
-            synced_keys = []
-            discarded = []
-            for r in valid_pending:
-                single_payload = [{k: v for k, v in r.items() if k != '_key'}]
-                try:
-                    sres = session.post(url, headers=_HEADERS_INSERT, json=single_payload, timeout=(3, 5))
-                    if sres.status_code in (200, 201):
-                        synced_keys.append(r['_key'])
-                        seen.add(r['_key'])
-                        recovered += 1
-                    elif sres.status_code == 409:
-                        # Already present in DB, mark synced
-                        synced_keys.append(r['_key'])
-                        seen.add(r['_key'])
-                    else:
-                        logger.error(f'⚠️ Discarding rejected punch for UID {r["device_user_id"]} ({sres.text})')
-                        discarded.append(r['_key'])
-                except Exception:
-                    pass
+        # Pre-flight check: ensure every employee in queue exists in official roster
+        unknown_found = any(not str(r.get('device_user_id', '')).strip() or str(r.get('device_user_id', '')).strip() not in _employee_cache for r in pending)
+        if unknown_found:
+            refresh_employee_cache()
 
-            if synced_keys:
+        valid_pending = []
+        discard_keys = []
+        for r in pending:
+            uid = str(r.get('device_user_id', '')).strip()
+            if uid and uid in _employee_cache:
+                valid_pending.append(r)
+            else:
+                discard_keys.append(r['_key'])
+
+        if discard_keys:
+            discard_rejected_punches(discard_keys)
+
+        if not valid_pending:
+            continue
+
+        payload = [{k: v for k, v in r.items() if k != '_key'} for r in valid_pending]
+        url = f'{SUPABASE_URL}/rest/v1/attendance_logs?on_conflict=device_user_id,punch_time'
+
+        try:
+            res = _post_supabase_batch(url, payload, timeout=(5, 10))
+            if res.status_code in (200, 201):
+                synced_keys = [r['_key'] for r in valid_pending]
                 mark_punches_synced(synced_keys)
-            if discarded:
-                discard_rejected_punches(discarded)
-            save_seen_set(seen)
-            logger.info(f'Queue recovery: {recovered} newly synced, {len(discarded)} discarded')
-            return recovered > 0
-        else:
-            logger.warning(f'Supabase returned HTTP {res.status_code} — kept in local SQLite queue (will retry)')
-    except Exception as e:
-        logger.warning(f'Slow network: upload queued locally ({len(valid_pending)} punch(es) waiting in SQLite): {e}')
+                for k in synced_keys:
+                    seen.add(k)
+                save_seen_set(seen)
 
-    return False
+                latest_uid = valid_pending[-1]['device_user_id']
+                emp_name = _employee_cache.get(latest_uid, f'ID #{latest_uid}')
+                logger.info(f'✅ SYNCED: {len(valid_pending)} punch(es) to cloud! (Latest: {emp_name})')
+                if len(pending) < 50:
+                    return True
+                continue
+            elif res.status_code == 409:
+                err_text = res.text
+                logger.warning(f'Supabase returned HTTP 409 Conflict: {err_text}')
+
+                recovered = 0
+                synced_keys = []
+                discarded = []
+                for r in valid_pending:
+                    single_payload = [{k: v for k, v in r.items() if k != '_key'}]
+                    try:
+                        sres = _post_supabase_batch(url, single_payload, timeout=(4, 6))
+                        if sres.status_code in (200, 201):
+                            synced_keys.append(r['_key'])
+                            seen.add(r['_key'])
+                            recovered += 1
+                        elif sres.status_code == 409:
+                            synced_keys.append(r['_key'])
+                            seen.add(r['_key'])
+                        else:
+                            logger.error(f'⚠️ Discarding rejected punch for UID {r["device_user_id"]} ({sres.text})')
+                            discarded.append(r['_key'])
+                    except Exception:
+                        pass
+
+                if synced_keys:
+                    mark_punches_synced(synced_keys)
+                if discarded:
+                    discard_rejected_punches(discarded)
+                save_seen_set(seen)
+                logger.info(f'Queue recovery: {recovered} newly synced, {len(discarded)} discarded')
+                return recovered > 0 or bool(synced_keys)
+            else:
+                logger.warning(f'Supabase returned HTTP {res.status_code} — kept in local SQLite queue (will retry)')
+                return False
+        except Exception as e:
+            logger.warning(f'Slow network: upload queued locally ({len(valid_pending)} punch(es) waiting in SQLite): {e}')
+            return False
+
+    return True
 
 def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
     global _last_device_punch
@@ -1246,6 +1372,14 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
         attendances.sort(key=lambda a: _parse_ts(getattr(a, 'timestamp', None)))
     except Exception:
         pass
+
+    # If any mapped UID isn't in local employee cache, refresh cache once before skipping
+    needed_uids = {
+        TA500_TO_SYSTEM_MAP.get(str(att.user_id), str(att.user_id))
+        for att in attendances
+    }
+    if any(u and u not in _employee_cache for u in needed_uids):
+        refresh_employee_cache()
 
     now_mnl = datetime.now(TZ)
     min_mnl = TZ.localize(_MIN_PUNCH_DT_NAIVE)
@@ -1287,11 +1421,14 @@ def process_punches_batch(attendances: List[Any], seen: Set[str]) -> int:
             status_val = int(att.status or 0)
 
         # Record immediately to local persistent SQLite WAL database
-        record_offline_punch(key, uid, utc_iso, int(status_val), int(att.status or 0), sync_time)
+        inserted_new = record_offline_punch(key, uid, utc_iso, int(status_val), int(att.status or 0), sync_time)
         seen.add(key)
-        new_count += 1
-        emp_name = _employee_cache.get(uid, f'ID #{uid}')
-        logger.info(f"🆕 NEW PUNCH: {emp_name} at {local_dt.strftime('%Y-%m-%d %H:%M:%S')} (status {status_val})")
+        if inserted_new:
+            new_count += 1
+            emp_name = _employee_cache.get(uid, f'ID #{uid}')
+            logger.info(f"🆕 NEW PUNCH: {emp_name} at {local_dt.strftime('%Y-%m-%d %H:%M:%S')} (status {status_val})")
+        else:
+            skipped_seen += 1
 
     logger.info(f"📊 Audit breakdown: {new_count} new, {skipped_seen} already in DB, {skipped_emp} unmapped emp, {skipped_year} bad year")
 
@@ -1340,15 +1477,16 @@ def discover_ta500() -> None:
 # ─── Main Bridge Engine ───────────────────────────────────────────────────────
 def main():
     acquire_instance_lock()
+    acquire_termux_wakelock()
     init_local_database()
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.8 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.9 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
-    logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
-    logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
-    logger.info('   Storage   : SQLite WAL Queue (Zero Punch Loss) | Instant Cloud Sync')
+    logger.info('   Mode      : Self-Healing TCP Framing | Retrying Chunk Extractor')
+    logger.info('   Stability : Zero-Miss Catchup | 5-Min Full Audit | Termux Wake-Lock')
+    logger.info('   Storage   : SQLite WAL Queue (Zero Punch Loss) | Auto-Recycle Cloud')
     logger.info('==================================================================')
 
     start_extender_keepalive(ZK_IP)
@@ -1361,7 +1499,10 @@ def main():
     update_live_heartbeat(False, 0)
     logger.info('Tablet bridge active. Press Ctrl+C to stop.')
 
-    # Reconnect & self-healing tracking
+    AUDIT_INTERVAL = 300        # 5-minute full-memory catch-up audit (guards against missed counter edges)
+    EMP_REFRESH_INTERVAL = 300  # 5-minute employee roster & cloud hash refresh
+
+    # Reconnect & self-healing tracking (preserved across reconnects)
     failure_start_time = 0.0
     ta500_fail_count = 0
     last_soft_reboot_attempt = 0.0
@@ -1436,58 +1577,92 @@ def main():
         failure_start_time = 0.0
         logger.info(f'🟢 TA500 CONNECTED ({ZK_IP})! Bulletproof engine ready in <1s.')
         # Zero enable_device() calls to prevent sensor/screen freeze
-        # v17.3: NO enable_device() after connect — device is already active on fresh connect.
 
-        # ── 2. Status & Catch-Up Check ───────────────────────────────────────
+        # ── 2. Status & Zero-Miss Startup Catch-Up Check ─────────────────────
+        catchup_pending = True
+        empty_punch_retries = 0
+        fetch_fail_streak = 0
+        read_sizes_fail_streak = 0
+        last_audit_time = time.time()
+        last_emp_refresh = time.time()
+        last_cloud_check = time.time()
+        last_heartbeat = 0.0
+        last_upload_attempt = 0.0
+        udp_fallback_since = time.time() if not getattr(conn, 'tcp', True) else 0.0
+
         try:
-            conn.read_sizes()
-            known_record_count = conn.records
-            if not isinstance(known_record_count, int) or known_record_count < 0 or known_record_count > 500000:
-                known_record_count = 0
-            logger.info(f'📊 TA500 reports {known_record_count} total attendance records on device.')
-            update_live_heartbeat(True, known_record_count)
+            # Verify fresh socket actually responds cleanly before entering loop
+            try:
+                conn.read_sizes()
+                startup_count = conn.records
+                if not isinstance(startup_count, int) or startup_count < 0 or startup_count > 500000:
+                    raise ValueError(f"Invalid record counter on startup: {startup_count}")
+            except Exception as e_sz:
+                raise ConnectionResetError(f"Initial read_sizes failed on fresh socket: {e_sz}")
+
+            logger.info(f'📊 TA500 reports {startup_count} total attendance records on device.')
+            update_live_heartbeat(True, startup_count)
 
             # Sync cloud hashes on startup so punches already in DB aren't re-inserted
-            cloud_hashes = load_cloud_seen_hashes(limit=max(known_record_count + 50, 300))
+            cloud_hashes = load_cloud_seen_hashes(limit=max(startup_count + 50, 300))
             new_cloud = cloud_hashes - seen
             if new_cloud:
                 seen.update(new_cloud)
                 save_seen_set(seen)
                 logger.info(f'☁️ Synced {len(new_cloud)} cloud punch hashes to local cache.')
 
-            # Run catch-up via SAFE SINGLE-SOCKET FETCH
-            if known_record_count > 0:
+            # Run catch-up ONLY advancing known_record_count once 100% verified!
+            if startup_count == 0:
+                known_record_count = 0
+                catchup_pending = False
+            else:
                 logger.info('🔄 Running startup catch-up audit on active connection...')
-                atts = safe_fetch_attendance(conn)
-                caught_up = process_punches_batch(atts, seen)
-                if caught_up > 0:
-                    logger.info(f'✅ Caught up {caught_up} punch(es) from TA500 memory!')
-                    flush_upload_queue(seen)
-                elif len(atts) == 0:
-                    logger.warning('⚠️ Catch-up: Zero attendance records returned by hardware buffer.')
-                else:
-                    logger.info(f'✅ Verified {len(atts)} records against cloud. All punches already present in Supabase.')
-        except Exception as e_init:
-            logger.warning(f'Initial status check notice: {e_init}')
+                try:
+                    atts = safe_fetch_attendance(conn)
+                    caught_up = process_punches_batch(atts, seen)
+                    if caught_up > 0:
+                        logger.info(f'✅ Caught up {caught_up} punch(es) from TA500 memory!')
+                        flush_upload_queue(seen)
+                    else:
+                        logger.info(f'✅ Verified {len(atts)} records against cloud. All punches already present in Supabase.')
+                    if len(atts) >= startup_count:
+                        known_record_count = startup_count
+                        catchup_pending = False
+                        last_audit_time = time.time()
+                    else:
+                        logger.warning(
+                            f'⏳ Startup audit saw {len(atts)}/{startup_count} records — keeping catch-up pending for next cycle.'
+                        )
+                except Exception as e_init_fetch:
+                    # NEVER mark catchup done or advance known_record_count if startup audit failed!
+                    logger.warning(f'⏳ Startup catch-up deferred ({e_init_fetch}) — will retry automatically.')
 
-        last_cloud_check = time.time()
-        last_heartbeat = 0
-        last_audit_time = time.time()
-        last_upload_attempt = 0.0
-        session_start_time = time.time()
-        read_sizes_fail_streak = 0
-
-        # v17.4: Permanent continuous connection — NEVER disconnect on a timer!
-        # Attendance fetching is triggered strictly when current_count > known_record_count.
-
-        try:
             # ── 3. Main Loop ─────────────────────────────────────────────────
             while True:
                 now = time.time()
 
+                # Upgrade back to TCP if we landed on UDP fallback while idle
+                if udp_fallback_since and not catchup_pending and (now - udp_fallback_since) >= 45:
+                    raise ConnectionResetError("Upgrading UDP fallback session back to reliable TCP")
+
                 if now - last_upload_attempt >= 4.0:
                     last_upload_attempt = now
                     flush_upload_queue(seen)
+
+                # Periodic roster & cloud-seen refresh for long multi-hour runs
+                if now - last_emp_refresh >= EMP_REFRESH_INTERVAL:
+                    last_emp_refresh = now
+                    refresh_employee_cache()
+                    c_hashes = load_cloud_seen_hashes(limit=500)
+                    new_ch = c_hashes - seen
+                    if new_ch:
+                        seen.update(new_ch)
+                        save_seen_set(seen)
+
+                # Periodic full-memory self-audit (catches any missed counter transitions)
+                if not catchup_pending and (now - last_audit_time) >= AUDIT_INTERVAL:
+                    catchup_pending = True
+                    logger.info('🔄 Running scheduled 5-minute full-memory catch-up audit...')
 
                 # Cloud portal commands check (~6s for rapid Super Admin response)
                 if now - last_cloud_check >= 6:
@@ -1530,9 +1705,6 @@ def main():
                             logger.warning('⚠️ TA500 hardware reboot attempted via fallback.')
 
                         # ── Hardware Power-Cycle Grace Period ──
-                        # The TA500 ARM SoC requires ~30s to discharge capacitors, reboot,
-                        # and reload its internal ZKTeco listening daemon on port 4370.
-                        # We MUST pause the bridge so it does NOT hammer the closed socket!
                         logger.info('⏳ Hardware boot grace active: waiting 30 seconds for physical TA500 power cycle...')
                         for sec in range(30, 0, -5):
                             logger.info(f'⏳ Hardware rebooting... {sec}s remaining before bridge reconnect...')
@@ -1545,6 +1717,7 @@ def main():
                         try:
                             conn.clear_attendance()
                             known_record_count = 0
+                            catchup_pending = False
                             logger.info('✅ TA500 physical memory CLEARED!')
                         except Exception as e:
                             logger.error(f'Error clearing hardware: {e}')
@@ -1557,12 +1730,10 @@ def main():
                     if meta.get('sync_employees') == 1:
                         logger.info('👤 Enrolled user sync requested from web portal!')
                         sync_device_users(conn)
+                        refresh_employee_cache()
                         acknowledge_command('sync_employees')
 
-                # ── KEY 1: read_sizes() heartbeat — now reliable via patched __recv_reply ─
-                # PyZK's __recv_reply is patched to loop recv() until full data received.
-                # GuardedSocket provides a second safety layer for all recv() calls.
-                # Together: zero TCP packet invalid blips from Wi-Fi fragmentation.
+                # ── KEY 1: read_sizes() heartbeat ───────────────────────────
                 try:
                     conn.read_sizes()
                     current_count = conn.records
@@ -1579,56 +1750,62 @@ def main():
                         logger.warning(f'⚠️ TA500 heartbeat blip ({read_sizes_fail_streak}/2): {e_rs}. Retrying...')
                         time.sleep(2)
                         continue
-                    if read_sizes_fail_streak >= 5:
-                        logger.warning(f'⚠️ {read_sizes_fail_streak} consecutive polling errors — cleaning socket and rebooting TA500...')
-                        try:
-                            conn.disconnect()
-                        except Exception:
-                            pass
-                        safe_disconnect(conn)
-                        time.sleep(1)
-                        restart_ta500_soft(ZK_IP)
-                        time.sleep(20)
-                        read_sizes_fail_streak = 0
-                        raise ConnectionResetError("Proactive reboot cycle completed")
-                    logger.warning(f'⚠️ TA500 connection lost ({read_sizes_fail_streak} times): {e_rs}. Reconnecting...')
-                    raise
+                    logger.warning(f'⚠️ TA500 connection lost ({read_sizes_fail_streak}x): {e_rs}. Reconnecting clean session...')
+                    raise ConnectionResetError(f"Heartbeat lost: {e_rs}")
 
-                # ── KEY 2: New Punches Detected via Counter ──────────────────
-                if current_count > known_record_count:
-                    delta = current_count - known_record_count
-                    logger.info(f'🆕 {delta} new punch(es) detected via counter! Allowing 1.5s flash commit...')
-                    time.sleep(1.5)  # Allow hardware to finish writing minutiae/timestamp to internal flash
+                # ── KEY 2: New Punches or Pending Catch-Up Audit ────────────
+                if catchup_pending or current_count > known_record_count:
+                    if current_count > known_record_count:
+                        delta = current_count - known_record_count
+                        logger.info(f'🆕 {delta} new punch(es) detected via counter ({known_record_count} → {current_count})! Allowing 1.5s flash commit...')
+                        time.sleep(1.5)
                     try:
                         atts = safe_fetch_attendance(conn)
+                        fetch_fail_streak = 0
                         new_punches = process_punches_batch(atts, seen)
                         if new_punches > 0:
-                            known_record_count = current_count
-                            empty_punch_retries = 0
                             logger.info(f'Uploading {new_punches} new punch(es) to cloud...')
                             flush_upload_queue(seen)
-                        else:
-                            empty_punch_retries += 1
-                            if empty_punch_retries >= 3:
-                                logger.info('All records verified — duplicates already recorded in database.')
-                                known_record_count = current_count
-                                empty_punch_retries = 0
-                            else:
-                                logger.info(f'Record write pending in hardware buffer (attempt {empty_punch_retries}/3)... will verify next cycle.')
-                    except Exception as e_fetch:
-                        logger.warning(f'⚠️ Attendance extraction error ({e_fetch}). Retrying next cycle...')
-                        time.sleep(1.0)
-                else:
-                    known_record_count = current_count
-                    empty_punch_retries = 0
 
-                # ── KEY 3: Direct Flash Memory Audit ────────────────────────
-                # In v17.3, punch detection is handled cleanly by KEY 2 (record counter delta).
-                # This prevents concurrent socket access and eliminates 'TCP packet invalid' collisions.
+                        if len(atts) >= current_count:
+                            # 100% of TA500 records verified — safe to mark counter synced!
+                            known_record_count = current_count
+                            catchup_pending = False
+                            empty_punch_retries = 0
+                            last_audit_time = time.time()
+                        else:
+                            # Hardware buffer still flushing tail record behind counter update
+                            empty_punch_retries += 1
+                            catchup_pending = True
+                            if empty_punch_retries >= 4:
+                                logger.warning(
+                                    f'⚠️ Hardware buffer lagged behind counter ({len(atts)}/{current_count}) for 4 cycles — reconnecting clean session...'
+                                )
+                                raise ConnectionResetError("Buffer lag behind hardware counter")
+                            logger.info(
+                                f'⏳ Tail record still flushing to hardware buffer ({len(atts)}/{current_count}, attempt {empty_punch_retries}/4)... retrying next cycle.'
+                            )
+                    except ConnectionResetError:
+                        raise
+                    except Exception as e_fetch:
+                        # NEVER advance known_record_count when extraction failed!
+                        catchup_pending = True
+                        fetch_fail_streak += 1
+                        logger.warning(
+                            f'⚠️ Attendance extraction error (attempt {fetch_fail_streak}/2): {e_fetch}'
+                        )
+                        if fetch_fail_streak >= 2:
+                            raise ConnectionResetError(f"Repeated extraction error ({e_fetch}); refreshing TA500 TCP session")
+                        time.sleep(1.5)
+                else:
+                    if current_count < known_record_count:
+                        known_record_count = current_count
+                    empty_punch_retries = 0
 
                 if now - last_heartbeat >= 30:
                     last_heartbeat = now
-                    logger.info(f'🟢 TA500 Active ({ZK_IP}) — {known_record_count} records | Sensor ready for punches...')
+                    status_suffix = " (catch-up pending)" if catchup_pending else ""
+                    logger.info(f'🟢 TA500 Active ({ZK_IP}) — {known_record_count} records{status_suffix} | Sensor ready for punches...')
 
                 time.sleep(POLL_INTERVAL)
 
@@ -1639,7 +1816,7 @@ def main():
         finally:
             safe_disconnect(conn)
             _ACTIVE_ZK_CONN = None
-            time.sleep(5)  # Allow hardware TCP stack 5s to clear TIME_WAIT before reconnect
+            time.sleep(3)  # Allow hardware TCP stack 3s to clear TIME_WAIT before reconnect
 
 if __name__ == '__main__':
     main()
