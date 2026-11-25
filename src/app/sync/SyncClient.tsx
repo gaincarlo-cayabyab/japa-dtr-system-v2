@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Fingerprint,
   Wifi,
@@ -83,6 +83,13 @@ export function SyncClient({
 }: SyncClientProps) {
   const [scenario, setScenario] = useState<NetworkScenario>('healthy')
   const [selectedNode, setSelectedNode] = useState<string>('ta500')
+  const specsSectionRef = useRef<HTMLDivElement>(null)
+  const handleInspectNode = (nodeId: string) => {
+    setSelectedNode(nodeId)
+    requestAnimationFrame(() => {
+      specsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
   const [testingPing, setTestingPing] = useState(false)
   const [liveLatency, setLiveLatency] = useState<number>(42)
   const [totalRecords, setTotalRecords] = useState(initialTotalRecords)
@@ -458,10 +465,6 @@ export function SyncClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-700">
-            <Clock className="w-3.5 h-3.5 text-slate-500" />
-            <span>{liveTime || '00:00:00'}</span>
-          </div>
           <button
             type="button"
             onClick={handleTestPing}
@@ -593,7 +596,7 @@ export function SyncClient({
 
               {/* ════════════════════════ NODE 1: FINGERTEC TA500 (3D BIOMETRIC MACHINE) ════════════════════════ */}
               <div
-                onClick={() => setSelectedNode('ta500')}
+                onClick={() => handleInspectNode('ta500')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
                   selectedNode === 'ta500'
                     ? 'ring-2 ring-blue-500 shadow-xl border-blue-400 bg-white'
@@ -808,18 +811,25 @@ export function SyncClient({
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-[11px] font-mono text-slate-500 font-bold">192.168.0.58</span>
-                  <span className="text-[10px] font-bold text-blue-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleInspectNode('ta500')
+                    }}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                  >
                     Inspect Specs <ChevronRight className="w-3 h-3" />
-                  </span>
+                  </button>
                 </div>
               </div>
 
               {/* ──── CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) ──── */}
-              <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20 -mx-1">
+              <div className="hidden lg:flex items-center shrink-0 w-20 xl:w-28 relative z-40 mx-0.5">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top badge */}
                   <span
-                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-xs whitespace-nowrap mb-1.5 ${
+                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap mb-2 z-40 ${
                       isTa500PowerOff
                         ? 'bg-slate-100 text-slate-600 border-slate-300'
                         : isLanBroken
@@ -882,7 +892,17 @@ export function SyncClient({
                   </div>
 
                   {/* Bottom label */}
-                  <span className="text-[8px] font-mono font-bold text-slate-500 whitespace-nowrap mt-1">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full border shadow-sm text-[9px] font-mono font-bold whitespace-nowrap mt-2 z-40 ${
+                      isTa500PowerOff
+                        ? 'bg-slate-100 text-slate-600 border-slate-300'
+                        : isLanBroken
+                          ? 'bg-rose-50 text-rose-700 border-rose-300'
+                          : isPacketLoss
+                            ? 'bg-amber-50 text-amber-700 border-amber-300'
+                            : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
                     {isTa500PowerOff ? 'No Voltage' : isLanBroken ? 'Port Closed' : isPacketLoss ? 'Jitter: Elevated' : 'UDP 4370 · Flow: Active'}
                   </span>
                 </div>
@@ -921,7 +941,7 @@ export function SyncClient({
 
               {/* ════════════════════════ NODE 2: TP-LINK TL-WA855RE REPEATER (AP BRIDGE) ════════════════════════ */}
               <div
-                onClick={() => setSelectedNode('repeater')}
+                onClick={() => handleInspectNode('repeater')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
                   selectedNode === 'repeater'
                     ? 'ring-2 ring-purple-500 shadow-xl border-purple-400 bg-white'
@@ -1122,18 +1142,25 @@ export function SyncClient({
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-[11px] font-mono text-slate-500 font-bold">802.11n · 2.4 GHz (300M)</span>
-                  <span className="text-[10px] font-bold text-purple-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleInspectNode('repeater')
+                    }}
+                    className="text-[10px] font-bold text-purple-600 hover:text-purple-700 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                  >
                     Inspect Specs <ChevronRight className="w-3 h-3" />
-                  </span>
+                  </button>
                 </div>
               </div>
 
               {/* ──── CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) ──── */}
-              <div className="hidden lg:flex items-center shrink-0 w-16 xl:w-24 relative z-20 -mx-1">
+              <div className="hidden lg:flex items-center shrink-0 w-20 xl:w-28 relative z-40 mx-0.5">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top Badge */}
                   <span
-                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-xs whitespace-nowrap mb-1.5 ${
+                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap mb-2 z-40 ${
                       isWifiBroken
                         ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
                         : isPacketLoss
@@ -1180,7 +1207,15 @@ export function SyncClient({
                   </div>
 
                   {/* Bottom Label */}
-                  <span className="text-[8px] font-mono font-bold text-slate-500 whitespace-nowrap mt-1">
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full border shadow-sm text-[9px] font-mono font-bold whitespace-nowrap mt-2 z-40 ${
+                      isWifiBroken
+                        ? 'bg-rose-50 text-rose-700 border-rose-300'
+                        : isPacketLoss || isSlow
+                          ? 'bg-amber-50 text-amber-700 border-amber-300'
+                          : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
                     {isWifiBroken ? 'Carrier Lost' : isPacketLoss ? 'RF Jitter High' : isSlow ? '-82 dBm (Weak)' : '-52 dBm Stable'}
                   </span>
                 </div>
@@ -1214,7 +1249,7 @@ export function SyncClient({
 
               {/* ════════════════════════ NODE 3: SAMSUNG GALAXY TAB A9+ (BRIDGE DAEMON) ════════════════════════ */}
               <div
-                onClick={() => setSelectedNode('tablet')}
+                onClick={() => handleInspectNode('tablet')}
                 className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-visible border-2 flex-1 min-w-0 flex flex-col justify-between ${
                   selectedNode === 'tablet'
                     ? 'ring-2 ring-amber-500 shadow-xl border-amber-400 bg-white'
@@ -1262,8 +1297,8 @@ export function SyncClient({
                     <div className="w-1.5 h-1.5 rounded-full bg-white" />
                   </div>
 
-                  {/* Pill Badge anchored cleanly to the RIGHT of the conduit - flows under Card 3 without colliding with WAN Gateway */}
-                  <div className="absolute left-6 top-1/2 -translate-y-1/2 pointer-events-auto z-30">
+                  {/* Pill Badge anchored cleanly to the LEFT of the conduit so it never clips past the container edge */}
+                  <div className="absolute right-5 top-[42%] -translate-y-1/2 pointer-events-auto z-40">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-mono font-bold shadow-md border whitespace-nowrap backdrop-blur-xs ${
                       isBridgeDown
                         ? 'bg-rose-50/95 text-rose-700 border-rose-300 animate-pulse'
@@ -1403,9 +1438,16 @@ export function SyncClient({
 
                 <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-[11px] font-mono text-slate-500 font-bold">Termux · Python 3.11</span>
-                  <span className="text-[10px] font-bold text-amber-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleInspectNode('tablet')
+                    }}
+                    className="text-[10px] font-bold text-amber-600 hover:text-amber-700 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                  >
                     Inspect Specs <ChevronRight className="w-3 h-3" />
-                  </span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -1522,7 +1564,7 @@ export function SyncClient({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mt-4">
             {/* ════════════════════════ NODE 4: SUPABASE CLOUD DATABASE (SINGAPORE) ════════════════════════ */}
             <div
-              onClick={() => setSelectedNode('supabase')}
+              onClick={() => handleInspectNode('supabase')}
               className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
                 selectedNode === 'supabase'
                   ? 'ring-2 ring-emerald-500 shadow-xl border-emerald-400 bg-white'
@@ -1594,15 +1636,22 @@ export function SyncClient({
 
               <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
                 <span className="text-[11px] font-mono text-slate-500 font-bold">WebSocket Realtime CDC</span>
-                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleInspectNode('supabase')
+                  }}
+                  className="text-[10px] font-bold text-emerald-600 hover:text-emerald-700 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                >
                   Inspect Specs <ChevronRight className="w-3 h-3" />
-                </span>
+                </button>
               </div>
             </div>
 
             {/* ════════════════════════ NODE 5: JAPA DTR ENTERPRISE PORTAL (VERCEL) ════════════════════════ */}
             <div
-              onClick={() => setSelectedNode('vercel')}
+              onClick={() => handleInspectNode('vercel')}
               className={`group cursor-pointer rounded-2xl p-4 sm:p-5 transition-all duration-300 relative overflow-hidden border-2 flex flex-col justify-between ${
                 selectedNode === 'vercel'
                   ? 'ring-2 ring-indigo-500 shadow-xl border-indigo-400 bg-white'
@@ -1656,9 +1705,16 @@ export function SyncClient({
 
               <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between text-xs">
                 <span className="text-[11px] font-mono text-slate-500 font-bold">Edge SSR + API Routes</span>
-                <span className="text-[10px] font-bold text-indigo-600 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleInspectNode('vercel')
+                  }}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform cursor-pointer"
+                >
                   Inspect Specs <ChevronRight className="w-3 h-3" />
-                </span>
+                </button>
               </div>
             </div>
           </div>
@@ -2054,7 +2110,11 @@ export function SyncClient({
           )}
 
           {/* ──── SELECTED NODE TELEMETRY & DIAGNOSTICS INSPECTOR ────────────────── */}
-          <div className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all">
+          <div
+            ref={specsSectionRef}
+            id="selected-node-specs"
+            className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all scroll-mt-4"
+          >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-4">
               <div>
                 <div className="flex items-center gap-2">
