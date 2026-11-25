@@ -195,13 +195,10 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   const [deleteTarget, setDeleteTarget] = useState<AttendanceLog | null>(null)
   const [isDeletingSingle, setIsDeletingSingle] = useState(false)
 
-  // Live timing & adaptive estimated duration for ASAP updates + background auto-reload
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  // Live timing & adaptive estimated duration ONLY for explicit user edits (background auto-reload stays completely silent)
   const [syncActivityLabel, setSyncActivityLabel] = useState<string | null>(null)
   const [syncElapsedMs, setSyncElapsedMs] = useState(0)
   const [estimatedSyncMs, setEstimatedSyncMs] = useState(600)
-  const [lastSyncedAt, setLastSyncedAt] = useState<number>(() => Date.now())
-  const [secondsSinceSync, setSecondsSinceSync] = useState(0)
   const syncStartedAtRef = useRef<number | null>(null)
 
   // Filters
@@ -218,9 +215,9 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
     toastTimerRef.current = setTimeout(() => setToastMessage(null), 3500)
   }
 
-  // Track elapsed loading time smoothly every 100ms while any save or background reload is active
+  // Track elapsed loading time smoothly every 100ms ONLY during user-initiated mutations
   useEffect(() => {
-    if (!isRefreshing && !savingPunch && !isDeletingSingle) {
+    if (!savingPunch && !isDeletingSingle && !isClearing) {
       syncStartedAtRef.current = null
       setSyncElapsedMs(0)
       return
@@ -234,28 +231,17 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       }
     }, 100)
     return () => clearInterval(timer)
-  }, [isRefreshing, savingPunch, isDeletingSingle])
-
-  // Update "Synced Xs ago" readout every second
-  useEffect(() => {
-    const t = setInterval(() => {
-      setSecondsSinceSync(Math.max(0, Math.floor((Date.now() - lastSyncedAt) / 1000)))
-    }, 1000)
-    return () => clearInterval(t)
-  }, [lastSyncedAt])
+  }, [savingPunch, isDeletingSingle, isClearing])
 
   const recordLatencyEstimate = useCallback((durationMs: number) => {
     const clamped = Math.max(150, Math.min(durationMs, 10000))
     setEstimatedSyncMs((prev) => Math.round(prev * 0.6 + clamped * 0.4))
   }, [])
 
-  // Fetch Latest Logs in background without blocking UI
-  const fetchLatest = useCallback(async (label: string = 'Background sync') => {
-    const t0 = performance.now()
-    setIsRefreshing(true)
-    setSyncActivityLabel(label)
-    const supabase = createClient()
+  // Fetch Latest Logs silently in the background without blocking UI or showing loading banners
+  const fetchLatest = useCallback(async () => {
     try {
+      const supabase = createClient()
       const [{ data: freshLogs, count: freshCount }, { data: freshEmps }] = await Promise.all([
         supabase
           .from('attendance_logs')
@@ -267,35 +253,31 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       if (freshLogs) setLogs(freshLogs as AttendanceLog[])
       if (typeof freshCount === 'number') setTotalCount(freshCount)
       if (freshEmps) setEmployeesList(freshEmps)
-      setLastSyncedAt(Date.now())
-      setSecondsSinceSync(0)
-      recordLatencyEstimate(performance.now() - t0)
-    } finally {
-      setIsRefreshing(false)
-      setSyncActivityLabel(null)
+    } catch {
+      // silent background retry next cycle
     }
-  }, [recordLatencyEstimate])
+  }, [])
 
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
       .channel('attendance-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-        fetchLatest('Live change detected')
+        fetchLatest()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
-        fetchLatest('Employee update detected')
+        fetchLatest()
       })
       .subscribe((status) => {
         setIsLive(status === 'SUBSCRIBED')
       })
 
     // Silent automatic background reload every 5 seconds + on tab focus
-    const interval = setInterval(() => fetchLatest('Auto-reloading in background'), 5000)
+    const interval = setInterval(() => fetchLatest(), 5000)
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchLatest('Syncing tab')
+      if (document.visibilityState === 'visible') fetchLatest()
     }
-    const onFocus = () => fetchLatest('Syncing background')
+    const onFocus = () => fetchLatest()
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('focus', onFocus)
 
@@ -310,6 +292,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   // Smart Clear logs handler
   const handleClearAll = async () => {
     setIsClearing(true)
+    setSyncActivityLabel('Clearing attendance logs')
     try {
       const body: Record<string, string> = { mode: clearMode }
       if ((clearMode === 'date' || clearMode === 'date_employee') && clearDate) body.date = clearDate
@@ -322,13 +305,14 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to clear')
-      await fetchLatest('Refreshing after clear')
+      await fetchLatest()
       showToast(`Cleared ${json.deleted ?? 0} attendance record(s).`)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
       showToast(`Error: ${msg}`, 'error')
     } finally {
       setIsClearing(false)
+      setSyncActivityLabel(null)
       setShowClearModal(false)
     }
   }
@@ -449,19 +433,17 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
         }
         showToast(`Updated in ${(elapsed / 1000).toFixed(2)}s! Background sync active.`)
       }
-      setLastSyncedAt(Date.now())
-      setSecondsSinceSync(0)
       // Trigger non-blocking background refresh so all derived views stay authoritative
-      fetchLatest('Verifying in background')
+      fetchLatest()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error saving punch'
       setLogs(previousLogs)
       setTotalCount(previousCount)
       showToast(msg, 'error')
-      fetchLatest('Recovering state')
+      fetchLatest()
     } finally {
       setSavingPunch(false)
-      if (!isRefreshing) setSyncActivityLabel(null)
+      setSyncActivityLabel(null)
     }
   }
 
@@ -488,7 +470,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       const elapsed = Math.round(performance.now() - t0)
       recordLatencyEstimate(elapsed)
       showToast(`Deleted in ${(elapsed / 1000).toFixed(2)}s.`)
-      fetchLatest('Refreshing in background')
+      fetchLatest()
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error deleting punch'
       setLogs(previousLogs)
@@ -496,6 +478,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       showToast(msg, 'error')
     } finally {
       setIsDeletingSingle(false)
+      setSyncActivityLabel(null)
     }
   }
 
@@ -585,13 +568,13 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Floating Non-Blocking Sync / Save Timer Banner (shown during save or reload >= 200ms) */}
-      {(savingPunch || isDeletingSingle || (isRefreshing && syncElapsedMs >= 200)) && (
+      {/* Floating Non-Blocking Save / Edit / Delete Timer Banner (shown ONLY for explicit user actions) */}
+      {(savingPunch || isDeletingSingle || isClearing) && (
         <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 min-w-[260px] max-w-xs space-y-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3 text-xs font-bold">
             <span className="flex items-center gap-2 text-blue-300">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              {syncActivityLabel || 'Syncing logs…'}
+              {syncActivityLabel || 'Saving changes…'}
             </span>
             <span className="font-mono text-[11px] text-slate-300">
               {(syncElapsedMs / 1000).toFixed(1)}s / est. ~{Math.max(0.2, estimatedSyncMs / 1000).toFixed(1)}s
@@ -669,25 +652,6 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
               Request Edit Access
             </button>
           ) : null}
-
-          <button
-            type="button"
-            onClick={() => fetchLatest('Manual refresh')}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border bg-white border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors"
-            title="Auto-reloads in background every 5s. Click to force refresh now."
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : 'text-slate-400'}`} />
-            {isRefreshing || savingPunch || isDeletingSingle ? (
-              <span className="text-blue-700 font-mono">
-                {syncActivityLabel || 'Syncing'} {(syncElapsedMs / 1000).toFixed(1)}s / est. ~{(estimatedSyncMs / 1000).toFixed(1)}s
-              </span>
-            ) : (
-              <span>
-                Auto-Sync · {secondsSinceSync === 0 ? 'Just now' : `${secondsSinceSync}s ago`}
-              </span>
-            )}
-          </button>
 
           <span
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${

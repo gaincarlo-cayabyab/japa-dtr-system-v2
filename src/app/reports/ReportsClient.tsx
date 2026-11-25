@@ -201,17 +201,13 @@ export function ReportsClient({
     }
   }, [])
 
-  const [isRefreshingDtr, setIsRefreshingDtr] = useState(false)
   const [dtrSyncLabel, setDtrSyncLabel] = useState<string | null>(null)
   const [dtrElapsedMs, setDtrElapsedMs] = useState(0)
   const [dtrEstimatedMs, setDtrEstimatedMs] = useState(650)
   const dtrStartedAtRef = useRef<number | null>(null)
 
-  // Background Auto-Refresh & Realtime Subscription for DTR Reports
-  const fetchFreshDtr = useCallback(async (label: string = 'Background sync') => {
-    const t0 = performance.now()
-    setIsRefreshingDtr(true)
-    setDtrSyncLabel(label)
+  // Silent Background Auto-Refresh & Realtime Subscription for DTR Reports (never triggers visible UI)
+  const fetchFreshDtr = useCallback(async () => {
     try {
       const supabase = createClient()
       const { data: freshDtr } = await supabase
@@ -222,13 +218,8 @@ export function ReportsClient({
       if (freshDtr) {
         setData(freshDtr as DailyDtr[])
       }
-      const dur = Math.max(150, Math.min(Math.round(performance.now() - t0), 10000))
-      setDtrEstimatedMs((prev) => Math.round(prev * 0.6 + dur * 0.4))
     } catch (e) {
       console.error('Error refreshing DTR reports:', e)
-    } finally {
-      setIsRefreshingDtr(false)
-      setDtrSyncLabel(null)
     }
   }, [])
 
@@ -237,20 +228,20 @@ export function ReportsClient({
     const channel = supabase
       .channel('reports-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_logs' }, () => {
-        fetchFreshDtr('Live change detected')
+        fetchFreshDtr()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_notes' }, () => {
-        fetchFreshDtr('Note update detected')
+        fetchFreshDtr()
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'employees' }, () => {
-        fetchFreshDtr('Employee update detected')
+        fetchFreshDtr()
       })
       .subscribe()
 
-    const interval = setInterval(() => fetchFreshDtr('Auto-syncing background'), 6000)
-    const onFocus = () => fetchFreshDtr('Syncing tab')
+    const interval = setInterval(() => fetchFreshDtr(), 6000)
+    const onFocus = () => fetchFreshDtr()
     const onVis = () => {
-      if (document.visibilityState === 'visible') fetchFreshDtr('Syncing tab')
+      if (document.visibilityState === 'visible') fetchFreshDtr()
     }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVis)
@@ -396,9 +387,9 @@ export function ReportsClient({
     return () => clearTimeout(timer)
   }, [toast])
 
-  // Track elapsed loading time while saving/syncing DTR
+  // Track elapsed loading time ONLY during user-initiated shift save/delete
   useEffect(() => {
-    if (!isRefreshingDtr && !savingShift && !deletingShift) {
+    if (!savingShift && !deletingShift) {
       dtrStartedAtRef.current = null
       setDtrElapsedMs(0)
       return
@@ -412,7 +403,7 @@ export function ReportsClient({
       }
     }, 100)
     return () => clearInterval(timer)
-  }, [isRefreshingDtr, savingShift, deletingShift])
+  }, [savingShift, deletingShift])
 
   const filtered = useMemo(() => {
     const weekRange = viewMode === 'weekly' ? getWeekRange(weekAnchor) : null
@@ -1019,16 +1010,17 @@ export function ReportsClient({
       })
 
       fetchShiftNotes([targetRow.work_date])
-      fetchFreshDtr('Verifying DTR in background')
+      fetchFreshDtr()
       setToast({ message: `Updated ${targetRow.full_name} in ${(elapsed / 1000).toFixed(2)}s!`, type: 'success' })
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error updating shift'
       setData(previousData)
       setShiftNotes(previousNotes)
       setToast({ message: msg, type: 'error' })
-      fetchFreshDtr('Reverting')
+      fetchFreshDtr()
     } finally {
       setSavingShift(false)
+      setDtrSyncLabel(null)
     }
   }
 
@@ -1039,6 +1031,7 @@ export function ReportsClient({
       return
     }
     setDeletingShift(true)
+    setDtrSyncLabel('Deleting shift')
     try {
       const res = await fetch('/api/reports/shift', {
         method: 'PUT',
@@ -1072,6 +1065,7 @@ export function ReportsClient({
       setToast({ message: msg, type: 'error' })
     } finally {
       setDeletingShift(false)
+      setDtrSyncLabel(null)
     }
   }
 
@@ -1983,13 +1977,13 @@ export function ReportsClient({
 
   return (
     <div className="space-y-6">
-      {/* Floating Non-Blocking Sync / Save Timer Banner */}
-      {(savingShift || deletingShift || (isRefreshingDtr && dtrElapsedMs >= 200)) && (
+      {/* Floating Non-Blocking Save / Delete Shift Timer Banner */}
+      {(savingShift || deletingShift) && (
         <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 min-w-[260px] max-w-xs space-y-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3 text-xs font-bold">
             <span className="flex items-center gap-2 text-blue-300">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              {dtrSyncLabel || 'Syncing DTR…'}
+              {dtrSyncLabel || 'Saving shift changes…'}
             </span>
             <span className="font-mono text-[11px] text-slate-300">
               {(dtrElapsedMs / 1000).toFixed(1)}s / est. ~{Math.max(0.2, dtrEstimatedMs / 1000).toFixed(1)}s
