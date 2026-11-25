@@ -71,7 +71,7 @@ const NAV_ITEMS: NavItemConfig[] = [
     icon: Calculator,
     idleIconWrap: 'bg-amber-100/90 text-amber-600 group-hover:bg-amber-500 group-hover:text-white',
     idleHoverBg: 'hover:bg-amber-50/70 hover:text-amber-900',
-    activeBg: 'bg-gradient-to-r from-amber-500 via-orange-600 to-rose-600 text-white shadow-md shadow-orange-500/20',
+    activeBg: 'bg-gradient-to-r from-amber-600 via-orange-600 to-rose-600 text-white shadow-md shadow-orange-500/20',
     activeAccentBar: 'bg-amber-200',
   },
   {
