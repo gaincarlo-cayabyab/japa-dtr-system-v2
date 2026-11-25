@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import {
@@ -15,7 +15,6 @@ import {
   Delete,
   Lock,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react'
 
 interface RoleOption {
@@ -77,90 +76,104 @@ const ROLES: RoleOption[] = [
   },
 ]
 
-// ── Web Audio Synthesizer for Keypad Audio Feedback ──────────────────────────
+// Singleton AudioContext avoids allocating/leaking audio threads on every keypress (zero input lag)
+let sharedAudioCtx: AudioContext | null = null
+
+function getSharedAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  try {
+    if (!sharedAudioCtx) {
+      const AudioContextClass =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!AudioContextClass) return null
+      sharedAudioCtx = new AudioContextClass()
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      void sharedAudioCtx.resume()
+    }
+    return sharedAudioCtx
+  } catch {
+    return null
+  }
+}
+
 function playKeySound(type: 'tap' | 'backspace' | 'clear' | 'success' | 'error', soundEnabled: boolean) {
   if (!soundEnabled) return
+  const ctx = getSharedAudioContext()
+  if (!ctx) return
   try {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    if (!AudioContextClass) return
-    const ctx = new AudioContextClass()
-
+    const now = ctx.currentTime
     if (type === 'tap') {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'sine'
-      osc.frequency.setValueAtTime(950, ctx.currentTime)
-      gain.gain.setValueAtTime(0.18, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05)
+      osc.frequency.setValueAtTime(950, now)
+      gain.gain.setValueAtTime(0.14, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045)
       osc.connect(gain)
       gain.connect(ctx.destination)
-      osc.start()
-      osc.stop(ctx.currentTime + 0.05)
+      osc.start(now)
+      osc.stop(now + 0.05)
     } else if (type === 'backspace') {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'sine'
-      osc.frequency.setValueAtTime(420, ctx.currentTime)
-      gain.gain.setValueAtTime(0.15, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06)
+      osc.frequency.setValueAtTime(420, now)
+      gain.gain.setValueAtTime(0.12, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.055)
       osc.connect(gain)
       gain.connect(ctx.destination)
-      osc.start()
-      osc.stop(ctx.currentTime + 0.06)
+      osc.start(now)
+      osc.stop(now + 0.06)
     } else if (type === 'clear') {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'triangle'
-      osc.frequency.setValueAtTime(320, ctx.currentTime)
-      osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.09)
-      gain.gain.setValueAtTime(0.15, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09)
+      osc.frequency.setValueAtTime(320, now)
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.08)
+      gain.gain.setValueAtTime(0.12, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085)
       osc.connect(gain)
       gain.connect(ctx.destination)
-      osc.start()
-      osc.stop(ctx.currentTime + 0.09)
+      osc.start(now)
+      osc.stop(now + 0.09)
     } else if (type === 'error') {
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.type = 'sawtooth'
-      osc.frequency.setValueAtTime(180, ctx.currentTime)
-      gain.gain.setValueAtTime(0.16, ctx.currentTime)
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25)
+      osc.frequency.setValueAtTime(180, now)
+      gain.gain.setValueAtTime(0.14, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22)
       osc.connect(gain)
       gain.connect(ctx.destination)
-      osc.start()
-      osc.stop(ctx.currentTime + 0.25)
+      osc.start(now)
+      osc.stop(now + 0.24)
     } else if (type === 'success') {
       const osc1 = ctx.createOscillator()
       const gain1 = ctx.createGain()
       osc1.type = 'sine'
-      osc1.frequency.setValueAtTime(880, ctx.currentTime)
-      gain1.gain.setValueAtTime(0.18, ctx.currentTime)
-      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1)
+      osc1.frequency.setValueAtTime(880, now)
+      gain1.gain.setValueAtTime(0.15, now)
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.09)
       osc1.connect(gain1)
       gain1.connect(ctx.destination)
-      osc1.start()
-      osc1.stop(ctx.currentTime + 0.1)
+      osc1.start(now)
+      osc1.stop(now + 0.1)
 
-      setTimeout(() => {
-        try {
-          const osc2 = ctx.createOscillator()
-          const gain2 = ctx.createGain()
-          osc2.type = 'sine'
-          osc2.frequency.setValueAtTime(1320, ctx.currentTime)
-          gain2.gain.setValueAtTime(0.2, ctx.currentTime)
-          gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18)
-          osc2.connect(gain2)
-          gain2.connect(ctx.destination)
-          osc2.start()
-          osc2.stop(ctx.currentTime + 0.18)
-        } catch {}
-      }, 100)
+      const osc2 = ctx.createOscillator()
+      const gain2 = ctx.createGain()
+      osc2.type = 'sine'
+      osc2.frequency.setValueAtTime(1320, now + 0.095)
+      gain2.gain.setValueAtTime(0.16, now + 0.095)
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.26)
+      osc2.connect(gain2)
+      gain2.connect(ctx.destination)
+      osc2.start(now + 0.095)
+      osc2.stop(now + 0.27)
     }
   } catch {
-    // Ignore audio permission errors
+    // Ignore audio errors
   }
 }
 
@@ -174,9 +187,19 @@ export default function LoginPage() {
   const [shake, setShake] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
 
+  // Refs avoid re-attaching window keydown listeners on every keystroke
+  const pinRef = useRef(pin)
+  const loadingRef = useRef(loading)
+  const soundRef = useRef(soundEnabled)
+  const pinSectionRef = useRef<HTMLDivElement>(null)
+  pinRef.current = pin
+  loadingRef.current = loading
+  soundRef.current = soundEnabled
+
   const submitLogin = useCallback(
     async (pinToSubmit: string) => {
       setLoading(true)
+      loadingRef.current = true
       setErrorMsg(null)
       try {
         const res = await fetch('/api/auth/login', {
@@ -186,83 +209,101 @@ export default function LoginPage() {
         })
         const data = await res.json()
         if (!res.ok) {
-          playKeySound('error', soundEnabled)
+          playKeySound('error', soundRef.current)
           setShake(true)
-          setTimeout(() => setShake(false), 500)
+          setTimeout(() => setShake(false), 400)
           setErrorMsg(data.error || 'Incorrect PIN. Please try again.')
+          pinRef.current = ''
           setPin('')
           return
         }
-        playKeySound('success', soundEnabled)
+        playKeySound('success', soundRef.current)
         router.push('/')
         router.refresh()
       } catch {
-        playKeySound('error', soundEnabled)
+        playKeySound('error', soundRef.current)
         setErrorMsg('Network error. Please try again.')
+        pinRef.current = ''
         setPin('')
       } finally {
+        loadingRef.current = false
         setLoading(false)
       }
     },
-    [selectedRole, router, soundEnabled]
+    [selectedRole.username, router]
   )
 
-  const handleNumClick = (digit: string) => {
-    if (loading || pin.length >= 6) return
-    playKeySound('tap', soundEnabled)
-    setErrorMsg(null)
-    const newPin = pin + digit
-    setPin(newPin)
-    if (newPin.length === 6) submitLogin(newPin)
-  }
+  const handleNumClick = useCallback(
+    (digit: string) => {
+      if (loadingRef.current || pinRef.current.length >= 6) return
+      const nextPin = pinRef.current + digit
+      pinRef.current = nextPin
+      setPin(nextPin)
+      setErrorMsg(null)
+      playKeySound('tap', soundRef.current)
+      if (nextPin.length === 6) {
+        void submitLogin(nextPin)
+      }
+    },
+    [submitLogin]
+  )
 
-  const handleBackspace = () => {
-    if (loading) return
-    playKeySound('backspace', soundEnabled)
+  const handleBackspace = useCallback(() => {
+    if (loadingRef.current || pinRef.current.length === 0) return
+    const nextPin = pinRef.current.slice(0, -1)
+    pinRef.current = nextPin
+    setPin(nextPin)
     setErrorMsg(null)
-    setPin((prev) => prev.slice(0, -1))
-  }
+    playKeySound('backspace', soundRef.current)
+  }, [])
 
-  const handleClear = () => {
-    if (loading) return
-    playKeySound('clear', soundEnabled)
-    setErrorMsg(null)
+  const handleClear = useCallback(() => {
+    if (loadingRef.current || pinRef.current.length === 0) return
+    pinRef.current = ''
     setPin('')
-  }
+    setErrorMsg(null)
+    playKeySound('clear', soundRef.current)
+  }, [])
 
   useEffect(() => {
+    if (step !== 2) return
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (step === 2) {
-        if (e.key >= '0' && e.key <= '9') {
-          handleNumClick(e.key)
-        } else if (e.key === 'Backspace') {
-          handleBackspace()
-        } else if (e.key === 'Escape') {
-          handleClear()
-        }
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+      if (e.key >= '0' && e.key <= '9') {
+        e.preventDefault()
+        handleNumClick(e.key)
+      } else if (e.key === 'Backspace') {
+        e.preventDefault()
+        handleBackspace()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        handleClear()
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [step, handleNumClick])
+  }, [step, handleNumClick, handleBackspace, handleClear])
 
   const handleSelectRole = (role: RoleOption) => {
+    getSharedAudioContext()
     playKeySound('tap', soundEnabled)
     setSelectedRole(role)
+    pinRef.current = ''
     setPin('')
     setErrorMsg(null)
     setStep(2)
+    requestAnimationFrame(() => pinSectionRef.current?.focus())
   }
 
   const RoleIcon = selectedRole.icon
 
   return (
-    <div className="h-screen w-full flex flex-col lg:flex-row overflow-hidden bg-slate-100 select-none">
-      {/* ── LEFT HALF: JAPA 3D Print Studio Animation (Fit in 100vh) ───────── */}
-      <div className="w-full lg:w-1/2 h-full relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
-        {/* Top-Left Floating Pill */}
-        <div className="absolute top-4 left-4 sm:top-5 sm:left-5 z-20 flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-white/95 backdrop-blur-md shadow-xs border border-slate-200/80">
-          <div className="relative w-6 h-6 rounded-lg overflow-hidden border border-slate-200 shadow-2xs flex-shrink-0 bg-white">
+    <div className="min-h-screen lg:h-screen w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-slate-100 select-none">
+      {/* ── LEFT HALF: JAPA 3D Print Studio Showcase ───────── */}
+      <div className="w-full lg:w-[48%] h-[520px] lg:h-full relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
+        {/* Top-Left Brand Pill (Positioned cleanly above shifted .studio-intro) */}
+        <div className="absolute top-4 left-4 sm:top-5 sm:left-6 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white shadow-sm border border-slate-200/90">
+          <div className="relative w-7 h-7 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-white">
             <Image
               src="/japa-logo.jpg"
               alt="JAPA Logo"
@@ -272,8 +313,8 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <p className="text-[11px] font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
-            <p className="text-[9px] font-medium text-slate-500 leading-none mt-0.5">
+            <p className="text-xs font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
+            <p className="text-[10px] font-semibold text-slate-600 leading-none mt-1">
               Enterprise Operations Workspace
             </p>
           </div>
@@ -290,37 +331,31 @@ export default function LoginPage() {
         </div>
 
         {/* Bottom-Left Pill */}
-        <div className="absolute bottom-4 left-4 z-20 hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/85 backdrop-blur-md shadow-xs border border-slate-200/60 text-[10px] font-medium text-slate-600">
+        <div className="absolute bottom-3.5 left-5 z-20 hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/95 shadow-xs border border-slate-200/80 text-[11px] font-semibold text-slate-700">
           <span>© 2026 JAPA Global Trading</span>
         </div>
 
         {/* Bottom-Right Pill */}
-        <div className="absolute bottom-4 right-4 z-20 hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/90 backdrop-blur-md shadow-xs border border-emerald-200/80 text-[10px] font-bold text-emerald-700">
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        <div className="absolute bottom-3.5 right-5 z-20 hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/95 shadow-xs border border-emerald-200 text-[11px] font-bold text-emerald-700">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
           <span>Dagupan &amp; Manila Nodes</span>
         </div>
       </div>
 
-      {/* ── RIGHT HALF: Light Colorful Theme (Zero Scroll, Spacious Container) ── */}
+      {/* ── RIGHT HALF: Enlarged Spacious Auth Container (Zero Input Lag) ── */}
       <div
-        className="w-full lg:w-1/2 h-full flex flex-col justify-center items-center p-3 sm:p-5 lg:p-6 relative overflow-hidden"
+        className="w-full lg:w-[52%] lg:h-full flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative overflow-y-auto"
         style={{
           background:
-            'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 25%, #f5f3ff 50%, #fdf2f8 75%, #ecfeff 100%)',
+            'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 28%, #f5f3ff 56%, #fdf2f8 82%, #ecfeff 100%)',
         }}
       >
-        {/* Soft Colorful Floating Ambient Orbs (Light Theme) */}
+        {/* Static Soft Ambient Layer (No costly continuous pulse/backdrop repaint during typing) */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-12 -right-12 w-96 h-96 bg-gradient-to-br from-sky-300/40 via-cyan-300/30 to-blue-400/25 rounded-full blur-3xl animate-pulse" />
+          <div className="absolute -top-16 -right-16 w-96 h-96 bg-gradient-to-br from-sky-300/35 via-cyan-200/25 to-blue-300/20 rounded-full blur-3xl" />
+          <div className="absolute -bottom-20 -left-20 w-96 h-96 bg-gradient-to-tr from-purple-300/35 via-indigo-200/25 to-pink-200/20 rounded-full blur-3xl" />
           <div
-            className="absolute -bottom-16 -left-16 w-96 h-96 bg-gradient-to-tr from-purple-300/40 via-indigo-300/30 to-pink-300/25 rounded-full blur-3xl animate-pulse"
-            style={{ animationDelay: '2s' }}
-          />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-gradient-to-r from-pink-300/20 via-purple-200/25 to-blue-200/25 rounded-full blur-3xl" />
-
-          {/* Light Colorful Cyber Dot Matrix (Matching User's Preferred Image) */}
-          <div
-            className="absolute inset-0 opacity-40"
+            className="absolute inset-0 opacity-35"
             style={{
               backgroundImage:
                 'radial-gradient(rgba(99, 102, 241, 0.25) 1.25px, transparent 1.25px)',
@@ -329,17 +364,12 @@ export default function LoginPage() {
           />
         </div>
 
-        {/* ── Floating Spacious Card (Fits 100vh with Zero Scroll) ─────────── */}
-        <div
-          className="w-full max-w-[530px] bg-white/95 backdrop-blur-2xl rounded-3xl p-5 sm:p-6 shadow-2xl shadow-indigo-500/10 border border-slate-200/80 relative z-10 transition-all duration-300"
-          style={{
-            maxHeight: 'calc(100vh - 40px)',
-          }}
-        >
+        {/* ── Floating Enlarged Auth Card (Crisp Solid Surface = Instant 60fps Input) ─ */}
+        <div className="w-full max-w-[600px] bg-white rounded-3xl p-6 sm:p-8 shadow-2xl shadow-indigo-500/10 border border-slate-200/90 relative z-10">
           {/* Card Top Brand Row */}
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
-            <div className="flex items-center gap-2.5">
-              <div className="relative w-8 h-8 rounded-xl overflow-hidden border border-slate-200/80 shadow-xs flex-shrink-0 bg-white">
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-slate-200/90 shadow-xs flex-shrink-0 bg-white">
                 <Image
                   src="/japa-logo.jpg"
                   alt="JAPA Logo"
@@ -349,34 +379,35 @@ export default function LoginPage() {
                 />
               </div>
               <div>
-                <h2 className="text-sm font-black text-slate-900 leading-tight">JAPA Global</h2>
-                <p className="text-[11px] font-semibold text-slate-400">Enterprise Operations</p>
+                <h2 className="text-base font-black text-slate-900 leading-tight">JAPA Global</h2>
+                <p className="text-xs font-semibold text-slate-500">Enterprise Operations</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200/80 shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>DAG &amp; MNL</span>
-              </span>
-            </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>DAG &amp; MNL</span>
+            </span>
           </div>
 
-          {/* ── STEP 1: Select Role View (Exact 4 Authorized Roles, Spacious) ─ */}
+          {/* ── STEP 1: Select Role View (Larger, Easier-to-Read Role Cards) ─ */}
           {step === 1 && (
-            <div className="space-y-3 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between mb-1">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base sm:text-lg font-black text-slate-900 leading-tight">Select Role</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Choose your authorized profile to sign in</p>
+                  <h3 className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
+                    Select Role
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                    Choose your authorized profile to sign in
+                  </p>
                 </div>
-                <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200/70">
+                <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
                   Step 1 of 2
                 </span>
               </div>
 
-              {/* Roles List (4 Exact Authorized Roles with Comfortable Width) */}
-              <div className="space-y-2.5 pt-0.5">
+              <div className="space-y-3 pt-1">
                 {ROLES.map((role) => {
                   const Icon = role.icon
                   return (
@@ -384,32 +415,32 @@ export default function LoginPage() {
                       key={role.id}
                       type="button"
                       onClick={() => handleSelectRole(role)}
-                      className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 bg-white hover:bg-slate-50/90 hover:border-indigo-400 hover:shadow-md transition-all text-left group"
+                      className="w-full flex items-center justify-between p-4 sm:p-5 rounded-2xl border-2 border-slate-200/80 bg-white hover:bg-indigo-50/40 hover:border-indigo-400 hover:shadow-md transition-colors duration-100 text-left group active:scale-[0.99]"
                     >
-                      <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="flex items-center gap-4 min-w-0 pr-3">
                         <div
-                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs group-hover:scale-105 transition-transform`}
+                          className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-xs`}
                         >
-                          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                          <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs sm:text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-base sm:text-lg font-extrabold text-slate-900 group-hover:text-indigo-700">
                               {role.title}
                             </span>
                             <span
-                              className={`text-[9px] sm:text-[10px] font-bold px-2 py-0.5 rounded-full border ${role.badgeColor}`}
+                              className={`text-[11px] sm:text-xs font-bold px-2.5 py-0.5 rounded-full border ${role.badgeColor}`}
                             >
                               {role.badge}
                             </span>
                           </div>
-                          <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 leading-tight truncate">
+                          <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-snug">
                             {role.desc}
                           </p>
                         </div>
                       </div>
 
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all flex-shrink-0" />
+                      <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-slate-400 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
                     </button>
                   )
                 })}
@@ -417,159 +448,160 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* ── STEP 2: Enter PIN Keypad View (Enlarged & Comfortable) ───── */}
+          {/* ── STEP 2: Enlarged, Zero-Lag 6-Digit Security PIN Entry ─ */}
           {step === 2 && (
-            <div className="space-y-3 sm:space-y-3.5 animate-in fade-in duration-150">
-              {/* Back to Roles navigation bar */}
-              <div className="flex items-center justify-between pb-0.5">
+            <div ref={pinSectionRef} tabIndex={-1} className="space-y-4 sm:space-y-5 outline-none">
+              {/* Navigation Row */}
+              <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => {
                     playKeySound('tap', soundEnabled)
                     setStep(1)
+                    pinRef.current = ''
                     setPin('')
                     setErrorMsg(null)
                   }}
-                  className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-700 hover:text-indigo-700 py-1 px-2 -ml-2 rounded-lg hover:bg-slate-100"
                 >
-                  <ChevronLeft className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  <ChevronLeft className="w-5 h-5" />
                   <span>Change Role</span>
                 </button>
 
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border transition-colors ${
+                    onClick={() => setSoundEnabled((prev) => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border ${
                       soundEnabled
                         ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                        : 'bg-slate-100 text-slate-600 border-slate-200'
                     }`}
                   >
                     {soundEnabled ? (
                       <>
-                        <Volume2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <Volume2 className="w-4 h-4 text-indigo-600" />
                         <span>Sound ON</span>
                       </>
                     ) : (
                       <>
-                        <VolumeX className="w-3.5 h-3.5 text-slate-400" />
+                        <VolumeX className="w-4 h-4 text-slate-500" />
                         <span>Muted</span>
                       </>
                     )}
                   </button>
-                  <span className="text-[10px] sm:text-xs font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-md border border-slate-200/70">
+                  <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200">
                     Step 2 of 2
                   </span>
                 </div>
               </div>
 
-              {/* Selected Role Banner (Enlarged) */}
-              <div className="flex items-center justify-between p-3 sm:p-3.5 rounded-2xl bg-slate-50/90 border border-slate-200/90">
-                <div className="flex items-center gap-3">
+              {/* Selected Role Banner (Large & Clear) */}
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center gap-3.5">
                   <div
-                    className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-2xs`}
+                    className={`w-12 h-12 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-xs`}
                   >
-                    <RoleIcon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <RoleIcon className="w-6 h-6" />
                   </div>
                   <div>
-                    <p className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                    <p className="text-base sm:text-lg font-black text-slate-900 leading-tight">
                       {selectedRole.title}
                     </p>
-                    <p className="text-xs text-slate-500 font-medium">Enter 6-digit Security PIN</p>
+                    <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+                      Enter 6-digit Security PIN (keyboard or tap below)
+                    </p>
                   </div>
                 </div>
                 <span
-                  className={`text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full border ${selectedRole.badgeColor}`}
+                  className={`hidden sm:inline-flex text-xs font-bold px-3 py-1 rounded-full border ${selectedRole.badgeColor}`}
                 >
                   {selectedRole.badge}
                 </span>
               </div>
 
-              {/* 6-Digit PIN Indicator Dots (Enlarged & Prominent) */}
-              <div className={`py-1.5 ${shake ? 'animate-shake' : ''}`}>
-                <div className="flex justify-center items-center gap-3.5 sm:gap-4">
+              {/* Large Tactile 6-Digit Visual PIN Slots */}
+              <div className={`py-1 ${shake ? 'animate-shake' : ''}`}>
+                <div className="grid grid-cols-6 gap-2.5 sm:gap-3.5 max-w-[440px] mx-auto">
                   {[0, 1, 2, 3, 4, 5].map((idx) => {
                     const isFilled = pin.length > idx
+                    const isActive = pin.length === idx && !loading
                     return (
                       <div
                         key={idx}
-                        className={`transition-all duration-150 ${
+                        className={`h-14 sm:h-16 rounded-2xl border-2 flex items-center justify-center ${
                           isFilled
-                            ? 'w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full scale-110 shadow-md'
-                            : 'w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-slate-100 border-2 border-slate-300'
+                            ? 'bg-indigo-50/70 border-indigo-500 shadow-xs'
+                            : isActive
+                              ? 'bg-white border-blue-500 ring-4 ring-blue-100'
+                              : 'bg-slate-50 border-slate-300'
                         }`}
-                        style={
-                          isFilled
-                            ? {
-                                background: 'linear-gradient(135deg, #2563eb 0%, #4f46e5 100%)',
-                                boxShadow: '0 2px 10px rgba(37, 99, 235, 0.5)',
-                              }
-                            : {}
-                        }
-                      />
+                      >
+                        {isFilled ? (
+                          <div className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 shadow-sm" />
+                        ) : isActive ? (
+                          <div className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
+                        ) : (
+                          <div className="w-2.5 h-2.5 rounded-full bg-slate-300" />
+                        )}
+                      </div>
                     )
                   })}
                 </div>
 
-                {/* Error Message */}
                 {errorMsg && (
-                  <div className="mt-2.5 flex items-center gap-1.5 text-xs sm:text-sm text-rose-700 bg-rose-50 border border-rose-200 px-3.5 py-1.5 rounded-xl font-bold justify-center animate-in fade-in">
+                  <div className="mt-3 flex items-center gap-2 text-xs sm:text-sm text-rose-700 bg-rose-50 border border-rose-200 px-4 py-2 rounded-xl font-bold justify-center">
                     <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
                     <span>{errorMsg}</span>
                   </div>
                 )}
               </div>
 
-              {/* 3x4 Keypad Grid (Enlarged buttons and digits) */}
-              <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[340px] sm:max-w-[360px] mx-auto w-full">
+              {/* Enlarged 3x4 Keypad Grid (Fast Response, No Heavy Transitions) */}
+              <div className="grid grid-cols-3 gap-3 max-w-[400px] mx-auto w-full touch-manipulation">
                 {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                   <button
                     key={digit}
                     type="button"
                     onClick={() => handleNumClick(digit)}
                     disabled={loading}
-                    className="h-12 sm:h-13.5 rounded-2xl bg-white border border-slate-200/90 text-2xl sm:text-3xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-2xs flex items-center justify-center"
+                    className="h-14 sm:h-16 rounded-2xl bg-white border-2 border-slate-200 text-2xl sm:text-3xl font-black text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 active:bg-indigo-100 active:scale-95 transition-transform duration-75 disabled:opacity-40 select-none shadow-xs flex items-center justify-center touch-manipulation"
                   >
                     {digit}
                   </button>
                 ))}
 
-                {/* Clear Button */}
                 <button
                   type="button"
                   onClick={handleClear}
                   disabled={loading || pin.length === 0}
-                  className="h-12 sm:h-13.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs sm:text-sm font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-30 select-none flex items-center justify-center"
+                  className="h-14 sm:h-16 rounded-2xl bg-rose-50 border-2 border-rose-200 text-xs sm:text-sm font-black uppercase tracking-wider text-rose-600 hover:bg-rose-100 active:scale-95 transition-transform duration-75 disabled:opacity-35 select-none flex items-center justify-center"
                 >
                   Clear
                 </button>
 
-                {/* 0 Button */}
                 <button
                   type="button"
                   onClick={() => handleNumClick('0')}
                   disabled={loading}
-                  className="h-12 sm:h-13.5 rounded-2xl bg-white border border-slate-200/90 text-2xl sm:text-3xl font-black text-slate-800 transition-all hover:border-indigo-400 hover:bg-indigo-50/70 hover:text-indigo-700 active:scale-95 disabled:opacity-40 select-none shadow-2xs flex items-center justify-center"
+                  className="h-14 sm:h-16 rounded-2xl bg-white border-2 border-slate-200 text-2xl sm:text-3xl font-black text-slate-800 hover:border-indigo-400 hover:bg-indigo-50 hover:text-indigo-700 active:bg-indigo-100 active:scale-95 transition-transform duration-75 disabled:opacity-40 select-none shadow-xs flex items-center justify-center"
                 >
                   0
                 </button>
 
-                {/* Backspace Button */}
                 <button
                   type="button"
                   onClick={handleBackspace}
                   disabled={loading || pin.length === 0}
-                  className="h-12 sm:h-13.5 rounded-2xl bg-slate-100 border border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all flex items-center justify-center active:scale-95 disabled:opacity-30 select-none"
+                  className="h-14 sm:h-16 rounded-2xl bg-slate-100 border-2 border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 flex items-center justify-center active:scale-95 transition-transform duration-75 disabled:opacity-35 select-none"
                   title="Backspace"
                 >
-                  <Delete className="w-5 h-5" />
+                  <Delete className="w-6 h-6" />
                 </button>
               </div>
 
-              {/* Loading Indicator */}
               {loading && (
-                <div className="pt-1 flex items-center justify-center gap-1.5 text-xs font-bold text-indigo-600 animate-pulse">
+                <div className="pt-1 flex items-center justify-center gap-2 text-sm font-bold text-indigo-600">
                   <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
                     <circle
                       className="opacity-25"
@@ -588,13 +620,13 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Security & System Creator Footer below card (Light Theme) */}
-        <div className="mt-3.5 flex flex-col items-center gap-1 text-center relative z-10">
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-600 font-medium">
-            <Lock className="w-3 h-3 text-indigo-600" />
+        {/* Security & System Creator Footer below card */}
+        <div className="mt-4 flex flex-col items-center gap-1 text-center relative z-10">
+          <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
+            <Lock className="w-3.5 h-3.5 text-indigo-600" />
             <span>Encrypted Session · Enterprise Role-Based Access Control</span>
           </div>
-          <p className="text-[11px] text-slate-500 font-semibold">
+          <p className="text-xs text-slate-600 font-semibold">
             Engineered &amp; Maintained by{' '}
             <span className="text-slate-900 font-black">Gain Carlo Cayabyab</span> · IT Administrator
           </p>
