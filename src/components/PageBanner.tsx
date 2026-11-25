@@ -8,6 +8,7 @@ export type BannerTheme =
   | 'payroll'
   | 'calendar'
   | 'sync'
+  | 'help'
 
 export type BannerPattern =
   | 'mesh'
@@ -124,6 +125,17 @@ const LIGHT_PALETTES: Record<BannerTheme, LightThemePalette> = {
     eyebrowPill: 'bg-cyan-100/80 border-cyan-200 text-cyan-900',
     chipClass: 'bg-white/90 border-cyan-200/75 text-slate-700',
     patternColor: '#0891b2',
+  },
+  help: {
+    container:
+      'bg-gradient-to-r from-white via-indigo-50/85 to-blue-100/75 border border-indigo-200/80 shadow-sm shadow-indigo-500/5',
+    topBar: 'from-indigo-600 via-blue-500 to-purple-500',
+    glowPrimary: 'bg-indigo-400/20',
+    glowSecondary: 'bg-blue-300/20',
+    iconBox: 'bg-gradient-to-br from-indigo-600 to-blue-600 text-white shadow-md shadow-indigo-500/25',
+    eyebrowPill: 'bg-indigo-100/85 border-indigo-200 text-indigo-800',
+    chipClass: 'bg-white/90 border-indigo-200/75 text-slate-700',
+    patternColor: '#4f46e5',
   },
 }
 
