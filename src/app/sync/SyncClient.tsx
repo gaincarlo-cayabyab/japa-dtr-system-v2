@@ -375,7 +375,7 @@ export function SyncClient({
       type: 'Edge Ingestion & Anti-Double Tap Gateway',
       ip: '192.168.0.112 (WLAN Static Lease)',
       port: 'TCP 4370 Local / HTTPS Uplink',
-      protocol: 'Python 3.11 · tablet_bridge.py v17.4',
+      protocol: 'Python 3.11 · tablet_bridge.py v18.9',
       statusBadge: isBridgeDown ? 'DAEMON TERMINATED' : 'ACTIVE POLLING (10s)',
       statusColor: isBridgeDown ? 'rose' : 'amber',
       specs: [
@@ -390,7 +390,7 @@ export function SyncClient({
       ],
       diagnosticTitle: isBridgeDown
         ? 'Python Sync Daemon Offline'
-        : 'Bridge Engine Running v17.4 (Omni-Sentinel Dual-Transport + Auto-Enroller)',
+        : 'Bridge Engine Running v18.9 (Iron Sentinel · Self-Healing Chunker)',
       diagnosticText: isBridgeDown
         ? 'The bridge process has been terminated. Open Termux on the tablet and type "bash sync-bridge/watchdog.sh" to restart automatic synchronization.'
         : 'The bridge engine queries the TA500 every 10s, isolates attendance fetching to dedicated clean sockets, strips duplicated double-taps within 15 seconds, and securely ships records to Supabase.',
@@ -511,7 +511,7 @@ export function SyncClient({
             {isHealthy &&
               (isManualSim
                 ? `FingerTec TA500 (192.168.0.58) communicates cleanly over physical Cat6 Ethernet through the TP-Link TL-WA855RE repeater to the Samsung Tab A9+ bridge daemon. Latest roundtrip latency: ${liveLatency}ms.`
-                : `FingerTec TA500 (192.168.0.58) is online and responding. Samsung Tab A9+ bridge v17.4 heartbeat active (${heartbeatAgeSec}s ago). Cloud roundtrip latency: ${liveLatency}ms.`)}
+                : `FingerTec TA500 (192.168.0.58) is online and responding. Samsung Tab A9+ bridge v18.9 heartbeat active (${heartbeatAgeSec}s ago). Cloud roundtrip latency: ${liveLatency}ms.`)}
             {isTa500PowerOff &&
               'The FingerTec TA500 terminal has lost 12V DC electrical power. The optical prism and TFT screen are off. Cat6 carrier voltage has collapsed.'}
             {isLanBroken && !isTa500PowerOff &&
@@ -526,7 +526,7 @@ export function SyncClient({
               'Biometric query packet roundtrip is elevated (~480ms). Check for 2.4 GHz Wi-Fi channel congestion or physical obstructions between the repeater and tablet.'}
             {isBridgeDown &&
               (isManualSim
-                ? 'The synchronization daemon (tablet_bridge.py v17.4) has terminated on the Samsung Tab A9+. Open Termux and execute: "bash sync-bridge/watchdog.sh".'
+                ? 'The synchronization daemon (tablet_bridge.py v18.9) has terminated on the Samsung Tab A9+. Open Termux and execute: "bash sync-bridge/watchdog.sh".'
                 : `No live heartbeat received from the bridge daemon in ${heartbeatAgeSec}s. Turn on the Samsung Galaxy Tab A9+, open Termux, and execute: "bash sync-bridge/watchdog.sh".`)}
             {isCloudDown &&
               'Local tablet cannot reach Supabase in Singapore. New biometric punches remain securely buffered in TA500 onboard flash memory and will sync upon reconnection.'}
@@ -825,11 +825,11 @@ export function SyncClient({
               </div>
 
               {/* ──── CONNECTOR 1: CAT6 ETHERNET PHYSICAL BRIDGE (DESKTOP EDGE-TO-EDGE) ──── */}
-              <div className="hidden lg:flex items-center shrink-0 w-20 xl:w-28 relative z-40 mx-0.5">
+              <div className="hidden lg:flex items-center shrink-0 w-20 xl:w-28 relative z-10 mx-0">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top badge */}
                   <span
-                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap mb-2 z-40 ${
+                    className={`inline-flex items-center gap-1.5 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap mb-2 ${
                       isTa500PowerOff
                         ? 'bg-slate-100 text-slate-600 border-slate-300'
                         : isLanBroken
@@ -841,15 +841,20 @@ export function SyncClient({
                               : 'bg-white text-blue-700 border-blue-200'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      isTa500PowerOff
-                        ? 'bg-slate-400'
-                        : isLanBroken
-                          ? 'bg-rose-500'
-                          : isPacketLoss || isSlow
-                            ? 'bg-amber-500'
-                            : 'bg-blue-500 animate-ping'
-                    }`} />
+                    <span className="relative flex h-1.5 w-1.5">
+                      {!isTa500PowerOff && !isLanBroken && !isPacketLoss && !isSlow && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                      )}
+                      <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
+                        isTa500PowerOff
+                          ? 'bg-slate-400'
+                          : isLanBroken
+                            ? 'bg-rose-500'
+                            : isPacketLoss || isSlow
+                              ? 'bg-amber-500'
+                              : 'bg-blue-500'
+                      }`} />
+                    </span>
                     <span>
                       {isTa500PowerOff
                         ? '✕ 0V DC POWER CUT'
@@ -893,7 +898,7 @@ export function SyncClient({
 
                   {/* Bottom label */}
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full border shadow-sm text-[9px] font-mono font-bold whitespace-nowrap mt-2 z-40 ${
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full border shadow-sm text-[9px] font-mono font-bold whitespace-nowrap mt-2 ${
                       isTa500PowerOff
                         ? 'bg-slate-100 text-slate-600 border-slate-300'
                         : isLanBroken
@@ -1156,11 +1161,11 @@ export function SyncClient({
               </div>
 
               {/* ──── CONNECTOR 2: WIRELESS 2.4 GHz WLAN CORRIDOR (DESKTOP EDGE-TO-EDGE) ──── */}
-              <div className="hidden lg:flex items-center shrink-0 w-20 xl:w-28 relative z-40 mx-0.5">
+              <div className="hidden lg:flex items-center shrink-0 w-20 xl:w-28 relative z-10 mx-0">
                 <div className="w-full relative flex flex-col items-center justify-center">
                   {/* Top Badge */}
                   <span
-                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap mb-2 z-40 ${
+                    className={`inline-flex items-center gap-1.5 text-[9px] font-mono font-bold px-2.5 py-0.5 rounded-full border shadow-sm whitespace-nowrap mb-2 ${
                       isWifiBroken
                         ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse'
                         : isPacketLoss
@@ -1170,9 +1175,14 @@ export function SyncClient({
                             : 'bg-white text-purple-700 border-purple-200'
                     }`}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      isWifiBroken ? 'bg-rose-500' : isPacketLoss || isSlow ? 'bg-amber-500' : 'bg-purple-500 animate-ping'
-                    }`} />
+                    <span className="relative flex h-1.5 w-1.5">
+                      {!isWifiBroken && !isPacketLoss && !isSlow && (
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-400 opacity-75" />
+                      )}
+                      <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${
+                        isWifiBroken ? 'bg-rose-500' : isPacketLoss || isSlow ? 'bg-amber-500' : 'bg-purple-500'
+                      }`} />
+                    </span>
                     <span>
                       {isWifiBroken
                         ? '✕ WI-FI DROPPED'
@@ -1208,7 +1218,7 @@ export function SyncClient({
 
                   {/* Bottom Label */}
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full border shadow-sm text-[9px] font-mono font-bold whitespace-nowrap mt-2 z-40 ${
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full border shadow-sm text-[9px] font-mono font-bold whitespace-nowrap mt-2 ${
                       isWifiBroken
                         ? 'bg-rose-50 text-rose-700 border-rose-300'
                         : isPacketLoss || isSlow
@@ -1322,7 +1332,7 @@ export function SyncClient({
                           : 'bg-amber-50 text-amber-700 border-amber-200'
                       }`}
                     >
-                      {isBridgeDown ? '✕ DAEMON STOPPED' : '● BRIDGE v17.4 ACTIVE'}
+                      {isBridgeDown ? '✕ DAEMON STOPPED' : '● BRIDGE v18.9 ACTIVE'}
                     </span>
                   </div>
 
@@ -1340,7 +1350,7 @@ export function SyncClient({
                           <span className="flex items-center gap-1 text-amber-400 font-bold truncate">
                             <Terminal className="w-3 h-3 shrink-0" /> Termux · python tablet_bridge.py
                           </span>
-                          <span className="shrink-0 ml-1">v17.4</span>
+                          <span className="shrink-0 ml-1">v18.9</span>
                         </div>
                         {isBridgeDown ? (
                           <div className="text-rose-400 font-bold py-1 text-[9px]">
@@ -2067,7 +2077,7 @@ export function SyncClient({
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Bridge Daemon:</span>
-                        <span className="font-bold text-slate-800">Samsung Tab A9+ (v17.4)</span>
+                        <span className="font-bold text-slate-800">Samsung Tab A9+ (v18.9)</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-400">Cycle Estimation:</span>
@@ -2223,7 +2233,7 @@ export function SyncClient({
               3. Samsung Galaxy Tab A9+ (Bridge Engine)
             </h4>
             <p>
-              Dedicated local tablet running Python Bridge Engine v17.4 via Termux. Features dual-transport bulletproof session, automated employee enrollment, and Option B hourly protected maintenance.
+              Dedicated local tablet running Python Bridge Engine v18.9 via Termux. Features self-healing sub-1KB atomic chunk streaming, zero-miss catchup state machine, and 5-min full-memory audits.
             </p>
             <p className="text-[11px] text-slate-500">
               💡 If stopped: open Termux on the tablet and run{' '}
