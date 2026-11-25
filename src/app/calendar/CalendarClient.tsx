@@ -27,6 +27,7 @@ import {
   ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
+import { PageBanner } from '@/components/PageBanner'
 import { PH_HOLIDAYS, getHolidayForDate, getHolidayTypeBadge, type PhHoliday } from '@/lib/holidays'
 
 export function CalendarClient() {
@@ -60,30 +61,38 @@ export function CalendarClient() {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-blue-900/10 relative overflow-hidden">
-        <div className="absolute right-0 top-0 translate-x-8 -translate-y-8 w-64 h-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 backdrop-blur-md text-blue-100 text-xs font-bold mb-3 border border-white/20">
-              <MapPin className="w-3.5 h-3.5 text-amber-300" />
-              <span>Location: Pangasinan, Philippines · Official 2026 Calendar</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">Philippine & Pangasinan Calendar</h1>
-            <p className="text-sm text-blue-100/90 mt-1.5 max-w-2xl leading-relaxed">
-              Official legal holidays, Pangasinan provincial holidays (Speaker Eugenio Perez Day, Pangasinan Day), Sunday rest day rules (+30% pay, no late), and bi-monthly payroll cutoff schedules.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href={`/reports?date=${selectedDateStr}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-blue-900 hover:bg-blue-50 rounded-2xl text-xs font-bold shadow-md transition-all active:scale-95"
-            >
-              <FileText className="w-4 h-4 text-blue-700" />
-              View DTR on {format(selectedDate, 'MMM d')}
-            </Link>
-          </div>
-        </div>
-      </div>
+      <PageBanner
+        theme="calendar"
+        pattern="grid"
+        eyebrow="Location: Pangasinan, Philippines · Official 2026 Calendar"
+        eyebrowIcon={<MapPin className="w-3.5 h-3.5 text-amber-200" />}
+        icon={<CalendarIcon className="w-6 h-6 text-white" />}
+        title="Philippine & Pangasinan Calendar"
+        description="Official legal holidays, Pangasinan provincial holidays (Speaker Eugenio Perez Day, Pangasinan Day), Sunday rest day rules (+30% pay, no late), and bi-monthly payroll cutoff schedules."
+        chips={[
+          {
+            icon: <Shield className="w-3.5 h-3.5 text-rose-200" />,
+            label: 'Regular 200% & Special +30% Holidays',
+          },
+          {
+            icon: <Clock className="w-3.5 h-3.5 text-pink-200" />,
+            label: 'Sunday Rest Day Policy',
+          },
+          {
+            icon: <DollarSign className="w-3.5 h-3.5 text-amber-200" />,
+            label: '15th & End-of-Month Paydays',
+          },
+        ]}
+        actions={
+          <Link
+            href={`/reports?date=${selectedDateStr}`}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-rose-900 hover:bg-rose-50 rounded-2xl text-xs font-bold shadow-md transition-all active:scale-95"
+          >
+            <FileText className="w-4 h-4 text-rose-700" />
+            View DTR on {format(selectedDate, 'MMM d')}
+          </Link>
+        }
+      />
 
       {/* Main Calendar Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -41,6 +41,7 @@ import {
   RotateCw,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { PageBanner } from '@/components/PageBanner'
 import type { AttendanceLog } from '@/types/database'
 import { PUNCH_STATUS, PUNCH_STATUS_COLOR } from '@/types/database'
 import { createClient } from '@/lib/supabase/client'
@@ -446,36 +447,43 @@ export function SyncClient({
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* ──── Top Header ────────────────────────────────────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-md shadow-blue-500/20">
-              <Activity className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                Sync Bridge Infrastructure &amp; Telemetry Monitor
-              </h1>
-              <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-                Physical biometric network topology &amp; real-time synchronization pipeline
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2.5">
+      {/* ──── Top Hero Banner ──────────────────────────────────────────────────────────────────────────────────────────── */}
+      <PageBanner
+        theme="sync"
+        pattern="circuit"
+        eyebrow="Physical Biometric Topology · Bridge v18.9 Iron Sentinel"
+        eyebrowIcon={<Cpu className="w-3.5 h-3.5 text-cyan-200" />}
+        icon={<Activity className="w-6 h-6 text-white animate-pulse" />}
+        title="Sync Bridge Infrastructure & Telemetry Monitor"
+        description="End-to-end physical network topology from FingerTec TA500 through TP-Link Wi-Fi bridge and Samsung Tab A9+ daemon into Supabase Singapore cloud."
+        chips={[
+          {
+            icon: <Fingerprint className="w-3.5 h-3.5 text-cyan-200" />,
+            label: 'TA500 · 192.168.0.58:4370',
+          },
+          {
+            icon: <Radio className="w-3.5 h-3.5 text-emerald-200" />,
+            label: liveBridgeOnline
+              ? `Heartbeat Active (${heartbeatAgeSec}s ago)`
+              : 'Bridge Standby',
+          },
+          {
+            icon: <Database className="w-3.5 h-3.5 text-teal-200" />,
+            label: `${totalRecords.toLocaleString()} Cloud Punches (${liveLatency} ms RTT)`,
+          },
+        ]}
+        actions={
           <button
             type="button"
             onClick={handleTestPing}
             disabled={testingPing}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white text-cyan-950 hover:bg-cyan-50 active:scale-95 text-xs font-bold shadow-md transition-all disabled:opacity-60"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${testingPing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-cyan-700 ${testingPing ? 'animate-spin' : ''}`} />
             {testingPing ? 'Pinging Nodes...' : 'Run Diagnostics'}
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ──── Active Status Alert Banner (Positioned directly under header for immediate awareness) ───── */}
       <div

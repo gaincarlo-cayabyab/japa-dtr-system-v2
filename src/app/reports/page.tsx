@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { verifySessionToken, checkUserCanEdit } from '@/lib/auth'
 import type { DailyDtr } from '@/types/database'
 import { ReportsClient } from './ReportsClient'
+import { PageBanner } from '@/components/PageBanner'
+import { FileSpreadsheet, FileText, Clock, CheckCircle2, Calendar } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,15 +31,38 @@ export default async function ReportsPage() {
     new Set((employeesData ?? []).map((e) => e.branch).filter(Boolean))
   ).sort() as string[]
 
+  const totalShifts = (dtrData ?? []).length
+  const completedCount = (dtrData ?? []).filter((r) => r.shift_status === 'Completed').length
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">DTR Reports</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Daily Time Record summary with export
-        </p>
-      </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <PageBanner
+        theme="reports"
+        pattern="diagonal"
+        eyebrow="Automated Timekeeping Ledger · Exact & Normalized Engines"
+        eyebrowIcon={<FileText className="w-3.5 h-3.5 text-cyan-200" />}
+        icon={<FileSpreadsheet className="w-6 h-6 text-white" />}
+        title="Daily Time Record (DTR) Reports"
+        description="Review per-employee daily shifts, regular vs overtime hours, tardiness, holiday statuses, shift correction notes, and export formatted Excel timesheets."
+        chips={[
+          {
+            icon: <Calendar className="w-3.5 h-3.5 text-sky-200" />,
+            label: `${totalShifts.toLocaleString()} Daily Shift Records`,
+          },
+          {
+            icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />,
+            label: `${completedCount.toLocaleString()} Completed Shifts`,
+          },
+          {
+            icon: <Clock className="w-3.5 h-3.5 text-cyan-200" />,
+            label: '9:00 AM Shift · 12–1 PM Lunch Rule',
+          },
+          {
+            icon: <FileSpreadsheet className="w-3.5 h-3.5 text-amber-200" />,
+            label: 'Excel Export Ready',
+          },
+        ]}
+      />
 
       <ReportsClient
         initialData={(dtrData ?? []) as DailyDtr[]}

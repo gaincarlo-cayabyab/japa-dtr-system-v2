@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import type { Employee } from '@/types/database'
 import { EmployeeManager } from './EmployeeManager'
+import { PageBanner } from '@/components/PageBanner'
+import { Users, Building2, UserCheck, AlertTriangle } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,32 +38,43 @@ export default async function EmployeesPage() {
     }
   })
 
+  const totalEmployees = (employees ?? []).length
   const unmappedCount = (employees ?? []).filter((e) =>
     e.full_name.includes('NN-')
   ).length
+  const branchCount = new Set((employees ?? []).map((e) => e.branch).filter(Boolean)).size
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Employee Directory</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {(employees ?? []).length} employees registered
-            {unmappedCount > 0 && (
-              <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                {unmappedCount} unmapped
-              </span>
-            )}
-          </p>
-        </div>
-      </div>
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      <PageBanner
+        theme="employees"
+        pattern="dots"
+        eyebrow="Workforce Master Roster & Compensation Profiles"
+        eyebrowIcon={<Users className="w-3.5 h-3.5 text-purple-200" />}
+        icon={<Users className="w-6 h-6 text-white" />}
+        title="Employee Directory & Device Mapping"
+        description="Manage biometric device ID assignments, office branch rosters, work schedules (Mon–Sat / Mon–Fri), and daily wage rates synced across payroll."
+        chips={[
+          {
+            icon: <UserCheck className="w-3.5 h-3.5 text-purple-200" />,
+            label: `${totalEmployees} Enrolled Personnel`,
+          },
+          {
+            icon: <Building2 className="w-3.5 h-3.5 text-fuchsia-200" />,
+            label: `${branchCount} Active Branches`,
+          },
+          {
+            icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-200" />,
+            label: unmappedCount > 0 ? `${unmappedCount} Unmapped Profiles` : 'All Device IDs Mapped',
+          },
+        ]}
+      />
 
       {unmappedCount > 0 && (
-        <div className="mb-5 flex items-center gap-3 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
+        <div className="flex items-center gap-3 px-4 py-3 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
           <span className="text-lg">⚠️</span>
           <span>
-            <strong>{unmappedCount} employee(s)</strong> have unmapped device IDs (names starting with <code className="font-mono">NN-</code>). 
+            <strong>{unmappedCount} employee(s)</strong> have unmapped device IDs (names starting with <code className="font-mono">NN-</code>).
             Edit them to assign proper names.
           </span>
         </div>

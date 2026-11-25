@@ -24,6 +24,7 @@ import {
   Table2,
 } from 'lucide-react'
 import Link from 'next/link'
+import { PageBanner } from '@/components/PageBanner'
 import { createClient } from '@/lib/supabase/client'
 import {
   buildDashboardAnalytics,
@@ -420,46 +421,53 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
   return (
     <div className="p-5 md:p-8 max-w-7xl mx-auto space-y-7">
-      {/* ──── Header & Executive Controls ──────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-md">
-              <BarChart3 className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">
-                Operations &amp; Attendance Command Center
-              </h1>
-            </div>
-          </div>
-          <p className="text-slate-500 text-xs md:text-sm">
-            Live workforce analytics · Shift performance curves · Punctuality &amp; DTR executive reports
-          </p>
-        </div>
-
-        <div className="flex items-center flex-wrap gap-2.5">
-          <button
-            type="button"
-            onClick={() => fetchFreshData()}
-            disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-xs font-bold shadow-xs transition-all disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin text-blue-600' : 'text-slate-400'}`} />
-            Refresh
-          </button>
-          <span
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border ${
-              isLive
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-2xs'
-                : 'bg-amber-50 border-amber-200 text-amber-700'
-            }`}
-          >
-            <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse text-emerald-600' : ''}`} />
-            {isLive ? 'Live Biometric Telemetry' : 'Sync Active'}
-          </span>
-        </div>
-      </div>
+      {/* ──── Hero Banner & Executive Controls ──────────────────────────────────────────── */}
+      <PageBanner
+        theme="dashboard"
+        pattern="mesh"
+        eyebrow="Live Biometric Command Center · Manila Time (UTC+8)"
+        eyebrowIcon={<BarChart3 className="w-3.5 h-3.5 text-blue-200" />}
+        icon={<BarChart3 className="w-6 h-6 text-white" />}
+        title="Operations & Attendance Command Center"
+        description="Real-time workforce telemetry, turnout & overtime trend curves, arrival punctuality analytics, and daily DTR executive summaries."
+        chips={[
+          {
+            icon: <Users className="w-3.5 h-3.5 text-blue-200" />,
+            label: `${stats.totalEmployees} Registered Staff`,
+          },
+          {
+            icon: <UserCheck className="w-3.5 h-3.5 text-emerald-200" />,
+            label: `${stats.todayPresent} Present Today (${stats.attendanceRate}%)`,
+          },
+          {
+            icon: <Cpu className="w-3.5 h-3.5 text-purple-200" />,
+            label: `Bridge ${bridgeMeta.bridgeVersion} Iron Sentinel`,
+          },
+        ]}
+        actions={
+          <>
+            <button
+              type="button"
+              onClick={() => fetchFreshData()}
+              disabled={refreshing}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white text-indigo-900 hover:bg-blue-50 text-xs font-bold shadow-md transition-all active:scale-95 disabled:opacity-60"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh Data
+            </button>
+            <span
+              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold border backdrop-blur-md ${
+                isLive
+                  ? 'bg-emerald-400/20 border-emerald-300/40 text-emerald-100'
+                  : 'bg-amber-400/20 border-amber-300/40 text-amber-100'
+              }`}
+            >
+              <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse text-emerald-300' : ''}`} />
+              {isLive ? 'Live Telemetry' : 'Sync Active'}
+            </span>
+          </>
+        }
+      />
 
       {/* Quick Navigation Pills */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
