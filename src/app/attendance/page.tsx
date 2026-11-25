@@ -27,26 +27,26 @@ export default async function AttendancePage() {
         theme="attendance"
         pattern="waves"
         eyebrow="Real-Time Biometric Stream · FingerTec TA500"
-        eyebrowIcon={<Fingerprint className="w-3.5 h-3.5 text-emerald-200" />}
-        icon={<Clock className="w-6 h-6 text-white" />}
+        eyebrowIcon={<Fingerprint className="w-3.5 h-3.5 text-emerald-700" />}
+        icon={<Clock className="w-5 h-5 text-white" />}
         title="Attendance Logs & Live Scan Feed"
-        description="Inspect chronological fingerprint and PIN scans synced from the TA500 terminal, filter by employee or date, and apply instant administrative punch corrections."
+        description="Inspect chronological fingerprint and PIN scans synced from the TA500 terminal and apply instant punch edits."
         chips={[
           {
-            icon: <Fingerprint className="w-3.5 h-3.5 text-emerald-200" />,
-            label: `${scanTotal.toLocaleString()} Total Biometric Scans`,
+            icon: <Fingerprint className="w-3.5 h-3.5 text-emerald-600" />,
+            label: `${scanTotal.toLocaleString()} Total Scans`,
           },
           {
-            icon: <Users className="w-3.5 h-3.5 text-teal-200" />,
-            label: `${employeeTotal} Mapped Personnel`,
+            icon: <Users className="w-3.5 h-3.5 text-teal-600" />,
+            label: `${employeeTotal} Mapped Staff`,
           },
           {
-            icon: <Radio className="w-3.5 h-3.5 text-cyan-200" />,
-            label: 'Realtime CDC Auto-Refresh',
+            icon: <Radio className="w-3.5 h-3.5 text-cyan-600" />,
+            label: 'Realtime CDC Sync',
           },
           {
-            icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />,
-            label: '15s Anti-Double Tap Guard',
+            icon: <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />,
+            label: '15s Anti-Double Tap',
           },
         ]}
       />

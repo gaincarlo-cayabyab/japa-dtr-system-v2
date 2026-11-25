@@ -65,30 +65,30 @@ export function CalendarClient() {
         theme="calendar"
         pattern="grid"
         eyebrow="Location: Pangasinan, Philippines · Official 2026 Calendar"
-        eyebrowIcon={<MapPin className="w-3.5 h-3.5 text-amber-200" />}
-        icon={<CalendarIcon className="w-6 h-6 text-white" />}
+        eyebrowIcon={<MapPin className="w-3.5 h-3.5 text-rose-600" />}
+        icon={<CalendarIcon className="w-5 h-5 text-white" />}
         title="Philippine & Pangasinan Calendar"
-        description="Official legal holidays, Pangasinan provincial holidays (Speaker Eugenio Perez Day, Pangasinan Day), Sunday rest day rules (+30% pay, no late), and bi-monthly payroll cutoff schedules."
+        description="Official national holidays, Pangasinan provincial holidays, Sunday rest day rules (+30% pay, no late), and payroll cutoffs."
         chips={[
           {
-            icon: <Shield className="w-3.5 h-3.5 text-rose-200" />,
-            label: 'Regular 200% & Special +30% Holidays',
+            icon: <Shield className="w-3.5 h-3.5 text-rose-600" />,
+            label: 'Regular 200% & Special +30%',
           },
           {
-            icon: <Clock className="w-3.5 h-3.5 text-pink-200" />,
+            icon: <Clock className="w-3.5 h-3.5 text-pink-600" />,
             label: 'Sunday Rest Day Policy',
           },
           {
-            icon: <DollarSign className="w-3.5 h-3.5 text-amber-200" />,
-            label: '15th & End-of-Month Paydays',
+            icon: <DollarSign className="w-3.5 h-3.5 text-amber-600" />,
+            label: '15th & Month-End Paydays',
           },
         ]}
         actions={
           <Link
             href={`/reports?date=${selectedDateStr}`}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white text-rose-900 hover:bg-rose-50 rounded-2xl text-xs font-bold shadow-md transition-all active:scale-95"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-500/20 transition-all active:scale-95"
           >
-            <FileText className="w-4 h-4 text-rose-700" />
+            <FileText className="w-4 h-4" />
             View DTR on {format(selectedDate, 'MMM d')}
           </Link>
         }

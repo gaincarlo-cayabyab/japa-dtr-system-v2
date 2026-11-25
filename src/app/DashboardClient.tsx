@@ -420,27 +420,27 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
   }, [stats.allTimePunches])
 
   return (
-    <div className="p-5 md:p-8 max-w-7xl mx-auto space-y-7">
-      {/* ──── Hero Banner & Executive Controls ──────────────────────────────────────────── */}
+    <div className="p-6 max-w-7xl mx-auto space-y-7">
+      {/* ──── Light-Theme Hero Banner & Executive Controls ─────────────────────────────── */}
       <PageBanner
         theme="dashboard"
         pattern="mesh"
         eyebrow="Live Biometric Command Center · Manila Time (UTC+8)"
-        eyebrowIcon={<BarChart3 className="w-3.5 h-3.5 text-blue-200" />}
-        icon={<BarChart3 className="w-6 h-6 text-white" />}
+        eyebrowIcon={<BarChart3 className="w-3.5 h-3.5 text-blue-600" />}
+        icon={<BarChart3 className="w-5 h-5 text-white" />}
         title="Operations & Attendance Command Center"
-        description="Real-time workforce telemetry, turnout & overtime trend curves, arrival punctuality analytics, and daily DTR executive summaries."
+        description="Live workforce analytics, turnout curves, arrival punctuality timing, and daily DTR executive reports."
         chips={[
           {
-            icon: <Users className="w-3.5 h-3.5 text-blue-200" />,
+            icon: <Users className="w-3.5 h-3.5 text-blue-600" />,
             label: `${stats.totalEmployees} Registered Staff`,
           },
           {
-            icon: <UserCheck className="w-3.5 h-3.5 text-emerald-200" />,
+            icon: <UserCheck className="w-3.5 h-3.5 text-emerald-600" />,
             label: `${stats.todayPresent} Present Today (${stats.attendanceRate}%)`,
           },
           {
-            icon: <Cpu className="w-3.5 h-3.5 text-purple-200" />,
+            icon: <Cpu className="w-3.5 h-3.5 text-indigo-600" />,
             label: `Bridge ${bridgeMeta.bridgeVersion} Iron Sentinel`,
           },
         ]}
@@ -450,19 +450,19 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
               type="button"
               onClick={() => fetchFreshData()}
               disabled={refreshing}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white text-indigo-900 hover:bg-blue-50 text-xs font-bold shadow-md transition-all active:scale-95 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-60"
             >
-              <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 ${refreshing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
               Refresh Data
             </button>
             <span
-              className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold border backdrop-blur-md ${
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border shadow-sm ${
                 isLive
-                  ? 'bg-emerald-400/20 border-emerald-300/40 text-emerald-100'
-                  : 'bg-amber-400/20 border-amber-300/40 text-amber-100'
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-amber-50 border-amber-200 text-amber-700'
               }`}
             >
-              <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse text-emerald-300' : ''}`} />
+              <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse text-emerald-600' : ''}`} />
               {isLive ? 'Live Telemetry' : 'Sync Active'}
             </span>
           </>

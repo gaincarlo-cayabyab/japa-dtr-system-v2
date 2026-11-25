@@ -40,26 +40,22 @@ export default async function ReportsPage() {
         theme="reports"
         pattern="diagonal"
         eyebrow="Automated Timekeeping Ledger · Exact & Normalized Engines"
-        eyebrowIcon={<FileText className="w-3.5 h-3.5 text-cyan-200" />}
-        icon={<FileSpreadsheet className="w-6 h-6 text-white" />}
+        eyebrowIcon={<FileText className="w-3.5 h-3.5 text-sky-700" />}
+        icon={<FileSpreadsheet className="w-5 h-5 text-white" />}
         title="Daily Time Record (DTR) Reports"
-        description="Review per-employee daily shifts, regular vs overtime hours, tardiness, holiday statuses, shift correction notes, and export formatted Excel timesheets."
+        description="Review per-employee daily shifts, overtime hours, tardiness, shift notes, and export formatted Excel timesheets."
         chips={[
           {
-            icon: <Calendar className="w-3.5 h-3.5 text-sky-200" />,
-            label: `${totalShifts.toLocaleString()} Daily Shift Records`,
+            icon: <Calendar className="w-3.5 h-3.5 text-sky-600" />,
+            label: `${totalShifts.toLocaleString()} Shift Records`,
           },
           {
-            icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-200" />,
+            icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />,
             label: `${completedCount.toLocaleString()} Completed Shifts`,
           },
           {
-            icon: <Clock className="w-3.5 h-3.5 text-cyan-200" />,
-            label: '9:00 AM Shift · 12–1 PM Lunch Rule',
-          },
-          {
-            icon: <FileSpreadsheet className="w-3.5 h-3.5 text-amber-200" />,
-            label: 'Excel Export Ready',
+            icon: <Clock className="w-3.5 h-3.5 text-cyan-600" />,
+            label: '9 AM Start · 12–1 PM Lunch',
           },
         ]}
       />

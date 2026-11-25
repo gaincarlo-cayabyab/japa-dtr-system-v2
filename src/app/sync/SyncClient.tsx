@@ -446,30 +446,30 @@ export function SyncClient({
   const activeDetail = nodeDetails[selectedNode] || nodeDetails.ta500
 
   return (
-    <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
-      {/* ──── Top Hero Banner ──────────────────────────────────────────────────────────────────────────────────────────── */}
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* ──── Light-Theme Hero Banner ──────────────────────────────────────────────────────────────────────────────────── */}
       <PageBanner
         theme="sync"
         pattern="circuit"
         eyebrow="Physical Biometric Topology · Bridge v18.9 Iron Sentinel"
-        eyebrowIcon={<Cpu className="w-3.5 h-3.5 text-cyan-200" />}
-        icon={<Activity className="w-6 h-6 text-white animate-pulse" />}
+        eyebrowIcon={<Cpu className="w-3.5 h-3.5 text-cyan-700" />}
+        icon={<Activity className="w-5 h-5 text-white animate-pulse" />}
         title="Sync Bridge Infrastructure & Telemetry Monitor"
-        description="End-to-end physical network topology from FingerTec TA500 through TP-Link Wi-Fi bridge and Samsung Tab A9+ daemon into Supabase Singapore cloud."
+        description="Live hardware topology from FingerTec TA500 through TP-Link Wi-Fi bridge and Samsung Tab A9+ daemon into Supabase cloud."
         chips={[
           {
-            icon: <Fingerprint className="w-3.5 h-3.5 text-cyan-200" />,
+            icon: <Fingerprint className="w-3.5 h-3.5 text-cyan-700" />,
             label: 'TA500 · 192.168.0.58:4370',
           },
           {
-            icon: <Radio className="w-3.5 h-3.5 text-emerald-200" />,
+            icon: <Radio className="w-3.5 h-3.5 text-emerald-600" />,
             label: liveBridgeOnline
               ? `Heartbeat Active (${heartbeatAgeSec}s ago)`
               : 'Bridge Standby',
           },
           {
-            icon: <Database className="w-3.5 h-3.5 text-teal-200" />,
-            label: `${totalRecords.toLocaleString()} Cloud Punches (${liveLatency} ms RTT)`,
+            icon: <Database className="w-3.5 h-3.5 text-teal-600" />,
+            label: `${totalRecords.toLocaleString()} Punches (${liveLatency} ms RTT)`,
           },
         ]}
         actions={
@@ -477,9 +477,9 @@ export function SyncClient({
             type="button"
             onClick={handleTestPing}
             disabled={testingPing}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-white text-cyan-950 hover:bg-cyan-50 active:scale-95 text-xs font-bold shadow-md transition-all disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 active:scale-95 text-white text-xs font-bold shadow-md shadow-cyan-500/20 transition-all disabled:opacity-60"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-cyan-700 ${testingPing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${testingPing ? 'animate-spin' : ''}`} />
             {testingPing ? 'Pinging Nodes...' : 'Run Diagnostics'}
           </button>
         }

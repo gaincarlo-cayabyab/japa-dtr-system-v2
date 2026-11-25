@@ -22,26 +22,22 @@ export default async function PayrollPage() {
         theme="payroll"
         pattern="rings"
         eyebrow="Philippine DOLE Labor Standards · Automated Wage Engine"
-        eyebrowIcon={<Scale className="w-3.5 h-3.5 text-amber-200" />}
-        icon={<Calculator className="w-6 h-6 text-white" />}
+        eyebrowIcon={<Scale className="w-3.5 h-3.5 text-amber-700" />}
+        icon={<Calculator className="w-5 h-5 text-white" />}
         title="Philippine DOLE Payroll & Salary Engine"
-        description="Automated salary computation across semi-monthly cutoffs including exact/normalized shifts, overtime pay, holiday multipliers, rest-day premiums, night differential, and payslip tracking."
+        description="Automated cutoff payroll computation for regular hours, overtime, holiday multipliers, rest days, and night differential."
         chips={[
           {
-            icon: <Building2 className="w-3.5 h-3.5 text-amber-100" />,
+            icon: <Building2 className="w-3.5 h-3.5 text-amber-600" />,
             label: `${branches.length} Office Branches`,
           },
           {
-            icon: <TrendingUp className="w-3.5 h-3.5 text-yellow-200" />,
-            label: 'Regular & Overtime Multipliers',
+            icon: <TrendingUp className="w-3.5 h-3.5 text-orange-600" />,
+            label: 'OT & Holiday Multipliers',
           },
           {
-            icon: <Moon className="w-3.5 h-3.5 text-orange-100" />,
-            label: '10 PM – 6 AM Night Diff (+10%)',
-          },
-          {
-            icon: <Scale className="w-3.5 h-3.5 text-rose-100" />,
-            label: 'DOLE Holiday & Sunday +30%',
+            icon: <Moon className="w-3.5 h-3.5 text-rose-600" />,
+            label: 'Night Diff +10% & Sunday +30%',
           },
         ]}
       />

@@ -21,7 +21,6 @@ export type BannerPattern =
 export interface BannerChip {
   icon?: ReactNode
   label: string
-  tone?: string
 }
 
 interface PageBannerProps {
@@ -37,104 +36,112 @@ interface PageBannerProps {
   className?: string
 }
 
-interface ThemePalette {
+interface LightThemePalette {
   container: string
-  topHairline: string
+  topBar: string
   glowPrimary: string
   glowSecondary: string
   iconBox: string
   eyebrowPill: string
-  accentText: string
+  chipClass: string
+  patternColor: string
 }
 
-const THEME_PALETTES: Record<BannerTheme, ThemePalette> = {
+const LIGHT_PALETTES: Record<BannerTheme, LightThemePalette> = {
   dashboard: {
     container:
-      'bg-gradient-to-br from-slate-950 via-blue-950 to-indigo-900 shadow-xl shadow-indigo-950/20 border border-indigo-400/20',
-    topHairline: 'from-transparent via-blue-400/80 to-transparent',
-    glowPrimary: 'bg-blue-500/25',
-    glowSecondary: 'bg-violet-500/20',
-    iconBox: 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-blue-500/15 border-blue-400/30 text-blue-100',
-    accentText: 'text-blue-300',
+      'bg-gradient-to-r from-white via-blue-50/85 to-indigo-100/75 border border-blue-200/80 shadow-sm shadow-blue-500/5',
+    topBar: 'from-blue-600 via-indigo-500 to-violet-500',
+    glowPrimary: 'bg-blue-400/20',
+    glowSecondary: 'bg-indigo-300/20',
+    iconBox: 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25',
+    eyebrowPill: 'bg-blue-100/80 border-blue-200 text-blue-800',
+    chipClass: 'bg-white/90 border-blue-200/75 text-slate-700',
+    patternColor: '#3b82f6',
   },
   attendance: {
     container:
-      'bg-gradient-to-br from-slate-950 via-emerald-950 to-teal-900 shadow-xl shadow-teal-950/20 border border-emerald-400/20',
-    topHairline: 'from-transparent via-emerald-400/80 to-transparent',
-    glowPrimary: 'bg-emerald-500/25',
-    glowSecondary: 'bg-cyan-500/20',
-    iconBox: 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-emerald-500/15 border-emerald-400/30 text-emerald-100',
-    accentText: 'text-emerald-300',
+      'bg-gradient-to-r from-white via-emerald-50/85 to-teal-100/75 border border-emerald-200/80 shadow-sm shadow-emerald-500/5',
+    topBar: 'from-emerald-500 via-teal-500 to-cyan-500',
+    glowPrimary: 'bg-emerald-400/20',
+    glowSecondary: 'bg-teal-300/20',
+    iconBox: 'bg-gradient-to-br from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-500/25',
+    eyebrowPill: 'bg-emerald-100/80 border-emerald-200 text-emerald-800',
+    chipClass: 'bg-white/90 border-emerald-200/75 text-slate-700',
+    patternColor: '#10b981',
   },
   employees: {
     container:
-      'bg-gradient-to-br from-slate-950 via-violet-950 to-purple-900 shadow-xl shadow-purple-950/20 border border-violet-400/20',
-    topHairline: 'from-transparent via-violet-400/80 to-transparent',
-    glowPrimary: 'bg-violet-500/25',
-    glowSecondary: 'bg-fuchsia-500/20',
-    iconBox: 'bg-gradient-to-br from-violet-500 to-purple-600 text-white shadow-lg shadow-violet-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-violet-500/15 border-violet-400/30 text-violet-100',
-    accentText: 'text-violet-300',
+      'bg-gradient-to-r from-white via-violet-50/85 to-purple-100/75 border border-violet-200/80 shadow-sm shadow-violet-500/5',
+    topBar: 'from-violet-600 via-purple-500 to-fuchsia-500',
+    glowPrimary: 'bg-violet-400/20',
+    glowSecondary: 'bg-fuchsia-300/20',
+    iconBox: 'bg-gradient-to-br from-violet-600 to-purple-600 text-white shadow-md shadow-violet-500/25',
+    eyebrowPill: 'bg-violet-100/80 border-violet-200 text-violet-800',
+    chipClass: 'bg-white/90 border-violet-200/75 text-slate-700',
+    patternColor: '#8b5cf6',
   },
   reports: {
     container:
-      'bg-gradient-to-br from-slate-950 via-sky-950 to-cyan-900 shadow-xl shadow-sky-950/20 border border-sky-400/20',
-    topHairline: 'from-transparent via-sky-400/80 to-transparent',
-    glowPrimary: 'bg-sky-500/25',
-    glowSecondary: 'bg-blue-500/20',
-    iconBox: 'bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-lg shadow-sky-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-sky-500/15 border-sky-400/30 text-sky-100',
-    accentText: 'text-sky-300',
+      'bg-gradient-to-r from-white via-sky-50/85 to-cyan-100/75 border border-sky-200/80 shadow-sm shadow-sky-500/5',
+    topBar: 'from-sky-500 via-cyan-500 to-blue-600',
+    glowPrimary: 'bg-sky-400/20',
+    glowSecondary: 'bg-cyan-300/20',
+    iconBox: 'bg-gradient-to-br from-sky-600 to-cyan-600 text-white shadow-md shadow-sky-500/25',
+    eyebrowPill: 'bg-sky-100/80 border-sky-200 text-sky-800',
+    chipClass: 'bg-white/90 border-sky-200/75 text-slate-700',
+    patternColor: '#0284c7',
   },
   payroll: {
     container:
-      'bg-gradient-to-br from-slate-950 via-stone-900 to-amber-950 shadow-xl shadow-amber-950/25 border border-amber-400/25',
-    topHairline: 'from-transparent via-amber-400/85 to-transparent',
-    glowPrimary: 'bg-amber-500/25',
-    glowSecondary: 'bg-orange-500/20',
-    iconBox: 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-lg shadow-amber-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-amber-500/15 border-amber-400/30 text-amber-100',
-    accentText: 'text-amber-300',
+      'bg-gradient-to-r from-white via-amber-50/85 to-orange-100/75 border border-amber-200/80 shadow-sm shadow-amber-500/5',
+    topBar: 'from-amber-500 via-orange-500 to-rose-500',
+    glowPrimary: 'bg-amber-400/20',
+    glowSecondary: 'bg-orange-300/20',
+    iconBox: 'bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shadow-amber-500/25',
+    eyebrowPill: 'bg-amber-100/90 border-amber-200 text-amber-900',
+    chipClass: 'bg-white/90 border-amber-200/75 text-slate-700',
+    patternColor: '#d97706',
   },
   calendar: {
     container:
-      'bg-gradient-to-br from-slate-950 via-rose-950 to-pink-900 shadow-xl shadow-rose-950/20 border border-rose-400/20',
-    topHairline: 'from-transparent via-rose-400/80 to-transparent',
-    glowPrimary: 'bg-rose-500/25',
-    glowSecondary: 'bg-pink-500/20',
-    iconBox: 'bg-gradient-to-br from-rose-500 to-pink-600 text-white shadow-lg shadow-rose-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-rose-500/15 border-rose-400/30 text-rose-100',
-    accentText: 'text-rose-300',
+      'bg-gradient-to-r from-white via-rose-50/85 to-pink-100/75 border border-rose-200/80 shadow-sm shadow-rose-500/5',
+    topBar: 'from-rose-500 via-pink-500 to-purple-500',
+    glowPrimary: 'bg-rose-400/20',
+    glowSecondary: 'bg-pink-300/20',
+    iconBox: 'bg-gradient-to-br from-rose-600 to-pink-600 text-white shadow-md shadow-rose-500/25',
+    eyebrowPill: 'bg-rose-100/80 border-rose-200 text-rose-800',
+    chipClass: 'bg-white/90 border-rose-200/75 text-slate-700',
+    patternColor: '#e11d48',
   },
   sync: {
     container:
-      'bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950 shadow-xl shadow-cyan-950/25 border border-cyan-400/20',
-    topHairline: 'from-transparent via-cyan-400/80 to-transparent',
-    glowPrimary: 'bg-cyan-500/25',
-    glowSecondary: 'bg-teal-500/20',
-    iconBox: 'bg-gradient-to-br from-cyan-500 to-teal-600 text-white shadow-lg shadow-cyan-500/30 ring-1 ring-white/25',
-    eyebrowPill: 'bg-cyan-500/15 border-cyan-400/30 text-cyan-100',
-    accentText: 'text-cyan-300',
+      'bg-gradient-to-r from-white via-cyan-50/85 to-teal-100/75 border border-cyan-200/80 shadow-sm shadow-cyan-500/5',
+    topBar: 'from-cyan-500 via-teal-500 to-emerald-500',
+    glowPrimary: 'bg-cyan-400/20',
+    glowSecondary: 'bg-teal-300/20',
+    iconBox: 'bg-gradient-to-br from-cyan-600 to-teal-600 text-white shadow-md shadow-cyan-500/25',
+    eyebrowPill: 'bg-cyan-100/80 border-cyan-200 text-cyan-900',
+    chipClass: 'bg-white/90 border-cyan-200/75 text-slate-700',
+    patternColor: '#0891b2',
   },
 }
 
-// Masks pattern cleanly toward the right edge so typography on the left stays razor-sharp
+// Masks geometric motifs gently toward the right edge so text on the left stays over a clean white-tinted backdrop
 const RIGHT_FADE_MASK: CSSProperties = {
-  maskImage: 'linear-gradient(to left, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.45) 45%, transparent 78%)',
+  maskImage: 'linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.35) 45%, transparent 72%)',
   WebkitMaskImage:
-    'linear-gradient(to left, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.45) 45%, transparent 78%)',
+    'linear-gradient(to left, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.35) 45%, transparent 72%)',
 }
 
-function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
+function PatternOverlay({ pattern, color }: { pattern: BannerPattern; color: string }) {
   if (pattern === 'dots') {
     return (
       <div
-        className="absolute inset-0 opacity-30 pointer-events-none"
+        className="absolute inset-0 opacity-25 pointer-events-none"
         style={{
           ...RIGHT_FADE_MASK,
-          backgroundImage: 'radial-gradient(rgba(255,255,255,0.55) 1.5px, transparent 1.5px)',
+          backgroundImage: `radial-gradient(${color} 1.5px, transparent 1.5px)`,
           backgroundSize: '18px 18px',
         }}
       />
@@ -144,12 +151,11 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
   if (pattern === 'grid') {
     return (
       <div
-        className="absolute inset-0 opacity-20 pointer-events-none"
+        className="absolute inset-0 opacity-15 pointer-events-none"
         style={{
           ...RIGHT_FADE_MASK,
-          backgroundImage:
-            'linear-gradient(to right, rgba(255,255,255,0.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.45) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
+          backgroundImage: `linear-gradient(to right, ${color} 1px, transparent 1px), linear-gradient(to bottom, ${color} 1px, transparent 1px)`,
+          backgroundSize: '26px 26px',
         }}
       />
     )
@@ -158,11 +164,10 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
   if (pattern === 'diagonal') {
     return (
       <div
-        className="absolute inset-0 opacity-20 pointer-events-none"
+        className="absolute inset-0 opacity-15 pointer-events-none"
         style={{
           ...RIGHT_FADE_MASK,
-          backgroundImage:
-            'repeating-linear-gradient(-45deg, rgba(255,255,255,0.4) 0px, rgba(255,255,255,0.4) 1px, transparent 1px, transparent 16px)',
+          backgroundImage: `repeating-linear-gradient(-45deg, ${color} 0px, ${color} 1px, transparent 1px, transparent 16px)`,
         }}
       />
     )
@@ -171,7 +176,7 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
   if (pattern === 'waves') {
     return (
       <svg
-        className="absolute right-0 bottom-0 top-0 w-2/3 h-full opacity-20 pointer-events-none"
+        className="absolute right-0 bottom-0 top-0 w-2/3 h-full opacity-15 pointer-events-none"
         style={RIGHT_FADE_MASK}
         preserveAspectRatio="none"
         viewBox="0 0 600 220"
@@ -179,13 +184,13 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
       >
         <path
           d="M0,150 C140,85 280,195 430,115 C510,72 560,105 600,82 L600,220 L0,220 Z"
-          fill="white"
-          fillOpacity="0.35"
+          fill={color}
+          fillOpacity="0.4"
         />
         <path
           d="M0,185 C170,125 320,210 490,142 C540,122 575,135 600,118 L600,220 L0,220 Z"
-          fill="white"
-          fillOpacity="0.2"
+          fill={color}
+          fillOpacity="0.22"
         />
       </svg>
     )
@@ -194,15 +199,15 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
   if (pattern === 'rings') {
     return (
       <svg
-        className="absolute -right-8 -top-10 w-80 h-80 opacity-20 pointer-events-none"
+        className="absolute -right-6 -top-8 w-72 h-72 opacity-20 pointer-events-none"
         style={RIGHT_FADE_MASK}
         viewBox="0 0 240 240"
         fill="none"
         aria-hidden="true"
       >
-        <circle cx="130" cy="120" r="44" stroke="white" strokeWidth="1.5" strokeDasharray="6 4" />
-        <circle cx="130" cy="120" r="76" stroke="white" strokeWidth="1.5" />
-        <circle cx="130" cy="120" r="108" stroke="white" strokeWidth="1" strokeDasharray="4 6" />
+        <circle cx="130" cy="120" r="42" stroke={color} strokeWidth="1.5" strokeDasharray="6 4" />
+        <circle cx="130" cy="120" r="74" stroke={color} strokeWidth="1.5" />
+        <circle cx="130" cy="120" r="106" stroke={color} strokeWidth="1" strokeDasharray="4 6" />
       </svg>
     )
   }
@@ -210,19 +215,19 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
   if (pattern === 'circuit') {
     return (
       <svg
-        className="absolute right-0 top-0 h-full w-96 opacity-25 pointer-events-none"
+        className="absolute right-0 top-0 h-full w-96 opacity-20 pointer-events-none"
         style={RIGHT_FADE_MASK}
         viewBox="0 0 360 200"
         fill="none"
         aria-hidden="true"
       >
-        <path d="M50 42 H165 L195 72 H325" stroke="white" strokeWidth="1.5" />
-        <path d="M90 120 H215 L245 90 H345" stroke="white" strokeWidth="1.5" />
-        <path d="M130 162 H255 L290 132 H350" stroke="white" strokeWidth="1.2" strokeDasharray="4 4" />
-        <circle cx="165" cy="42" r="3.5" fill="white" />
-        <circle cx="325" cy="72" r="4" fill="white" />
-        <circle cx="215" cy="120" r="3.5" fill="white" />
-        <circle cx="290" cy="132" r="3.5" fill="white" />
+        <path d="M50 42 H165 L195 72 H325" stroke={color} strokeWidth="1.5" />
+        <path d="M90 120 H215 L245 90 H345" stroke={color} strokeWidth="1.5" />
+        <path d="M130 162 H255 L290 132 H350" stroke={color} strokeWidth="1.2" strokeDasharray="4 4" />
+        <circle cx="165" cy="42" r="3.5" fill={color} />
+        <circle cx="325" cy="72" r="4" fill={color} />
+        <circle cx="215" cy="120" r="3.5" fill={color} />
+        <circle cx="290" cy="132" r="3.5" fill={color} />
       </svg>
     )
   }
@@ -230,11 +235,10 @@ function PatternOverlay({ pattern }: { pattern: BannerPattern }) {
   // Default 'mesh'
   return (
     <div
-      className="absolute inset-0 opacity-25 pointer-events-none"
+      className="absolute inset-0 opacity-20 pointer-events-none"
       style={{
         ...RIGHT_FADE_MASK,
-        backgroundImage:
-          'radial-gradient(circle at 86% 24%, rgba(255,255,255,0.45) 0, transparent 34%), radial-gradient(circle at 72% 85%, rgba(255,255,255,0.22) 0, transparent 30%)',
+        backgroundImage: `radial-gradient(circle at 86% 24%, ${color} 0, transparent 34%), radial-gradient(circle at 72% 85%, ${color} 0, transparent 28%)`,
       }}
     />
   )
@@ -252,62 +256,62 @@ export function PageBanner({
   actions,
   className = '',
 }: PageBannerProps) {
-  const palette = THEME_PALETTES[theme]
+  const palette = LIGHT_PALETTES[theme]
 
   return (
     <section
-      className={`${palette.container} rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden ${className}`}
+      className={`${palette.container} rounded-3xl px-6 py-5 sm:px-7 sm:py-6 min-h-[156px] flex items-center relative overflow-hidden ${className}`}
     >
-      {/* Top Luminous Hairline Accent */}
+      {/* Top Signature Accent Strip */}
       <div
-        className={`absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r ${palette.topHairline} pointer-events-none`}
+        className={`absolute top-0 inset-x-0 h-1 bg-gradient-to-r ${palette.topBar} pointer-events-none`}
       />
 
-      {/* Soft Right-Anchored Ambient Auras (Leaves text side deep & legible) */}
+      {/* Soft Right-Anchored Pastel Glow Orbs */}
       <div
-        className={`absolute -right-12 -top-14 w-80 h-80 rounded-full blur-3xl pointer-events-none ${palette.glowPrimary}`}
+        className={`absolute -right-10 -top-12 w-72 h-72 rounded-full blur-3xl pointer-events-none ${palette.glowPrimary}`}
       />
       <div
-        className={`absolute right-1/4 -bottom-16 w-72 h-72 rounded-full blur-3xl pointer-events-none ${palette.glowSecondary}`}
+        className={`absolute right-1/4 -bottom-16 w-64 h-64 rounded-full blur-3xl pointer-events-none ${palette.glowSecondary}`}
       />
 
-      <PatternOverlay pattern={pattern} />
+      <PatternOverlay pattern={pattern} color={palette.patternColor} />
 
-      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-        <div className="max-w-3xl space-y-3.5">
-          {/* Crisp Frosted Eyebrow Pill */}
+      <div className="relative z-10 w-full flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex-1 min-w-0 space-y-2.5">
+          {/* Eyebrow Tag */}
           <div
-            className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-md text-xs font-bold ${palette.eyebrowPill}`}
+            className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border text-[11px] font-bold ${palette.eyebrowPill}`}
           >
             {eyebrowIcon}
             <span>{eyebrow}</span>
           </div>
 
-          {/* Glossy Gradient Icon + Pure White Title */}
-          <div className="flex items-start sm:items-center gap-3.5">
+          {/* Glossy Gradient Icon + High-Contrast Ink Title */}
+          <div className="flex items-center gap-3">
             {icon && (
               <div
-                className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 ${palette.iconBox}`}
+                className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 ${palette.iconBox}`}
               >
                 {icon}
               </div>
             )}
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-tight text-white">
+            <h1 className="text-xl sm:text-2xl md:text-[26px] font-black tracking-tight text-slate-900 leading-tight">
               {title}
             </h1>
           </div>
 
-          <p className="text-xs sm:text-sm leading-relaxed max-w-2xl text-slate-200 font-medium">
+          <p className="text-xs sm:text-sm text-slate-600 font-medium leading-relaxed max-w-2xl">
             {description}
           </p>
 
-          {/* High-Contrast Dark Frosted Status Chips */}
+          {/* Clean Light Status Chips */}
           {chips.length > 0 && (
-            <div className="pt-1 flex flex-wrap gap-2 text-xs">
+            <div className="pt-0.5 flex flex-wrap gap-2 text-xs">
               {chips.map((chip, idx) => (
                 <span
                   key={`${chip.label}-${idx}`}
-                  className="px-3 py-1.5 rounded-xl bg-slate-950/50 border border-white/15 backdrop-blur-sm flex items-center gap-1.5 font-semibold text-slate-100 shadow-sm"
+                  className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-semibold shadow-sm ${palette.chipClass}`}
                 >
                   {chip.icon}
                   <span>{chip.label}</span>
@@ -317,8 +321,8 @@ export function PageBanner({
           )}
         </div>
 
-        {/* Right Actions */}
-        {actions && <div className="flex flex-wrap items-center gap-2.5 shrink-0">{actions}</div>}
+        {/* Right Action Controls */}
+        {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
       </div>
     </section>
   )

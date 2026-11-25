@@ -50,21 +50,21 @@ export default async function EmployeesPage() {
         theme="employees"
         pattern="dots"
         eyebrow="Workforce Master Roster & Compensation Profiles"
-        eyebrowIcon={<Users className="w-3.5 h-3.5 text-purple-200" />}
-        icon={<Users className="w-6 h-6 text-white" />}
+        eyebrowIcon={<Users className="w-3.5 h-3.5 text-violet-700" />}
+        icon={<Users className="w-5 h-5 text-white" />}
         title="Employee Directory & Device Mapping"
-        description="Manage biometric device ID assignments, office branch rosters, work schedules (Mon–Sat / Mon–Fri), and daily wage rates synced across payroll."
+        description="Manage biometric device ID assignments, branch rosters, weekly schedules, and daily wage rates across payroll."
         chips={[
           {
-            icon: <UserCheck className="w-3.5 h-3.5 text-purple-200" />,
+            icon: <UserCheck className="w-3.5 h-3.5 text-violet-600" />,
             label: `${totalEmployees} Enrolled Personnel`,
           },
           {
-            icon: <Building2 className="w-3.5 h-3.5 text-fuchsia-200" />,
+            icon: <Building2 className="w-3.5 h-3.5 text-purple-600" />,
             label: `${branchCount} Active Branches`,
           },
           {
-            icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-200" />,
+            icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />,
             label: unmappedCount > 0 ? `${unmappedCount} Unmapped Profiles` : 'All Device IDs Mapped',
           },
         ]}

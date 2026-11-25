@@ -7,7 +7,7 @@ export const metadata = {
 
 export default function CalendarPage() {
   return (
-    <div className="p-6 sm:p-8 max-w-7xl mx-auto">
+    <div className="p-6 max-w-7xl mx-auto">
       <CalendarClient />
     </div>
   )
