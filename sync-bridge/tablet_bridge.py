@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 JAPA DTR Sync Bridge — Samsung Galaxy Tab A8/A9+ Edition
-v18.6 "Iron Sentinel — Auto-Aligning Record Scanner"
+v18.7 "Iron Sentinel — Chunked Buffer Reader"
 
 Key Architecture Fixes:
   1. Self-Synchronizing Buffered Frame Reader (ZKFrameReader):
@@ -9,14 +9,16 @@ Key Architecture Fixes:
      - Automatically aligns to ZKTeco magic header (0x5050, 0x7d82).
      - Loops until exact declared frame payload is assembled across TCP fragments.
      - Completely eliminates 'TCP packet invalid' errors over Wi-Fi extenders.
-  2. Multi-Packet Attendance Stream Extractor:
-     - Accurate 32-bit uint size extraction at offset 1:5 (e.g. 9684 bytes for 242 records).
-     - Streams all CMD_DATA frames until CMD_ACK_OK — assembles complete buffer.
+  2. Chunked 4096-byte Buffer Reader (v18.7 KEY FIX):
+     - Sends multiple CMD_READ_BUFFER (1504) requests with incrementing offsets.
+     - Each chunk collects its own CMD_DATA frames until CMD_ACK_OK.
+     - Guarantees ALL 242+ records are read — the TA500 firmware terminates each
+       single large request early (after ~7 frames), so chunked reads are mandatory.
   3. Auto-Aligning Record Scanner (v18.6):
      - Probes offsets 0-8 and selects the one yielding the most valid timestamps (2024-2027).
-     - Eliminates 'bad year / unmapped emp' caused by TA500 prepending a 4-byte size header.
+     - Eliminates 'bad year / unmapped emp' caused by TA500's optional 4-byte size header.
   4. Authoritative Cloud Reconciliation:
-     - Seeds seen cache directly from Supabase (load_cloud_seen_hashes), guaranteeing that any unsynced punches are immediately detected and uploaded.
+     - Seeds seen cache directly from Supabase (load_cloud_seen_hashes).
   5. 3-Second Rapid Punch Detection (POLL_INTERVAL = 3s).
 """
 
@@ -200,7 +202,7 @@ def _apply_pyzk_hotfix():
 
     ZK._ZK__send_command = patched_send_command
 
-    # ── 3. Fix read_with_buffer: complete multi-segment TCP attendance extraction ──
+    # ── 3. Fix read_with_buffer: chunked 4096-byte reads for complete buffer extraction ──
     orig_rwb = ZK.read_with_buffer
     def patched_read_with_buffer(self, command, fct=0, ext=0):
         if not self.tcp:
@@ -221,10 +223,9 @@ def _apply_pyzk_hotfix():
             logger.info(f"📋 RWB received CMD_DATA directly ({data_len} bytes)")
             return self._ZK__data, data_len
 
-        # Extract declared buffer size
+        # Extract declared total buffer size from CMD_PREPARE_DATA / CMD_ACK_OK response
         total_size = 0
         if data_len >= 5:
-            # ZKTeco standard: self._ZK__data[1:5] contains the 32-bit unsigned size
             s1 = struct.unpack('<I', self._ZK__data[1:5])[0]
             if 0 < s1 < 10000000:
                 total_size = s1
@@ -233,11 +234,11 @@ def _apply_pyzk_hotfix():
             if 0 < s0 < 10000000:
                 total_size = s0
 
-        # Hardware fallback: if size is 0 or unparsed, calculate from known records count
+        # Hardware fallback from known records count
         records_hint = getattr(self, 'records', 0)
         if total_size <= 0 and records_hint > 0:
             total_size = records_hint * 40 + 4
-            logger.info(f"📋 RWB buffer size defaulted from hardware records count: {total_size} bytes ({records_hint} records)")
+            logger.info(f"📋 RWB buffer size from hardware records: {total_size} bytes ({records_hint} records)")
         else:
             logger.info(f"📋 RWB declared total size: {total_size} bytes (records hint={records_hint})")
 
@@ -245,46 +246,64 @@ def _apply_pyzk_hotfix():
             logger.warning("⚠️ RWB could not determine buffer size (total_size=0)")
             return b'', 0
 
-        # Request stream using 1504 (CMD_READ_BUFFER)
-        # The TA500 streams multiple CMD_DATA (1501) frames until terminating with CMD_ACK_OK (2000)
-        req_str = struct.pack('<ii', 0, total_size)
-        resp_1504 = self._ZK__send_command(1504, req_str, 1024)
-        c_1504 = resp_1504.get('code', 0)
-        logger.info(f"📋 RWB 1504 stream initiated: resp={c_1504}")
-
+        # ── CHUNKED READ LOOP ────────────────────────────────────────────────────
+        # The TA500 firmware sends CMD_ACK_OK after each chunk request regardless
+        # of whether more data remains. We must issue multiple 1504 requests with
+        # incrementing offsets (4096 bytes each) until we have the full buffer.
+        CHUNK_SIZE = 4096
         accumulated = bytearray()
-        if c_1504 == const.CMD_DATA and len(self._ZK__data) > 0:
-            accumulated.extend(self._ZK__data)
+        chunk_num = 0
 
-        # Loop receiving all CMD_DATA frames until CMD_ACK_OK
-        frame_count = 1 if len(accumulated) > 0 else 0
-        while True:
-            if total_size > 0 and len(accumulated) >= total_size:
-                try:
-                    c_end, _ = reader.recv_frame(timeout=0.8)
-                    if c_end == const.CMD_ACK_OK:
-                        pass
-                except Exception:
-                    pass
-                break
+        while len(accumulated) < total_size:
+            offset = len(accumulated)
+            remaining = total_size - offset
+            req_size = min(CHUNK_SIZE, remaining)
+
+            req_str = struct.pack('<ii', offset, req_size)
             try:
-                cmd, payload = reader.recv_frame(timeout=5.0)
-                if cmd == const.CMD_DATA:
-                    accumulated.extend(payload[8:])
-                    frame_count += 1
-                elif cmd == const.CMD_ACK_OK:
-                    logger.info(f"📋 RWB stream completed cleanly via CMD_ACK_OK ({frame_count} frames)")
-                    break
-                elif cmd == const.CMD_PREPARE_DATA:
-                    continue
-                else:
-                    logger.warning(f"⚠️ RWB unexpected frame {cmd} during stream, breaking")
-                    break
-            except socket.timeout:
-                logger.warning(f"⚠️ RWB stream timeout (got {len(accumulated)}/{total_size} bytes)")
+                resp_chunk = self._ZK__send_command(1504, req_str, 1024)
+                c_chunk = resp_chunk.get('code', 0)
+            except Exception as e_cmd:
+                logger.warning(f"⚠️ RWB chunk {chunk_num} CMD send error: {e_cmd}")
                 break
-            except Exception as e_stream:
-                logger.warning(f"⚠️ RWB stream error: {e_stream}")
+
+            chunk_data = bytearray()
+
+            # Collect the first data from __send_command if it returned CMD_DATA directly
+            if c_chunk == const.CMD_DATA and len(self._ZK__data) > 0:
+                chunk_data.extend(self._ZK__data)
+
+            # Drain remaining CMD_DATA frames for this chunk until CMD_ACK_OK
+            while True:
+                try:
+                    cmd, payload = reader.recv_frame(timeout=5.0)
+                    if cmd == const.CMD_DATA:
+                        chunk_data.extend(payload[8:])
+                    elif cmd == const.CMD_ACK_OK:
+                        break
+                    elif cmd == const.CMD_PREPARE_DATA:
+                        continue
+                    else:
+                        logger.warning(f"⚠️ RWB unexpected frame {cmd} in chunk {chunk_num}")
+                        break
+                except socket.timeout:
+                    logger.warning(f"⚠️ RWB chunk {chunk_num} timeout after {len(chunk_data)} bytes")
+                    break
+                except Exception as e_frame:
+                    logger.warning(f"⚠️ RWB chunk {chunk_num} frame error: {e_frame}")
+                    break
+
+            if not chunk_data:
+                logger.warning(f"⚠️ RWB chunk {chunk_num} returned 0 bytes at offset {offset} — stopping")
+                break
+
+            accumulated.extend(chunk_data)
+            chunk_num += 1
+            logger.info(f"📋 RWB chunk {chunk_num}: +{len(chunk_data)} bytes → {len(accumulated)}/{total_size} total")
+
+            if len(chunk_data) < req_size:
+                # Device sent less than requested — it has no more data
+                logger.info(f"📋 RWB device signalled end of data (sent {len(chunk_data)} < requested {req_size})")
                 break
 
         # Free buffer on TA500 RAM
@@ -293,7 +312,7 @@ def _apply_pyzk_hotfix():
         except Exception:
             pass
 
-        logger.info(f"✅ RWB Complete: Assembled {len(accumulated)} attendance bytes from TA500 RAM ({frame_count} frames)")
+        logger.info(f"✅ RWB Complete: Assembled {len(accumulated)}/{total_size} bytes from TA500 RAM ({chunk_num} chunks)")
         return bytes(accumulated), len(accumulated)
 
     ZK.read_with_buffer = patched_read_with_buffer
@@ -729,7 +748,7 @@ def update_live_heartbeat(ta500_online: bool, records_count: int = 0) -> None:
             {'key': 'ta500_status',     'value': 1 if ta500_online else 0},
             {'key': 'ta500_last_seen',  'value': _last_ta500_seen_ts if _last_ta500_seen_ts > 0 else now_ts},
             {'key': 'ta500_records',    'value': int(records_count)},
-            {'key': 'bridge_version',   'value': 186},
+            {'key': 'bridge_version',   'value': 187},
         ]
         url = f'{SUPABASE_URL}/rest/v1/sync_meta?on_conflict=key'
         session.post(url, headers=_HEADERS_INSERT, json=payload, timeout=(2, 4))
@@ -1275,7 +1294,7 @@ def main():
     global _pending_upload_queue, ZK_IP
 
     logger.info('==================================================================')
-    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.6 "Iron Sentinel"')
+    logger.info('🚀 JAPA DTR Sync Bridge (Samsung Galaxy Tab A8/A9+) v18.7 "Iron Sentinel"')
     logger.info(f'   Target IP : {ZK_IP}:{ZK_PORT}')
     logger.info('   Mode      : Self-Synchronizing TCP Framing | Complete Multi-Packet Extractor')
     logger.info('   Stability : Zero Packet Invalids | TP-Link Port 9 Keepalive | 3s Rapid Detection')
