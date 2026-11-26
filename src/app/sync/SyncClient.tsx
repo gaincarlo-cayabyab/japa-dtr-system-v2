@@ -446,7 +446,7 @@ export function SyncClient({
   const activeDetail = nodeDetails[selectedNode] || nodeDetails.ta500
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
       {/* ──── Light-Theme Hero Banner ──────────────────────────────────────────────────────────────────────────────────── */}
       <PageBanner
         theme="sync"
@@ -477,7 +477,7 @@ export function SyncClient({
             type="button"
             onClick={handleTestPing}
             disabled={testingPing}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 active:scale-95 text-white text-xs font-bold shadow-md shadow-cyan-500/20 transition-all disabled:opacity-60"
+            className="w-full sm:w-auto justify-center inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-700 hover:to-teal-700 active:scale-95 text-white text-xs font-bold shadow-md shadow-cyan-500/20 transition-all disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${testingPing ? 'animate-spin' : ''}`} />
             {testingPing ? 'Pinging Nodes...' : 'Run Diagnostics'}
@@ -567,9 +567,9 @@ export function SyncClient({
           }}
         />
 
-        <div className="relative z-10 p-5 sm:p-7">
+        <div className="relative z-10 p-4 sm:p-7">
           {/* Header Row */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 sm:mb-6">
             <div>
               <span className="inline-flex items-center gap-1.5 text-[10px] font-black tracking-widest uppercase text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full mb-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
@@ -579,10 +579,10 @@ export function SyncClient({
                 Live Biometric Data Propagation Path
               </h2>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Click any device below to inspect live hardware specs, network ports &amp; diagnostic telemetry
+                Tap any device below to inspect live hardware specs, network ports &amp; diagnostic telemetry
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-[11px] font-bold bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 text-[11px] font-bold bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm w-full sm:w-auto">
               <span className="flex items-center gap-1.5 text-emerald-700">
                 <span className="w-3 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Normal Wire Flow
@@ -628,7 +628,7 @@ export function SyncClient({
 
                 {/* 3D Hardware Device Casing Mockup */}
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                       DEVICE #1 · BIOMETRIC TERMINAL
                     </span>
@@ -779,20 +779,20 @@ export function SyncClient({
                   </div>
 
                   {/* Informative Hardware Spec Matrix (Fills whitespace professionally) */}
-                  <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                  <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] font-mono">
+                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                       <span className="text-slate-400 font-semibold">Firmware:</span>
                       <span className="font-bold text-slate-700">TCMS v6.60</span>
                     </div>
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                       <span className="text-slate-400 font-semibold">Capacity:</span>
                       <span className="font-bold text-emerald-600">100k Logs</span>
                     </div>
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                       <span className="text-slate-400 font-semibold">Users:</span>
                       <span className="font-bold text-blue-600">3,000 Enrolled</span>
                     </div>
-                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                    <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                       <span className="text-slate-400 font-semibold">Sensor:</span>
                       <span className="font-bold text-indigo-600">500 DPI Glass</span>
                     </div>
@@ -800,7 +800,7 @@ export function SyncClient({
 
                   {/* Hardware Buffer Progress Bar */}
                   <div className="mt-2 bg-slate-50 border border-slate-200/80 rounded-lg p-2">
-                    <div className="flex items-center justify-between text-[9px] font-mono mb-1">
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-[9px] font-mono mb-1">
                       <span className="text-slate-500 font-bold">Flash Memory Buffer:</span>
                       <span className="text-emerald-700 font-black">{totalRecords.toLocaleString()} / 100,000 (&lt; 0.2%)</span>
                     </div>
@@ -984,7 +984,7 @@ export function SyncClient({
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                       DEVICE #2 · TP-LINK TL-WA855RE
                     </span>
@@ -1009,7 +1009,7 @@ export function SyncClient({
 
                   {/* 3D Cat6 Cable Inflow Graphic with Smooth Luminous Loading Effect */}
                   <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-3 shadow-xs relative overflow-hidden">
-                    <div className="flex items-center justify-between text-[10px] font-mono font-bold mb-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px] font-mono font-bold mb-2">
                       <span className="text-slate-800 flex items-center gap-1.5">
                         <Cable className="w-3.5 h-3.5 text-blue-600" />
                         <span>Cat6 RJ45 Input Cable</span>
@@ -1094,7 +1094,7 @@ export function SyncClient({
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200">
                       <div className="flex items-center gap-2.5">
                         <div className="p-2 rounded-lg bg-purple-100 text-purple-700 border border-purple-200">
                           {isWifiBroken ? (
@@ -1124,22 +1124,22 @@ export function SyncClient({
                     </div>
 
                     {/* TP-Link Tether App 4-Card Status Grid (Accurate to real hardware app) */}
-                    <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[9px] font-mono">
-                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between">
+                    <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[9px] font-mono">
+                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Network Status:</span>
                         <span className={`font-bold ${isWifiBroken ? 'text-rose-600' : 'text-emerald-600'}`}>
                           {isWifiBroken ? 'Disconnected' : 'Online (Stable)'}
                         </span>
                       </div>
-                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between">
+                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Clients:</span>
                         <span className="font-bold text-slate-700">1 Online (Bridge)</span>
                       </div>
-                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between">
+                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Main Network:</span>
                         <span className="font-bold text-purple-600">2.4 GHz Host</span>
                       </div>
-                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between">
+                      <div className="bg-white border border-slate-200 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Extended Wi-Fi:</span>
                         <span className="font-bold text-indigo-600">2.4 GHz Extender</span>
                       </div>
@@ -1329,7 +1329,7 @@ export function SyncClient({
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-3">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5 mb-3">
                     <span className="text-[10px] font-mono font-black uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
                       DEVICE #3 · LOCAL BRIDGE HOST
                     </span>
@@ -1415,7 +1415,7 @@ export function SyncClient({
                       </div>
 
                       {/* Heartbeat Status Line: Strictly fixed-width tabular numbers to prevent layout shift */}
-                      <div className="text-slate-400 text-[8.5px] pt-1.5 border-t border-slate-800/80 flex items-center justify-between min-w-0 mt-1">
+                      <div className="text-slate-400 text-[8.5px] pt-1.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-1 min-w-0 mt-1">
                         <div className="truncate flex items-center gap-1 min-w-0">
                           <span className="shrink-0">[HEARTBEAT]</span>
                           <span className="tabular-nums font-mono text-slate-200 font-bold inline-block min-w-[28px] text-right shrink-0">
@@ -1423,7 +1423,7 @@ export function SyncClient({
                           </span>
                           <span className="shrink-0">ago · Persistent</span>
                         </div>
-                        <span className="text-emerald-400 font-bold shrink-0 ml-2 whitespace-nowrap">● 24/7 Watchdog Active</span>
+                        <span className="text-emerald-400 font-bold shrink-0 whitespace-nowrap">● 24/7 Watchdog Active</span>
                       </div>
                     </div>
                   </div>
@@ -1433,20 +1433,20 @@ export function SyncClient({
                     <p className="text-xs text-slate-500 font-medium">Local Python Synchronization Bridge Daemon</p>
 
                     {/* Professional Enterprise Telemetries (Replacing informal text) */}
-                    <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[10px] font-mono">
-                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                    <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] font-mono">
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Session Protocol:</span>
                         <span className="font-bold text-blue-600">Persistent TCP Stream</span>
                       </div>
-                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Daemon Guard:</span>
                         <span className="font-bold text-indigo-600">Health Supervisor</span>
                       </div>
-                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Sensor Workload:</span>
                         <span className="font-bold text-emerald-600">&gt; 95% Free</span>
                       </div>
-                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between">
+                      <div className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 flex items-center justify-between gap-2">
                         <span className="text-slate-400 font-semibold">Wire Transport:</span>
                         <span className="font-bold text-slate-700">TCP Port 4370</span>
                       </div>
@@ -1498,10 +1498,10 @@ export function SyncClient({
           </div>
 
           {/* ──── HORIZONTAL WAN BEAM / CLOUD CORRIDOR (INTERNET BOUNDARY) ──────────── */}
-          <div className="relative mt-12 mb-8 lg:mt-14 lg:mb-10">
-            <div className="relative flex items-center justify-center">
+          <div className="relative mt-6 mb-6 lg:mt-14 lg:mb-10">
+            <div className="relative py-3 flex items-center justify-center">
               <div
-                className={`w-full h-3 rounded-full border relative overflow-hidden shadow-sm ${
+                className={`absolute inset-x-0 top-1/2 -translate-y-1/2 w-full h-2.5 sm:h-3 rounded-full border overflow-hidden shadow-sm ${
                   isCloudDown ? 'bg-rose-100 border-rose-300' : 'bg-slate-100 border-slate-300'
                 }`}
               >
@@ -1516,16 +1516,16 @@ export function SyncClient({
 
               {/* Central Glowing WAN Gateway Badge */}
               <div
-                className={`absolute px-4 py-1.5 rounded-full border shadow-md flex items-center gap-2 text-xs font-mono transition-all ${
+                className={`relative z-10 max-w-full px-3 sm:px-4 py-1.5 rounded-2xl sm:rounded-full border shadow-md flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs font-mono text-center transition-all ${
                   isCloudDown
                     ? 'bg-rose-100 text-rose-900 border-rose-400 animate-pulse'
                     : 'bg-white/95 backdrop-blur-sm text-slate-800 border-slate-300'
                 }`}
               >
-                <Globe className={`w-3.5 h-3.5 ${isCloudDown ? 'text-rose-600' : 'text-blue-600 animate-spin'}`} style={{ animationDuration: '8s' }} />
-                <span className="font-black">INTERNET WAN UPLINK → SINGAPORE CLOUD REGION</span>
+                <Globe className={`w-3.5 h-3.5 shrink-0 ${isCloudDown ? 'text-rose-600' : 'text-blue-600 animate-spin'}`} style={{ animationDuration: '8s' }} />
+                <span className="font-black">INTERNET WAN UPLINK → SINGAPORE CLOUD</span>
                 <span
-                  className={`font-mono font-black px-2 py-0.5 rounded text-[10px] border ${
+                  className={`font-mono font-black px-2 py-0.5 rounded text-[10px] border shrink-0 ${
                     isCloudDown
                       ? 'bg-rose-200 text-rose-900 border-rose-400'
                       : isSlow
@@ -1596,7 +1596,7 @@ export function SyncClient({
               }}
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200">
                       <Database className="w-5 h-5" />
@@ -1607,7 +1607,7 @@ export function SyncClient({
                     </div>
                   </div>
                   <span
-                    className={`text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border ${
+                    className={`text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border shrink-0 ${
                       isCloudDown
                         ? 'bg-rose-50 text-rose-600 border-rose-200'
                         : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -1683,7 +1683,7 @@ export function SyncClient({
               }}
             >
               <div>
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2">
                     <span className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-200">
                       <Globe className="w-5 h-5" />
@@ -1693,7 +1693,7 @@ export function SyncClient({
                       <p className="text-[11px] text-slate-500 font-mono">Vercel Global Edge Network</p>
                     </div>
                   </div>
-                  <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200">
+                  <span className="text-[10px] font-mono font-black uppercase px-2.5 py-1 rounded-full border bg-indigo-50 text-indigo-700 border-indigo-200 shrink-0">
                     ● ONLINE · LIVE
                   </span>
                 </div>
@@ -1739,14 +1739,14 @@ export function SyncClient({
 
           {/* ──── CONNECTOR 5: REALTIME BI-DIRECTIONAL CLOUD BUS ────────────────────── */}
           <div className="mt-4 flex items-center justify-center">
-            <div className="w-full max-w-xl bg-gradient-to-r from-emerald-50 via-cyan-50 to-indigo-50 px-4 py-2.5 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono font-bold text-slate-600 shadow-xs">
+            <div className="w-full max-w-xl bg-gradient-to-r from-emerald-50 via-cyan-50 to-indigo-50 px-3.5 sm:px-4 py-2.5 rounded-2xl border border-slate-200/90 flex flex-col sm:flex-row items-center justify-between gap-2 text-[10px] font-mono font-bold text-slate-600 shadow-xs text-center">
               <span className="flex items-center gap-1.5 text-emerald-800">
                 <Database className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span>Supabase Cloud DB</span>
               </span>
-              <span className="flex items-center gap-1.5 text-cyan-800 font-black bg-white/80 px-2.5 py-1 rounded-full border border-cyan-200 shadow-xs">
-                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping" />
-                <span> ◀ WebSocket Realtime CDC Channel (Live Punch Push) ▶ </span>
+              <span className="flex flex-wrap items-center justify-center gap-1.5 text-cyan-800 font-black bg-white/80 px-2.5 py-1 rounded-full border border-cyan-200 shadow-xs max-w-full">
+                <span className="w-2 h-2 rounded-full bg-cyan-500 animate-ping shrink-0" />
+                <span>◀ WebSocket Realtime CDC (Live Punch Push) ▶</span>
               </span>
               <span className="flex items-center gap-1.5 text-indigo-800">
                 <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
@@ -1757,7 +1757,7 @@ export function SyncClient({
 
           {/* ──── SUPER ADMIN EXCLUSIVE: REMOTE TA500 HARDWARE REBOOT PANEL ────── */}
           {isSuperAdmin && (
-            <div className="mt-5 bg-gradient-to-br from-red-50/70 via-amber-50/50 to-orange-50/70 rounded-2xl border-2 border-red-200/90 shadow-sm p-5 relative overflow-hidden transition-all">
+            <div className="mt-5 bg-gradient-to-br from-red-50/70 via-amber-50/50 to-orange-50/70 rounded-2xl border-2 border-red-200/90 shadow-sm p-4 sm:p-5 relative overflow-hidden transition-all">
               {/* Glowing Top Accent Strip */}
               <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-500 via-amber-500 to-orange-500 shadow-xs" />
 
@@ -1793,12 +1793,12 @@ export function SyncClient({
                 </div>
 
                 {/* Action CTA Button */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 w-full lg:w-auto">
                   <button
                     type="button"
                     onClick={() => setIsRestartModalOpen(true)}
                     disabled={isRestarting || isDispatchingRestart}
-                    className={`px-4 py-2.5 rounded-xl font-black text-xs shadow-md transition-all flex items-center gap-2 ${
+                    className={`w-full lg:w-auto justify-center px-4 py-2.5 rounded-xl font-black text-xs shadow-md transition-all flex items-center gap-2 ${
                       isRestarting
                         ? 'bg-amber-100 text-amber-800 border border-amber-300 cursor-not-allowed opacity-90'
                         : 'bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white shadow-red-500/20 hover:shadow-lg active:scale-98 cursor-pointer'
@@ -1837,8 +1837,8 @@ export function SyncClient({
               {isRestarting ? (
                 <div className="mt-4 space-y-4">
                   {/* Animated Signal Wave & Progress Bar */}
-                  <div className="bg-white/80 backdrop-blur-xs border border-red-200/80 rounded-xl p-3.5 shadow-xs">
-                    <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-700 mb-2">
+                  <div className="bg-white/80 backdrop-blur-sm border border-red-200/80 rounded-xl p-3.5 shadow-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono font-bold text-slate-700 mb-2">
                       <span className="flex items-center gap-1.5 text-red-800">
                         <Activity className="w-3.5 h-3.5 text-red-600 animate-pulse" />
                         LIVE HARDWARE REBOOT SIGNAL PROPAGATION
@@ -1978,8 +1978,8 @@ export function SyncClient({
                   </div>
 
                   {/* Live Diagnostics Console Stream */}
-                  <div className="bg-slate-900 rounded-xl p-3 font-mono text-[11px] text-slate-300 border border-slate-800 shadow-inner">
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-800 pb-1 mb-2 font-bold">
+                  <div className="bg-slate-900 rounded-xl p-3 font-mono text-[11px] text-slate-300 border border-slate-800 shadow-inner overflow-x-auto">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400 border-b border-slate-800 pb-1 mb-2 font-bold">
                       <span className="flex items-center gap-1.5 text-emerald-400">
                         <Terminal className="w-3.5 h-3.5" />
                         LIVE FIRMWARE REBOOT TELEMETRY STREAM
@@ -2052,8 +2052,8 @@ export function SyncClient({
 
               {/* Confirmation Modal */}
               {isRestartModalOpen && (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-                  <div className="bg-white rounded-2xl max-w-md w-full border border-slate-200 shadow-2xl p-6 relative">
+                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3.5 sm:p-4 overflow-y-auto">
+                  <div className="bg-white rounded-2xl max-w-md w-full max-h-[90dvh] overflow-y-auto border border-slate-200 shadow-2xl p-4 sm:p-6 my-auto relative">
                     <div className="flex items-center gap-3 mb-4">
                       <div className="w-10 h-10 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
                         <Power className="w-5 h-5" />
@@ -2075,25 +2075,25 @@ export function SyncClient({
                     </div>
 
                     <div className="space-y-1.5 text-xs font-mono text-slate-600 mb-5 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                      <div className="flex justify-between">
+                      <div className="flex flex-wrap justify-between gap-1">
                         <span className="text-slate-400">Target Terminal:</span>
                         <span className="font-bold text-slate-800">FingerTec TA500</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex flex-wrap justify-between gap-1">
                         <span className="text-slate-400">Network IP:</span>
                         <span className="font-bold text-slate-800">192.168.0.58:4370</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex flex-wrap justify-between gap-1">
                         <span className="text-slate-400">Bridge Daemon:</span>
                         <span className="font-bold text-slate-800">Samsung Tab A9+ (v18.9)</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="flex flex-wrap justify-between gap-1">
                         <span className="text-slate-400">Cycle Estimation:</span>
                         <span className="font-bold text-slate-800">~45 Seconds</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2.5">
+                    <div className="flex flex-wrap items-center justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={() => setIsRestartModalOpen(false)}
@@ -2131,21 +2131,21 @@ export function SyncClient({
           <div
             ref={specsSectionRef}
             id="selected-node-specs"
-            className="mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-5 transition-all scroll-mt-4"
+            className="mt-5 sm:mt-6 bg-white rounded-2xl border border-slate-200 shadow-md p-4 sm:p-5 transition-all scroll-mt-4"
           >
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3.5 mb-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
                     Selected Node Inspector
                   </span>
-                  <h3 className="text-base font-black text-slate-900">{activeDetail.name}</h3>
+                  <h3 className="text-sm sm:text-base font-black text-slate-900">{activeDetail.name}</h3>
                 </div>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">{activeDetail.subtitle}</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-mono text-xs font-bold">
+                <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 font-mono text-[11px] sm:text-xs font-bold break-all sm:break-normal">
                   {activeDetail.ip}:{activeDetail.port}
                 </span>
                 <span
@@ -2167,11 +2167,11 @@ export function SyncClient({
             </div>
 
             {/* Specification Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-6 gap-2.5 mb-4">
               {activeDetail.specs.map((s, idx) => (
                 <div key={idx} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
                   <div className="text-[10px] text-slate-600 uppercase font-black tracking-wider">{s.label}</div>
-                  <div className="text-xs font-black text-slate-900 font-mono mt-0.5 truncate">{s.value}</div>
+                  <div className="text-xs font-black text-slate-900 font-mono mt-0.5 break-words">{s.value}</div>
                 </div>
               ))}
             </div>
@@ -2199,7 +2199,7 @@ export function SyncClient({
       </div>
 
       {/* ──── Physical Hardware Architecture Summary ────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm text-xs text-slate-600 space-y-3">
+      <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-sm text-xs text-slate-600 space-y-3">
         <h3 className="font-black text-slate-900 uppercase tracking-wider text-xs flex items-center gap-2">
           <Server className="w-4 h-4 text-blue-600" />
           How Physical Attendance Punches Flow to the Cloud
@@ -2257,7 +2257,7 @@ export function SyncClient({
       {/* ──── Live Biometric Ingestion Feed (Enhanced with Instant CDC WebSockets + Fast Polling) ── */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-center flex-shrink-0">
               <Activity className="w-4 h-4 text-blue-600" />
@@ -2278,7 +2278,7 @@ export function SyncClient({
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs font-mono">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
               <Database className="w-3 h-3 text-blue-500" />
               <span className="text-slate-500">Total:</span>
@@ -2286,7 +2286,7 @@ export function SyncClient({
               <span className="text-slate-400">punches</span>
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200">
-              <Clock className="w-3 h-3 text-slate-400" />
+              <Clock className="w-3 h-3 text-slate-400 shrink-0" />
               <span className="text-slate-500">Last:</span>
               <span className="text-slate-700 font-semibold">{lastSync ? formatTs(lastSync) : 'Never'}</span>
             </div>
@@ -2300,7 +2300,59 @@ export function SyncClient({
             <p className="text-slate-300 text-xs mt-1">Punches will appear here as employees scan their fingerprints.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile Compact Feed Cards */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {recentLogs.map((log, idx) => {
+              const punchDate = log.punch_time ? new Date(log.punch_time) : null
+              const syncDate = log.synced_at ? new Date(log.synced_at) : null
+              const lagSec = punchDate && syncDate
+                ? Math.round((syncDate.getTime() - punchDate.getTime()) / 1000)
+                : null
+              const isRecent = syncDate && (Date.now() - syncDate.getTime()) < 300000
+              return (
+                <div
+                  key={`mobile-${log.id}`}
+                  className={`p-3.5 space-y-1.5 text-xs ${idx === 0 && isRecent ? 'bg-green-50/60' : ''}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {idx === 0 && isRecent && (
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse flex-shrink-0" />
+                      )}
+                      <span className="font-bold text-slate-900 font-mono">ID #{log.device_user_id}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                        log.status === 0
+                          ? 'bg-green-50 text-green-700 border-green-200'
+                          : log.status === 1
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {log.status === 0 ? 'TIME IN' : log.status === 1 ? 'TIME OUT' : `Status ${log.status}`}
+                      </span>
+                    </div>
+                    {lagSec !== null && (
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                        lagSec < 10
+                          ? 'text-green-700 bg-green-50 border border-green-200'
+                          : lagSec < 60
+                            ? 'text-amber-700 bg-amber-50 border border-amber-200'
+                            : 'text-slate-500 bg-slate-50 border border-slate-200'
+                      }`}>
+                        Lag {lagSec < 60 ? `${lagSec}s` : `${Math.round(lagSec / 60)}m`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-1 text-[11px] font-mono text-slate-600">
+                    <span>Punch: <strong className="text-slate-800">{formatTs(log.punch_time)}</strong></span>
+                    <span className="text-slate-400">Synced: {formatTs(log.synced_at)}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr className="text-slate-500 uppercase tracking-wider font-bold text-[10px]">
@@ -2385,11 +2437,12 @@ export function SyncClient({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
 
       {/* ──── Scenario / Simulation Selector (Relocated to bottom of page per user request) ───── */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200">

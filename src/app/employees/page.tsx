@@ -45,7 +45,7 @@ export default async function EmployeesPage() {
   const branchCount = new Set((employees ?? []).map((e) => e.branch).filter(Boolean)).size
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <PageBanner
         theme="employees"
         pattern="dots"

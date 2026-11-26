@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
@@ -6,6 +6,11 @@ import { AppHeader } from "@/components/AppHeader";
 import { AppFooter } from "@/components/AppFooter";
 
 const inter = Inter({ subsets: ["latin"] });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: "JAPA DTR System — Enterprise Attendance & Biometrics",
@@ -27,13 +32,13 @@ export default function RootLayout({
       <head>
         <link rel="icon" href="/japa-logo.jpg" type="image/jpeg" />
       </head>
-      <body className={`${inter.className} bg-slate-50 text-slate-900 antialiased`}>
-        <div className="flex h-screen overflow-hidden">
+      <body className={`${inter.className} bg-slate-50 text-slate-900 antialiased overflow-x-hidden`}>
+        <div className="flex h-[100dvh] lg:h-screen overflow-hidden">
           <Sidebar />
-          <div className="flex-1 flex flex-col h-screen overflow-hidden">
+          <div className="flex-1 min-w-0 flex flex-col h-[100dvh] lg:h-screen overflow-hidden">
             <AppHeader />
-            <main className="flex-1 overflow-y-auto flex flex-col justify-between">
-              <div className="flex-1">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden flex flex-col justify-between">
+              <div className="flex-1 min-w-0">
                 {children}
               </div>
               <AppFooter />

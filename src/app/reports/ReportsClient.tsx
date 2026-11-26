@@ -1147,7 +1147,7 @@ export function ReportsClient({
   ) => {
     return (
       <div>
-        <div className={`px-4 py-2.5 border-b flex items-center justify-between ${bgHeader} ${borderHeader}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 ${bgHeader} ${borderHeader}`}>
           <div className="flex items-center gap-2">
             <span className={`text-xs font-black uppercase tracking-wider ${textHeader}`}>{title}</span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border text-slate-700">
@@ -1159,7 +1159,7 @@ export function ReportsClient({
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
-                <th className="px-3.5 py-2.5 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[190px]">
+                <th className="px-2.5 sm:px-3.5 py-2.5 text-left sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[132px] sm:min-w-[190px]">
                   Employee Name
                 </th>
                 <th className="px-3 py-2.5 text-center border-r border-slate-100 min-w-[70px]">Date</th>
@@ -1190,13 +1190,13 @@ export function ReportsClient({
                     }`}
                   >
                     {/* Name */}
-                    <td className="px-3.5 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
-                      <div className="flex items-center gap-2.5">
+                    <td className="px-2.5 sm:px-3.5 py-2 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
+                      <div className="flex items-center gap-2 sm:gap-2.5">
                         <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[10px] font-black flex-shrink-0`}>
                           {initials}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-slate-900 text-xs truncate max-w-[150px]">{item.emp.full_name}</p>
+                          <p className="font-bold text-slate-900 text-xs truncate max-w-[82px] sm:max-w-[150px]">{item.emp.full_name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] text-slate-400 font-mono">#{item.emp.device_user_id}</span>
                             <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${
@@ -1344,7 +1344,7 @@ export function ReportsClient({
   ) => {
     return (
       <div className="space-y-3">
-        <div className={`px-4 py-2.5 rounded-2xl border flex items-center justify-between ${bgHeader} ${borderHeader}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2 ${bgHeader} ${borderHeader}`}>
           <span className={`text-xs font-black uppercase tracking-wider ${textHeader}`}>{title}</span>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border text-slate-700">
             {items.length} Staff (A to Z)
@@ -1359,7 +1359,7 @@ export function ReportsClient({
             return (
               <div
                 key={`card-${item.emp.device_user_id}-${dateFilter}-${idx}`}
-                className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3"
+                className="bg-white rounded-2xl border border-slate-200/90 p-3.5 sm:p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3"
               >
                 <div className="flex items-start justify-between gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -1434,15 +1434,15 @@ export function ReportsClient({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-[10px] text-amber-800 font-semibold truncate max-w-[170px]" title={note?.notes || note?.ot_reason}>
+                <div className="flex items-center justify-between gap-2 text-xs pt-1">
+                  <span className="text-[10px] text-amber-800 font-semibold truncate flex-1 min-w-0" title={note?.notes || note?.ot_reason}>
                     {note?.notes || note?.ot_reason ? `💬 ${note.notes || note.ot_reason}` : ''}
                   </span>
                   {canAddEditDelete && (
                     <button
                       type="button"
                       onClick={() => openEditForEmployee(item.emp, dateFilter)}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-[10px] font-bold"
+                      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 text-[10px] font-bold shrink-0"
                     >
                       <Edit2 className="w-2.5 h-2.5" /> Edit
                     </button>
@@ -1465,7 +1465,7 @@ export function ReportsClient({
   ) => {
     return (
       <div>
-        <div className={`px-4 py-2.5 border-b flex items-center justify-between ${bgHeader} ${borderHeader}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 ${bgHeader} ${borderHeader}`}>
           <div className="flex items-center gap-2">
             <span className={`text-xs font-black uppercase tracking-wider ${textHeader}`}>{title}</span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border text-slate-700">
@@ -1477,7 +1477,7 @@ export function ReportsClient({
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 border-b-2 border-slate-200">
-                <th className="px-3.5 py-3 text-left font-black text-slate-700 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 min-w-[200px]">
+                <th className="px-2.5 sm:px-3.5 py-3 text-left font-black text-slate-700 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 min-w-[132px] sm:min-w-[200px]">
                   Employee Name
                 </th>
                 {weekDays.map((day) => (
@@ -1509,13 +1509,13 @@ export function ReportsClient({
                 return (
                   <tr key={emp.device_user_id} className="hover:bg-slate-50/70 transition-colors group">
                     {/* Sticky Employee Name Column */}
-                    <td className="px-3.5 py-2.5 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-200">
-                      <div className="flex items-center gap-2.5">
+                    <td className="px-2.5 sm:px-3.5 py-2.5 sticky left-0 bg-white group-hover:bg-slate-50 z-10 border-r border-slate-200">
+                      <div className="flex items-center gap-2 sm:gap-2.5">
                         <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[10px] font-black shadow-2xs flex-shrink-0`}>
                           {initials}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-bold text-slate-900 text-xs truncate max-w-[140px] leading-tight">{emp.full_name}</p>
+                          <p className="font-bold text-slate-900 text-xs truncate max-w-[82px] sm:max-w-[140px] leading-tight">{emp.full_name}</p>
                           <div className="flex items-center gap-1.5 mt-0.5">
                             <span className="text-[10px] text-slate-400 font-mono">#{emp.device_user_id}</span>
                             <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${emp.isMonFri ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
@@ -1696,29 +1696,29 @@ export function ReportsClient({
   ) => {
     return (
       <div className="space-y-3">
-        <div className={`px-4 py-2.5 rounded-2xl border flex items-center justify-between ${bgHeader} ${borderHeader}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2 ${bgHeader} ${borderHeader}`}>
           <span className={`text-xs font-black uppercase tracking-wider ${textHeader}`}>{title}</span>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border text-slate-700">
             {items.length} Staff (A to Z)
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {items.map((emp) => {
             const gradient = getAvatarColor(emp.full_name)
             const initials = getInitials(emp.full_name)
             return (
               <div
                 key={emp.device_user_id}
-                className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3.5 sm:gap-4"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
                       {initials}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-sm leading-snug">{emp.full_name}</h3>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.branch}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug truncate">{emp.full_name}</h3>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">#{emp.device_user_id} · {emp.branch}</p>
                     </div>
                   </div>
                   <span
@@ -1753,7 +1753,7 @@ export function ReportsClient({
 
                 {/* 7 Days Mini Strip */}
                 <div className="space-y-1.5 pt-2 border-t border-slate-100">
-                  <div className="grid grid-cols-7 gap-1 text-center">
+                  <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center">
                     {weekDays.map((day) => {
                       const rec = emp.records.get(day.dateStr)
                       const isRestDay = day.isSunday || (emp.isMonFri && day.isSaturday)
@@ -1762,7 +1762,7 @@ export function ReportsClient({
                       return (
                         <div
                           key={day.dateStr}
-                          className={`p-1 rounded-lg border text-[10px] flex flex-col items-center justify-between min-h-[50px] ${
+                          className={`p-0.5 sm:p-1 rounded-lg border text-[10px] flex flex-col items-center justify-between min-h-[46px] sm:min-h-[50px] ${
                             hrs > 0
                               ? 'bg-blue-50/70 border-blue-200 text-blue-900'
                               : note?.attendance_status === 'leave'
@@ -1816,7 +1816,7 @@ export function ReportsClient({
   ) => {
     return (
       <div>
-        <div className={`px-4 py-2.5 border-b flex items-center justify-between ${bgHeader} ${borderHeader}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 border-b flex flex-wrap items-center justify-between gap-2 ${bgHeader} ${borderHeader}`}>
           <div className="flex items-center gap-2">
             <span className={`text-xs font-black uppercase tracking-wider ${textHeader}`}>{title}</span>
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border text-slate-700">
@@ -1827,8 +1827,8 @@ export function ReportsClient({
         <div className="overflow-x-auto">
           <table className="w-full text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50 border-b-2 border-slate-200 text-left text-xs font-bold text-slate-600 uppercase tracking-wider">
-                <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200">Employee Name</th>
+              <tr className="bg-slate-50 border-b-2 border-slate-200 text-left text-xs font-bold text-slate-600 uppercase tracking-wider whitespace-nowrap">
+                <th className="px-2.5 sm:px-4 py-3 sticky left-0 bg-slate-50 z-10 border-r border-slate-200 min-w-[132px] sm:min-w-[190px]">Employee Name</th>
                 <th className="px-3 py-3 text-center border-r border-slate-100">Branch</th>
                 <th className="px-3 py-3 text-center border-r border-slate-100">Schedule</th>
                 <th className="px-3 py-3 text-center border-r border-slate-100">Days Worked</th>
@@ -1843,14 +1843,14 @@ export function ReportsClient({
                 const gradient = getAvatarColor(emp.full_name)
                 const initials = getInitials(emp.full_name)
                 return (
-                  <tr key={emp.device_user_id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-4 py-3 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
+                  <tr key={emp.device_user_id} className="hover:bg-slate-50/70 transition-colors whitespace-nowrap">
+                    <td className="px-2.5 sm:px-4 py-3 sticky left-0 bg-white hover:bg-slate-50 z-10 border-r border-slate-100">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-[10px] sm:text-xs font-black shadow-xs flex-shrink-0`}>
                           {initials}
                         </div>
-                        <div>
-                          <p className="font-bold text-slate-900 text-xs">{emp.full_name}</p>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 text-xs truncate max-w-[82px] sm:max-w-[160px]">{emp.full_name}</p>
                           <p className="text-[10px] text-slate-400 font-mono">#{emp.device_user_id}</p>
                         </div>
                       </div>
@@ -1908,29 +1908,29 @@ export function ReportsClient({
   ) => {
     return (
       <div className="space-y-3">
-        <div className={`px-4 py-2.5 rounded-2xl border flex items-center justify-between ${bgHeader} ${borderHeader}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2 ${bgHeader} ${borderHeader}`}>
           <span className={`text-xs font-black uppercase tracking-wider ${textHeader}`}>{title}</span>
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 border text-slate-700">
             {items.length} Staff (A to Z)
           </span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {items.map((emp) => {
             const gradient = getAvatarColor(emp.full_name)
             const initials = getInitials(emp.full_name)
             return (
               <div
                 key={emp.device_user_id}
-                className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3.5 sm:gap-4"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
                       {initials}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 text-sm leading-snug">{emp.full_name}</h3>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.branch}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-slate-900 text-sm leading-snug truncate">{emp.full_name}</h3>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">#{emp.device_user_id} · {emp.branch}</p>
                     </div>
                   </div>
                   <span
@@ -1976,10 +1976,10 @@ export function ReportsClient({
   const activeHolidayBadge = activeDayHoliday ? getHolidayTypeBadge(activeDayHoliday.type) : null
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Floating Non-Blocking Save / Delete Shift Timer Banner */}
       {(savingShift || deletingShift) && (
-        <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 min-w-[260px] max-w-xs space-y-2 backdrop-blur-sm">
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-5 sm:right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 sm:min-w-[260px] sm:max-w-xs space-y-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3 text-xs font-bold">
             <span className="flex items-center gap-2 text-blue-300">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -2003,7 +2003,7 @@ export function ReportsClient({
       {/* Toast Alert — Middle Top */}
       {toast && (
         <div
-          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 duration-300 ${
+          className={`fixed top-4 left-4 right-4 sm:top-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto sm:max-w-lg z-50 flex items-center gap-2.5 sm:gap-3 px-4 py-3 sm:px-5 sm:py-3.5 rounded-2xl shadow-2xl border text-xs sm:text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 duration-300 ${
             toast.type === 'success'
               ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-900/20'
               : 'bg-rose-600 text-white border-rose-500 shadow-rose-900/20'
@@ -2014,10 +2014,10 @@ export function ReportsClient({
           ) : (
             <AlertCircle className="w-5 h-5 text-rose-100 flex-shrink-0" />
           )}
-          <span>{toast.message}</span>
+          <span className="flex-1">{toast.message}</span>
           <button
             onClick={() => setToast(null)}
-            className="ml-3 text-white/80 hover:text-white font-black text-base leading-none"
+            className="ml-2 text-white/80 hover:text-white font-black text-base leading-none shrink-0"
           >
             ×
           </button>
@@ -2025,47 +2025,47 @@ export function ReportsClient({
       )}
 
       {/* 4 Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <Users className="w-6 h-6" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Employees</p>
-            <p className="text-2xl font-black text-slate-900 mt-0.5">{uniqueEmployees}</p>
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Active Employees</p>
+            <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">{uniqueEmployees}</p>
             <p className="text-xs text-slate-400 mt-0.5">{filtered.length} total shift records</p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <Clock className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Regular Work Hours</p>
-            <p className="text-2xl font-black text-emerald-700 mt-0.5">{totalRegularHours.toFixed(1)} hrs</p>
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Regular Work Hours</p>
+            <p className="text-xl sm:text-2xl font-black text-emerald-700 mt-0.5">{totalRegularHours.toFixed(1)} hrs</p>
             <p className="text-xs text-slate-400 mt-0.5">Standard 8-hour workday</p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
-            <Moon className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
+            <Moon className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overtime Recorded</p>
-            <p className="text-2xl font-black text-purple-700 mt-0.5">{totalOvertimeHours.toFixed(1)} hrs</p>
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Overtime Recorded</p>
+            <p className="text-xl sm:text-2xl font-black text-purple-700 mt-0.5">{totalOvertimeHours.toFixed(1)} hrs</p>
             <p className="text-xs text-slate-400 mt-0.5">Approved overtime hours</p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-            <CheckCircle2 className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+            <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Completed Shifts</p>
-            <p className="text-2xl font-black text-slate-900 mt-0.5">{completedShifts}</p>
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Completed Shifts</p>
+            <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5">{completedShifts}</p>
             <p className="text-xs text-slate-400 mt-0.5">{onDutyShifts} on duty · {incompleteShifts} incomplete</p>
           </div>
         </div>
@@ -2073,13 +2073,13 @@ export function ReportsClient({
 
       {/* Holiday Banner Alert (if selected day is a holiday) */}
       {viewMode === 'daily' && activeDayHoliday && (
-        <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+        <div className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
           activeDayHoliday.scope === 'pangasinan'
             ? 'bg-purple-50 border-purple-200 text-purple-900'
             : 'bg-amber-50 border-amber-200 text-amber-900'
         }`}>
           <div className="flex items-center gap-3">
-            <span className="text-xl">{activeDayHoliday.scope === 'pangasinan' ? '📍' : '🎌'}</span>
+            <span className="text-xl shrink-0">{activeDayHoliday.scope === 'pangasinan' ? '📍' : '🎌'}</span>
             <div>
               <p className="font-black text-sm">{activeDayHoliday.name}</p>
               <p className="text-xs opacity-80 mt-0.5">{activeDayHoliday.rateDescription}</p>
@@ -2087,7 +2087,7 @@ export function ReportsClient({
           </div>
           <Link
             href="/calendar"
-            className="text-xs font-bold underline hover:no-underline flex items-center gap-1"
+            className="text-xs font-bold underline hover:no-underline flex items-center gap-1 shrink-0"
           >
             Open Calendar Details →
           </Link>
@@ -2097,15 +2097,15 @@ export function ReportsClient({
       {/* Visual Charts Strip (Available across Daily, Weekly, and Monthly views) */}
       {dailyAttendanceData.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="lg:col-span-2 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="lg:col-span-2 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between min-w-0">
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
                     <BarChart3 className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900 flex flex-wrap items-center gap-2">
                       Daily Attendance Volume
                       <span className="text-[11px] font-normal px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
                         {viewMode === 'monthly'
@@ -2114,13 +2114,13 @@ export function ReportsClient({
                       </span>
                     </h3>
                     <p className="text-[11px] text-slate-500">
-                      Actual attendee turnout vs total {employees?.length || 23} staff • Click any bar to inspect that day
+                      Actual attendee turnout vs total {employees?.length || 23} staff • Tap any bar to inspect that day
                     </p>
                   </div>
                 </div>
 
                 {/* Quick Legend */}
-                <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] font-bold text-slate-500 shrink-0">
                   <span className="inline-flex items-center gap-1">
                     <span className="w-2.5 h-2.5 rounded-sm bg-blue-600 inline-block" /> Present
                   </span>
@@ -2136,78 +2136,84 @@ export function ReportsClient({
                 </div>
               </div>
 
-              {/* Chart Grid */}
-              <div className="h-44 flex items-end gap-1 sm:gap-2 pt-6 pb-2 px-1 border-b border-slate-100">
-                {dailyAttendanceData.map((d) => {
-                  const heightPct = Math.round((d.presentCount / maxDailyCount) * 100)
-                  const barColor = d.holiday
-                    ? 'bg-amber-400 hover:bg-amber-500'
-                    : d.isSunday
-                    ? 'bg-purple-300 hover:bg-purple-400'
-                    : d.presentCount > 0
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-slate-200 hover:bg-slate-300'
+              {/* Chart Grid (scrollable horizontally for dense 30-day monthly view on small screens) */}
+              <div className="overflow-x-auto pb-1">
+                <div
+                  className={`h-44 flex items-end gap-1 sm:gap-2 pt-6 pb-2 px-1 border-b border-slate-100 ${
+                    dailyAttendanceData.length > 14 ? 'min-w-[520px] sm:min-w-0' : ''
+                  }`}
+                >
+                  {dailyAttendanceData.map((d) => {
+                    const heightPct = Math.round((d.presentCount / maxDailyCount) * 100)
+                    const barColor = d.holiday
+                      ? 'bg-amber-400 hover:bg-amber-500'
+                      : d.isSunday
+                      ? 'bg-purple-300 hover:bg-purple-400'
+                      : d.presentCount > 0
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-slate-200 hover:bg-slate-300'
 
-                  return (
-                    <button
-                      key={d.date}
-                      type="button"
-                      onClick={() => handleDateChange(d.date)}
-                      title={`${d.date} (${d.dayName}): ${d.presentCount}/${d.totalStaff} present${d.holiday ? ` • ${d.holiday.name}` : ''}${d.isSunday ? ' • Sunday Rest Day' : ''}`}
-                      className="flex-1 h-full flex flex-col justify-end items-center gap-1 group relative focus:outline-none"
-                    >
-                      {/* Floating Tooltip */}
-                      <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md shadow-lg whitespace-nowrap">
-                        <p className="font-bold">{d.date} ({d.dayName})</p>
-                        <p className="text-emerald-300">{d.presentCount} / {d.totalStaff} Present ({heightPct}%)</p>
-                        {d.holiday && <p className="text-amber-300">⭐ {d.holiday.name}</p>}
-                        {d.isSunday && <p className="text-purple-300">Rest Day (Flexible)</p>}
-                        {d.otHours > 0 && <p className="text-purple-200">+{d.otHours}h OT</p>}
-                      </div>
+                    return (
+                      <button
+                        key={d.date}
+                        type="button"
+                        onClick={() => handleDateChange(d.date)}
+                        title={`${d.date} (${d.dayName}): ${d.presentCount}/${d.totalStaff} present${d.holiday ? ` • ${d.holiday.name}` : ''}${d.isSunday ? ' • Sunday Rest Day' : ''}`}
+                        className="flex-1 min-w-0 h-full flex flex-col justify-end items-center gap-1 group relative focus:outline-none"
+                      >
+                        {/* Floating Tooltip (hidden on xs so edges don't clip) */}
+                        <div className="hidden sm:block absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md shadow-lg whitespace-nowrap">
+                          <p className="font-bold">{d.date} ({d.dayName})</p>
+                          <p className="text-emerald-300">{d.presentCount} / {d.totalStaff} Present ({heightPct}%)</p>
+                          {d.holiday && <p className="text-amber-300">⭐ {d.holiday.name}</p>}
+                          {d.isSunday && <p className="text-purple-300">Rest Day (Flexible)</p>}
+                          {d.otHours > 0 && <p className="text-purple-200">+{d.otHours}h OT</p>}
+                        </div>
 
-                      {/* Number count on top of bar if weekly / daily */}
-                      {dailyAttendanceData.length <= 14 && (
-                        <span className={`text-[10px] font-bold ${d.isSelected ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`}>
-                          {d.presentCount > 0 ? d.presentCount : '0'}
-                        </span>
-                      )}
+                        {/* Number count on top of bar if weekly / daily */}
+                        {dailyAttendanceData.length <= 14 && (
+                          <span className={`text-[10px] font-bold ${d.isSelected ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-700'}`}>
+                            {d.presentCount > 0 ? d.presentCount : '0'}
+                          </span>
+                        )}
 
-                      {/* Bar Fill */}
-                      <div className="w-full flex-1 flex items-end">
-                        <div
-                          className={`w-full rounded-t-md transition-all duration-300 ${barColor} ${
-                            d.isSelected ? 'ring-2 ring-indigo-600 ring-offset-1 shadow-sm' : ''
-                          }`}
-                          style={{ height: `${Math.max(heightPct, 8)}%` }}
-                        />
-                      </div>
+                        {/* Bar Fill */}
+                        <div className="w-full flex-1 flex items-end">
+                          <div
+                            className={`w-full rounded-t-md transition-all duration-300 ${barColor} ${
+                              d.isSelected ? 'ring-2 ring-indigo-600 ring-offset-1 shadow-sm' : ''
+                            }`}
+                            style={{ height: `${Math.max(heightPct, 8)}%` }}
+                          />
+                        </div>
 
-                      {/* Label underneath */}
-                      <div className="flex flex-col items-center">
-                        <span className={`text-[10px] font-bold font-mono ${
-                          d.isSelected ? 'text-indigo-600 font-black' : 'text-slate-500 group-hover:text-slate-900'
-                        }`}>
-                          {dailyAttendanceData.length <= 14 ? `${d.dayName} ${d.dayOfMonth}` : d.dayOfMonth}
-                        </span>
-                      </div>
-                    </button>
-                  )
-                })}
+                        {/* Label underneath */}
+                        <div className="flex flex-col items-center">
+                          <span className={`text-[9px] sm:text-[10px] font-bold font-mono whitespace-nowrap ${
+                            d.isSelected ? 'text-indigo-600 font-black' : 'text-slate-500 group-hover:text-slate-900'
+                          }`}>
+                            {dailyAttendanceData.length <= 14 ? `${d.dayName.slice(0, 2)} ${d.dayOfMonth}` : d.dayOfMonth}
+                          </span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
             {/* Quick summary below chart */}
-            <div className="flex items-center justify-between text-xs text-slate-500 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pt-3">
               <span>
                 Active Date: <strong className="text-slate-900">{dateFilter}</strong>
               </span>
               <span className="text-[11px] text-slate-400">
-                Tip: Click any bar to jump to that shift
+                Tip: Tap any bar to jump to that shift
               </span>
             </div>
           </div>
 
-          <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <PieChart className="w-4 h-4 text-emerald-600" />
@@ -2290,11 +2296,11 @@ export function ReportsClient({
         </div>
 
         {/* Segmented Switcher Control */}
-        <div className="flex items-center p-1 bg-slate-800/90 rounded-xl border border-slate-700/80 shadow-inner flex-shrink-0 self-start md:self-center">
+        <div className="flex flex-wrap sm:flex-nowrap items-center p-1 bg-slate-800/90 rounded-xl border border-slate-700/80 shadow-inner flex-shrink-0 w-full md:w-auto self-stretch md:self-center gap-1 sm:gap-0">
           <button
             type="button"
             onClick={() => handleToggleCalcMode('exact')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex-1 md:flex-none justify-center whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
               calcMode === 'exact'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
                 : 'text-slate-400 hover:text-white'
@@ -2308,7 +2314,7 @@ export function ReportsClient({
           <button
             type="button"
             onClick={() => handleToggleCalcMode('normalized')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex-1 md:flex-none justify-center whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
               calcMode === 'normalized'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-black'
                 : 'text-slate-400 hover:text-white'
@@ -2323,9 +2329,9 @@ export function ReportsClient({
       </div>
 
       {/* Filter Toolbar */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-wrap gap-3 items-end">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 lg:items-end">
         {/* Search */}
-        <div className="flex-1 min-w-[180px]">
+        <div className="sm:col-span-2 lg:flex-1 lg:min-w-[180px]">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Search Employee</label>
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -2340,14 +2346,14 @@ export function ReportsClient({
         </div>
 
         {/* View Mode Toggle — Day / Week / Month */}
-        <div>
+        <div className="w-full lg:w-auto">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">View Mode</label>
-          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+          <div className="flex w-full lg:w-auto border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
             {(['daily', 'weekly', 'monthly'] as const).map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all capitalize ${
+                className={`flex-1 lg:flex-none px-3 py-1.5 text-xs font-bold rounded-lg transition-all capitalize ${
                   viewMode === mode ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
@@ -2359,7 +2365,7 @@ export function ReportsClient({
 
         {/* Date / Week / Month Picker */}
         {viewMode === 'daily' && (
-          <div>
+          <div className="sm:col-span-2 lg:col-span-1 w-full lg:w-auto">
             <div className="flex items-center justify-between mb-1.5">
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Date</label>
               <button
@@ -2375,7 +2381,7 @@ export function ReportsClient({
                 type="date"
                 value={dateFilter}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
               <div className="flex flex-wrap gap-1">
                 {[
@@ -2404,7 +2410,7 @@ export function ReportsClient({
         )}
 
         {viewMode === 'weekly' && (
-          <div>
+          <div className="sm:col-span-2 lg:col-span-1 w-full lg:w-auto">
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
               Week: {getWeekRange(weekAnchor).start} → {getWeekRange(weekAnchor).end}
             </label>
@@ -2417,7 +2423,7 @@ export function ReportsClient({
                     prev.setDate(prev.getDate() - 7)
                     handleWeekAnchorChange(format(prev, 'yyyy-MM-dd'))
                   }}
-                  className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                  className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors shrink-0"
                   title="Previous Week"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -2426,7 +2432,7 @@ export function ReportsClient({
                   type="date"
                   value={weekAnchor}
                   onChange={(e) => handleWeekAnchorChange(e.target.value)}
-                  className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  className="flex-1 lg:w-auto min-w-0 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                 />
                 <button
                   type="button"
@@ -2435,7 +2441,7 @@ export function ReportsClient({
                     next.setDate(next.getDate() + 7)
                     handleWeekAnchorChange(format(next, 'yyyy-MM-dd'))
                   }}
-                  className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+                  className="p-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors shrink-0"
                   title="Next Week"
                 >
                   <ChevronRight className="w-4 h-4" />
@@ -2470,14 +2476,14 @@ export function ReportsClient({
         )}
 
         {viewMode === 'monthly' && (
-          <div>
+          <div className="sm:col-span-2 lg:col-span-1 w-full lg:w-auto">
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Month</label>
             <div className="flex flex-col gap-1.5">
               <input
                 type="month"
                 value={monthFilter}
                 onChange={(e) => handleMonthChange(e.target.value)}
-                className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
               />
               <div className="flex flex-wrap gap-1">
                 <button
@@ -2496,12 +2502,12 @@ export function ReportsClient({
           </div>
         )}
 
-        <div>
+        <div className="w-full lg:w-auto">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Branch</label>
           <select
             value={branchFilter}
             onChange={(e) => setBranchFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="">All Branches</option>
             {branches.map((b) => (
@@ -2512,12 +2518,12 @@ export function ReportsClient({
           </select>
         </div>
 
-        <div>
+        <div className="w-full lg:w-auto">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Shift Status</label>
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="all">All Statuses</option>
             <option value="Completed">Completed</option>
@@ -2529,30 +2535,30 @@ export function ReportsClient({
         </div>
 
         {/* Display Mode Toggle */}
-        <div>
+        <div className="w-full lg:w-auto">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Display</label>
-          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+          <div className="flex w-full lg:w-auto border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
             <button
               onClick={() => setDisplayMode('table')}
               title="Excel-like compact table"
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`flex-1 lg:flex-none justify-center px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
             >
               <Table2 className="w-3.5 h-3.5" /> Table
             </button>
             <button
               onClick={() => setDisplayMode('scroll')}
               title="Card view"
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'scroll' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
+              className={`flex-1 lg:flex-none justify-center px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'scroll' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
             >
               <LayoutList className="w-3.5 h-3.5" /> Cards
             </button>
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="sm:col-span-2 lg:ml-auto flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <button
             onClick={exportExcel}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+            className="flex-1 sm:flex-none justify-center whitespace-nowrap inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Export Excel (.xlsx)
@@ -2560,7 +2566,7 @@ export function ReportsClient({
 
           <button
             onClick={exportCSV}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
+            className="flex-1 sm:flex-none justify-center whitespace-nowrap inline-flex items-center gap-2 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
           >
             <Download className="w-4 h-4" />
             Export CSV
@@ -2602,7 +2608,7 @@ export function ReportsClient({
               )}
             </div>
           ) : (
-            <div className="p-5 space-y-8 bg-slate-50/40">
+            <div className="p-3.5 sm:p-5 space-y-6 sm:space-y-8 bg-slate-50/40">
               {renderDailyCards(
                 dailyEmployees.dagupanDaily,
                 '🏢 Dagupan Main Branch',
@@ -2653,7 +2659,7 @@ export function ReportsClient({
               )}
             </div>
           ) : (
-            <div className="p-5 space-y-8 bg-slate-50/40">
+            <div className="p-3.5 sm:p-5 space-y-6 sm:space-y-8 bg-slate-50/40">
               {renderWeeklyCards(
                 weeklyEmployees.dagupanWeekly,
                 '🏢 Dagupan Main Branch',
@@ -2704,7 +2710,7 @@ export function ReportsClient({
               )}
             </div>
           ) : (
-            <div className="p-5 space-y-8 bg-slate-50/40">
+            <div className="p-3.5 sm:p-5 space-y-6 sm:space-y-8 bg-slate-50/40">
               {renderMonthlyCards(
                 monthlyEmployees.dagupanMonthly,
                 '🏢 Dagupan Main Branch',
@@ -2731,8 +2737,8 @@ export function ReportsClient({
 
       {/* OT Reason Modal */}
       {otModalOpen && otModalRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-6 space-y-4 my-auto animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
@@ -2768,7 +2774,7 @@ export function ReportsClient({
                   className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none leading-relaxed"
                 />
               </div>
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setOtModalOpen(false)}
@@ -2791,12 +2797,12 @@ export function ReportsClient({
 
       {/* Super Admin Edit Shift Modal */}
       {editModalOpen && editRow && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-3 sm:p-4 overflow-hidden">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 border border-slate-200/80 my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 border border-slate-200/80 my-auto">
             {/* Fixed Header */}
             <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white flex-shrink-0">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
                   <ShieldCheck className="w-5 h-5" />
                 </div>
                 <div>
@@ -2815,7 +2821,7 @@ export function ReportsClient({
             </div>
 
             {/* Employee & Date Banner */}
-            <div className="px-5 py-3 bg-blue-50/60 border-b border-blue-100/70 flex items-center justify-between flex-shrink-0">
+            <div className="px-4 sm:px-5 py-3 bg-blue-50/60 border-b border-blue-100/70 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
               <div>
                 <p className="text-xs sm:text-sm font-bold text-slate-900">{editRow.full_name}</p>
                 <p className="text-[11px] text-slate-500 font-mono mt-0.5">
@@ -3080,19 +3086,19 @@ export function ReportsClient({
             </div>
 
             {/* Fixed Footer (Always visible at bottom) */}
-            <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between flex-shrink-0">
+            <div className="p-3.5 sm:p-4 border-t border-slate-100 bg-slate-50 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
               <button
                 type="button"
                 onClick={handleDeleteShift}
                 disabled={deletingShift || savingShift}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-colors disabled:opacity-50"
                 title="Delete all punches and records for this employee on this date"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 {deletingShift ? 'Deleting…' : 'Delete Shift'}
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 ml-auto">
                 <button
                   type="button"
                   onClick={() => setEditModalOpen(false)}

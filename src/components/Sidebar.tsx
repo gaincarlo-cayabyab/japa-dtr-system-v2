@@ -16,6 +16,7 @@ import {
   BookOpen,
   CalendarDays,
   ChevronRight,
+  X,
 } from 'lucide-react'
 
 interface NavItemConfig {
@@ -112,6 +113,24 @@ export function Sidebar() {
     role: string
   } | null>(null)
   const [loggingOut, setLoggingOut] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
+
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    const handleOpen = () => setMobileOpen(true)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileOpen(false)
+    }
+    window.addEventListener('japa-open-sidebar', handleOpen)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('japa-open-sidebar', handleOpen)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
 
   useEffect(() => {
     if (pathname === '/login') return
@@ -147,135 +166,161 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 h-screen bg-gradient-to-b from-white via-white to-slate-50/90 border-r border-slate-200/90 flex flex-col flex-shrink-0 select-none relative">
-      {/* Subtle Top Multi-Color Brand Accent Line */}
-      <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-500 flex-shrink-0" />
+    <>
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm lg:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
-      {/* Brand Header */}
-      <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200/80 bg-gradient-to-r from-slate-50/70 to-indigo-50/30">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-indigo-200/80 shadow-sm flex-shrink-0 bg-white">
-            <Image
-              src="/japa-logo.jpg"
-              alt="JAPA Logo"
-              fill
-              className="object-contain p-0.5"
-              priority
-            />
-          </div>
-          <div className="min-w-0">
-            <span className="text-base font-black text-slate-900 tracking-tight block leading-none">
-              JAPA DTR
-            </span>
-            <p className="text-[11px] font-semibold text-indigo-600 leading-none mt-1">
-              Enterprise Portal
-            </p>
-          </div>
-        </div>
-        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-          v5.0
-        </span>
-      </div>
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] lg:static lg:w-64 h-[100dvh] lg:h-screen bg-gradient-to-b from-white via-white to-slate-50/90 border-r border-slate-200/90 flex flex-col flex-shrink-0 select-none transform transition-transform duration-200 ease-out ${
+          mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full lg:translate-x-0'
+        }`}
+      >
+        {/* Subtle Top Multi-Color Brand Accent Line */}
+        <div className="h-1 w-full bg-gradient-to-r from-blue-600 via-purple-600 to-emerald-500 flex-shrink-0" />
 
-      {/* Section Caption */}
-      <div className="px-4 pt-4 pb-1">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-          Navigation Workspace
-        </p>
-      </div>
-
-      {/* Colorful Navigation Items */}
-      <nav className="flex-1 px-3 py-2 space-y-1.5 overflow-y-auto">
-        {NAV_ITEMS.map(({ label, href, icon: Icon, idleIconWrap, idleHoverBg, activeBg, activeAccentBar }) => {
-          const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
-
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={`group flex items-center justify-between gap-2.5 px-2.5 py-2 rounded-2xl text-[13px] transition-all duration-150 ${
-                isActive
-                  ? `${activeBg} font-bold`
-                  : `text-slate-700 font-semibold ${idleHoverBg}`
-              }`}
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span
-                  className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors duration-150 ${
-                    isActive
-                      ? 'bg-white/20 text-white shadow-inner backdrop-blur-xs'
-                      : idleIconWrap
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                </span>
-                <span className="truncate">{label}</span>
-              </div>
-
-              {isActive ? (
-                <span className={`w-1.5 h-5 rounded-full ${activeAccentBar} flex-shrink-0`} />
-              ) : (
-                <ChevronRight className="w-3.5 h-3.5 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-              )}
-            </Link>
-          )
-        })}
-      </nav>
-
-      {/* TA500 Bridge Live Pill */}
-      <div className="px-3.5 py-2.5 border-t border-slate-100">
-        <Link
-          href="/sync"
-          className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50/80 border border-emerald-200/80 hover:border-emerald-300 transition-colors group"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-800 leading-none truncate">
-                TA500 Bridge
-              </p>
-              <p className="text-[10px] text-emerald-700 mt-1 font-semibold leading-none">
-                Online · Active Sync
-              </p>
-            </div>
-          </div>
-          <span className="text-[10px] font-black text-emerald-700 bg-white px-2 py-0.5 rounded-lg border border-emerald-200 shadow-sm flex-shrink-0">
-            v18.9
-          </span>
-        </Link>
-      </div>
-
-      {/* Operator Session & Logout */}
-      <div className="p-3 border-t border-slate-200/80 bg-slate-50/70">
-        <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-white border border-slate-200/90 shadow-sm">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-xs font-black text-white shadow-sm flex-shrink-0">
-              {currentUser ? currentUser.displayName.charAt(0).toUpperCase() : <User className="w-4 h-4 text-white" />}
+        {/* Brand Header */}
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-200/80 bg-gradient-to-r from-slate-50/70 to-indigo-50/30">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-indigo-200/80 shadow-sm flex-shrink-0 bg-white">
+              <Image
+                src="/japa-logo.jpg"
+                alt="JAPA Logo"
+                fill
+                className="object-contain p-0.5"
+                priority
+              />
             </div>
             <div className="min-w-0">
-              <p className="text-xs font-bold text-slate-900 truncate leading-tight">
-                {currentUser?.displayName || 'Authorized User'}
-              </p>
-              <span className="text-[10px] text-indigo-600 capitalize font-semibold block leading-tight mt-0.5">
-                {currentUser?.role?.replace('_', ' ') || 'Session Active'}
+              <span className="text-base font-black text-slate-900 tracking-tight block leading-none">
+                JAPA DTR
               </span>
+              <p className="text-[11px] font-semibold text-indigo-600 leading-none mt-1">
+                Enterprise Portal
+              </p>
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            title="Log Out"
-            className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50 flex-shrink-0"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+              v5.0
+            </span>
+            <button
+              type="button"
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close navigation menu"
+              className="lg:hidden p-1.5 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+
+        {/* Section Caption */}
+        <div className="px-4 pt-4 pb-1">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            Navigation Workspace
+          </p>
+        </div>
+
+        {/* Colorful Navigation Items */}
+        <nav className="flex-1 px-3 py-2 space-y-1.5 overflow-y-auto">
+          {NAV_ITEMS.map(({ label, href, icon: Icon, idleIconWrap, idleHoverBg, activeBg, activeAccentBar }) => {
+            const isActive = href === '/' ? pathname === '/' : pathname.startsWith(href)
+
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={() => setMobileOpen(false)}
+                className={`group flex items-center justify-between gap-2.5 px-2.5 py-2 rounded-2xl text-[13px] transition-all duration-150 ${
+                  isActive
+                    ? `${activeBg} font-bold`
+                    : `text-slate-700 font-semibold ${idleHoverBg}`
+                }`}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors duration-150 ${
+                      isActive
+                        ? 'bg-white/20 text-white shadow-inner backdrop-blur-sm'
+                        : idleIconWrap
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" />
+                  </span>
+                  <span className="truncate">{label}</span>
+                </div>
+
+                {isActive ? (
+                  <span className={`w-1.5 h-5 rounded-full ${activeAccentBar} flex-shrink-0`} />
+                ) : (
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-300 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
+                )}
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* TA500 Bridge Live Pill */}
+        <div className="px-3.5 py-2.5 border-t border-slate-100">
+          <Link
+            href="/sync"
+            onClick={() => setMobileOpen(false)}
+            className="flex items-center justify-between gap-2 px-3 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50/80 border border-emerald-200/80 hover:border-emerald-300 transition-colors group"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-800 leading-none truncate">
+                  TA500 Bridge
+                </p>
+                <p className="text-[10px] text-emerald-700 mt-1 font-semibold leading-none">
+                  Online · Active Sync
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-black text-emerald-700 bg-white px-2 py-0.5 rounded-lg border border-emerald-200 shadow-sm flex-shrink-0">
+              v18.9
+            </span>
+          </Link>
+        </div>
+
+        {/* Operator Session & Logout */}
+        <div className="p-3 border-t border-slate-200/80 bg-slate-50/70">
+          <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-white border border-slate-200/90 shadow-sm">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center text-xs font-black text-white shadow-sm flex-shrink-0">
+                {currentUser ? currentUser.displayName.charAt(0).toUpperCase() : <User className="w-4 h-4 text-white" />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-900 truncate leading-tight">
+                  {currentUser?.displayName || 'Authorized User'}
+                </p>
+                <span className="text-[10px] text-indigo-600 capitalize font-semibold block leading-tight mt-0.5">
+                  {currentUser?.role?.replace('_', ' ') || 'Session Active'}
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              title="Log Out"
+              className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50 flex-shrink-0"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+    </>
   )
 }

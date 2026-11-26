@@ -517,10 +517,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   ) => {
     if (empList.length === 0) return null
     return (
-      <div className="overflow-x-auto border-t border-slate-300">
+      <div className="border-t border-slate-300">
         {/* Branch Section Banner */}
-        <div className={`px-4 py-2.5 flex items-center justify-between border-b border-slate-300 ${badgeBg}`}>
-          <div className="flex items-center gap-2.5">
+        <div className={`px-3.5 sm:px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 ${badgeBg}`}>
+          <div className="flex items-center gap-2">
             <h3 className={`text-xs font-black uppercase tracking-wider ${badgeText}`}>
               {branchTitle}
             </h3>
@@ -536,11 +536,12 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           </div>
         </div>
 
+        <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse border-b border-slate-300">
           <thead>
             <tr className="bg-slate-100 text-slate-700 text-[11px] font-bold uppercase tracking-tight select-none border-b-2 border-slate-300">
               <th className="px-2 py-1.5 text-center border-r border-slate-300 w-10">#</th>
-              <th className="px-2.5 py-1.5 text-left border-r border-slate-300 min-w-[200px]">Employee Name</th>
+              <th className="px-2.5 py-1.5 text-left border-r border-slate-300 min-w-[140px] sm:min-w-[200px]">Employee Name</th>
               <th className="px-2 py-1.5 text-center border-r border-slate-300 w-16">Sched</th>
               <th className="px-2.5 py-1.5 text-right border-r border-slate-300 w-24">Daily Rate</th>
               <th className="px-2 py-1.5 text-center border-r border-slate-300 w-14">Days</th>
@@ -572,7 +573,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                   </td>
                   <td className="px-2.5 py-1 border-r border-slate-200">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-slate-900 text-xs truncate max-w-[210px]" title={emp.employee_name}>
+                      <span className="font-bold text-slate-900 text-xs truncate max-w-[145px] sm:max-w-[210px]" title={emp.employee_name}>
                         {emp.employee_name}
                       </span>
                     </div>
@@ -730,6 +731,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             </tr>
           </tfoot>
         </table>
+        </div>
       </div>
     )
   }
@@ -745,7 +747,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
     if (empList.length === 0) return null
     return (
       <div className="space-y-4">
-        <div className={`px-4 py-2.5 rounded-xl border flex items-center justify-between ${badgeBg} ${badgeBorder}`}>
+        <div className={`px-3.5 sm:px-4 py-2.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${badgeBg} ${badgeBorder}`}>
           <div className="flex items-center gap-2">
             <h3 className={`text-xs font-black uppercase tracking-wider ${badgeText}`}>
               {branchTitle}
@@ -755,7 +757,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             </span>
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
           {empList.map((emp) => {
             const gradient = getAvatarColor(emp.employee_name)
             const initials = getInitials(emp.employee_name)
@@ -766,17 +768,17 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             return (
               <div
                 key={emp.device_user_id}
-                className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-4"
+                className="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between gap-3.5 sm:gap-4"
               >
                 {/* Card Header */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-sm font-black shadow-xs flex-shrink-0`}>
                       {initials}
                     </div>
-                    <div>
-                      <h3 className="font-black text-slate-900 text-sm leading-snug">{emp.employee_name}</h3>
-                      <p className="text-xs text-slate-400 font-mono mt-0.5">#{emp.device_user_id} · {emp.position || 'Staff'}</p>
+                    <div className="min-w-0">
+                      <h3 className="font-black text-slate-900 text-sm leading-snug truncate">{emp.employee_name}</h3>
+                      <p className="text-xs text-slate-400 font-mono mt-0.5 truncate">#{emp.device_user_id} · {emp.position || 'Staff'}</p>
                     </div>
                   </div>
                   <span
@@ -790,7 +792,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                 </div>
 
                 {/* Compensation Row */}
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400 font-semibold text-[11px]">Daily Rate: </span>
                     <span className="font-bold text-slate-800">₱{emp.daily_rate.toFixed(2)}</span>
@@ -902,11 +904,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
   }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* Toast Alert (Middle Top) */}
       {toast && (
         <div
-          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
+          className={`fixed top-4 left-4 right-4 sm:top-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto sm:max-w-lg z-50 flex items-center gap-2.5 sm:gap-3 px-4 py-3 sm:px-5 rounded-2xl shadow-2xl border text-xs sm:text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
             toast.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-500/10'
               : 'bg-rose-50 text-rose-800 border-rose-200 shadow-rose-500/10'
@@ -917,31 +919,31 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           ) : (
             <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
           )}
-          <span>{toast.message}</span>
-          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold">
+          <span className="flex-1">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold shrink-0">
             ×
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
               <Calculator className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Bi-Monthly Payroll &amp; Disbursements</h1>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">Bi-Monthly Payroll &amp; Disbursements</h2>
               <p className="text-xs text-slate-500">Official Philippine DOLE labor calculations · Payday on 15th &amp; 30th/31st</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={handleDownloadExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+            className="w-full sm:w-auto justify-center flex items-center gap-2 px-4 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all active:scale-95"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Export Payroll Excel (.xlsx)
@@ -950,14 +952,14 @@ export function PayrollClient({ branches }: PayrollClientProps) {
       </div>
 
       {/* 5 Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-            <DollarSign className="w-6 h-6" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold shrink-0">
+            <DollarSign className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Gross Payroll</p>
-            <p className="text-2xl font-black text-slate-900 mt-0.5">
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Gross Payroll</p>
+            <p className="text-xl sm:text-2xl font-black text-slate-900 mt-0.5 truncate">
               {formatCurrency(payrollData?.totals?.total_gross_pay || 0)}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -966,13 +968,13 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <Banknote className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <Banknote className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Disbursed (Paid)</p>
-            <p className="text-2xl font-black text-emerald-700 mt-0.5">
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Total Disbursed (Paid)</p>
+            <p className="text-xl sm:text-2xl font-black text-emerald-700 mt-0.5 truncate">
               {formatCurrency(paymentStats.totalPaid)}
             </p>
             <p className="text-xs text-emerald-600 font-bold mt-0.5">
@@ -981,26 +983,26 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
-            <Receipt className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+            <Receipt className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Unpaid Balance</p>
-            <p className="text-2xl font-black text-amber-600 mt-0.5">
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Unpaid Balance</p>
+            <p className="text-xl sm:text-2xl font-black text-amber-600 mt-0.5 truncate">
               {formatCurrency(paymentStats.balanceUnpaid)}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">Pending disbursement</p>
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
-            <TrendingUp className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
+            <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overtime Pay (+25%)</p>
-            <p className="text-2xl font-black text-purple-700 mt-0.5">
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Overtime Pay (+25%)</p>
+            <p className="text-xl sm:text-2xl font-black text-purple-700 mt-0.5 truncate">
               {formatCurrency(payrollData?.totals?.total_overtime_pay || 0)}
             </p>
             <p className="text-xs text-purple-500 font-semibold mt-0.5">
@@ -1009,13 +1011,13 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-            <Star className="w-6 h-6" />
+        <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3 sm:gap-4">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold shrink-0">
+            <Star className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
-          <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Holiday Pay (Extra)</p>
-            <p className="text-2xl font-black text-rose-700 mt-0.5">
+          <div className="min-w-0">
+            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Holiday Pay (Extra)</p>
+            <p className="text-xl sm:text-2xl font-black text-rose-700 mt-0.5 truncate">
               {formatCurrency(payrollData?.totals?.total_holiday_pay || 0)}
             </p>
             <p className="text-xs text-rose-500 font-semibold mt-0.5">
@@ -1052,11 +1054,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
         </div>
 
         {/* Segmented Switcher Control */}
-        <div className="flex items-center p-1 bg-slate-800/90 rounded-xl border border-slate-700/80 shadow-inner flex-shrink-0 self-start md:self-center">
+        <div className="flex flex-wrap sm:flex-nowrap items-center p-1 bg-slate-800/90 rounded-xl border border-slate-700/80 shadow-inner flex-shrink-0 w-full md:w-auto self-stretch md:self-center gap-1 sm:gap-0">
           <button
             type="button"
             onClick={() => handleToggleCalcMode('exact')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex-1 md:flex-none justify-center whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
               calcMode === 'exact'
                 ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 font-black'
                 : 'text-slate-400 hover:text-white'
@@ -1070,7 +1072,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           <button
             type="button"
             onClick={() => handleToggleCalcMode('normalized')}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex-1 md:flex-none justify-center whitespace-nowrap flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all ${
               calcMode === 'normalized'
                 ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 font-black'
                 : 'text-slate-400 hover:text-white'
@@ -1085,9 +1087,9 @@ export function PayrollClient({ branches }: PayrollClientProps) {
       </div>
 
       {/* Control Bar: Bi-Monthly Period Presets & Filters */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-3.5 sm:gap-4">
         {/* Bi-monthly Cutoff Selection */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mr-1">
             Bi-Monthly Cutoff:
           </span>
@@ -1119,33 +1121,33 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             Full Month
           </button>
 
-          <div className="flex items-center gap-2 ml-2 border-l border-slate-200 pl-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto sm:ml-2 sm:border-l sm:border-slate-200 sm:pl-3">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-bold"
+              className="flex-1 sm:flex-none min-w-0 text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-bold"
             />
             <span className="text-slate-400 text-xs">to</span>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-bold"
+              className="flex-1 sm:flex-none min-w-0 text-xs border border-slate-200 rounded-xl px-2.5 py-1.5 text-slate-700 bg-slate-50 font-bold"
             />
           </div>
         </div>
 
         {/* Search & Branch filter */}
-        <div className="flex items-center gap-3">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          <div className="relative w-full sm:w-52">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder="Search employee..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2 w-52 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full text-xs border border-slate-200 rounded-xl pl-9 pr-3 py-2 bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
             />
           </div>
 
@@ -1153,7 +1155,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
             <select
               value={branchFilter}
               onChange={(e) => setBranchFilter(e.target.value)}
-              className="text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 font-medium"
+              className="w-full sm:w-auto text-xs border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 text-slate-700 font-medium"
             >
               <option value="">All Branches</option>
               {branches.map((b) => (
@@ -1165,39 +1167,41 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           )}
 
           {/* Deductions ON/OFF Toggle */}
-          <div className="flex items-center gap-2 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white shadow-2xs">
+          <div className="flex items-center justify-between sm:justify-start gap-2 border border-slate-200 rounded-xl px-2.5 py-1.5 bg-white shadow-2xs w-full sm:w-auto whitespace-nowrap">
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Deductions:</span>
-            <button
-              type="button"
-              onClick={() => handleToggleDeductions(!waiveDeductions)}
-              className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
-                !waiveDeductions ? 'bg-rose-500' : 'bg-slate-300'
-              }`}
-              title={!waiveDeductions ? 'Click to Turn OFF all deductions (Waive late penalties)' : 'Click to Turn ON standard late deductions'}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform ${
-                  !waiveDeductions ? 'translate-x-5' : 'translate-x-1'
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleToggleDeductions(!waiveDeductions)}
+                className={`relative inline-flex h-5 w-10 items-center rounded-full transition-colors focus:outline-none ${
+                  !waiveDeductions ? 'bg-rose-500' : 'bg-slate-300'
                 }`}
-              />
-            </button>
-            <span className={`text-xs font-black ${!waiveDeductions ? 'text-rose-600' : 'text-emerald-600'}`}>
-              {!waiveDeductions ? 'ON' : 'OFF (Waived)'}
-            </span>
+                title={!waiveDeductions ? 'Click to Turn OFF all deductions (Waive late penalties)' : 'Click to Turn ON standard late deductions'}
+              >
+                <span
+                  className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs transition-transform ${
+                    !waiveDeductions ? 'translate-x-5' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className={`text-xs font-black ${!waiveDeductions ? 'text-rose-600' : 'text-emerald-600'}`}>
+                {!waiveDeductions ? 'ON' : 'OFF (Waived)'}
+              </span>
+            </div>
           </div>
 
           {/* Display Mode Toggle (Table default vs Cards) */}
-          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+          <div className="flex border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5 w-full sm:w-auto">
             <button
               onClick={() => setDisplayMode('table')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`flex-1 sm:flex-none justify-center px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'table' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
               <Table2 className="w-3.5 h-3.5" /> Table
             </button>
             <button
               onClick={() => setDisplayMode('cards')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'cards' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              className={`flex-1 sm:flex-none justify-center px-3 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1 ${displayMode === 'cards' ? 'bg-white text-blue-700 shadow-xs' : 'text-slate-600 hover:text-slate-900'
                 }`}
             >
               <LayoutList className="w-3.5 h-3.5" /> Cards
@@ -1208,7 +1212,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
       {/* Salary Table */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-3.5 sm:p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-bold text-slate-900">Payroll Computation Sheet</h2>
             <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-bold border border-blue-100">
@@ -1304,7 +1308,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
           </div>
         ) : (
           /* Cards Display Mode */
-          <div className="p-5 space-y-8 bg-slate-50/50">
+          <div className="p-3.5 sm:p-5 space-y-6 sm:space-y-8 bg-slate-50/50">
             {/* 1. Dagupan Main Cards */}
             {renderBranchCards(
               dagupanEmployees,
@@ -1349,11 +1353,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
       {/* Record Payment Status Modal */}
       {paymentModalOpen && paymentTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-7 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-7 space-y-4 my-auto animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-black text-slate-900">Record Salary Disbursement</h3>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">Record Salary Disbursement</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Bi-monthly payroll payment tracking</p>
               </div>
               <button onClick={() => setPaymentModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl">
@@ -1361,7 +1365,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               </button>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-wrap items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-bold text-slate-900">{paymentTarget.name}</p>
                 <p className="text-xs text-slate-400 font-mono">Period: {startDate} to {endDate}</p>
@@ -1473,7 +1477,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               />
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setPaymentModalOpen(false)}
@@ -1496,11 +1500,11 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
       {/* Edit Compensation Modal */}
       {rateModalOpen && rateTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-8 space-y-5 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md max-h-[90dvh] overflow-y-auto p-4 sm:p-8 space-y-4 sm:space-y-5 my-auto animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-black text-slate-900">Edit Employee Compensation</h3>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">Edit Employee Compensation</h3>
                 <p className="text-xs text-slate-400 mt-0.5">Rates used for DOLE labor calculations</p>
               </div>
               <button onClick={() => setRateModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1.5 rounded-xl hover:bg-slate-100">
@@ -1508,7 +1512,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               </button>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex items-center gap-3">
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 flex flex-wrap items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold">
                 {getInitials(rateTarget.name)}
               </div>
@@ -1569,7 +1573,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setRateModalOpen(false)}
@@ -1592,19 +1596,19 @@ export function PayrollClient({ branches }: PayrollClientProps) {
 
       {/* Detailed DTR Breakdown Modal */}
       {selectedEmployee && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90dvh] flex flex-col overflow-hidden my-auto animate-in fade-in zoom-in-95">
             {/* Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 to-white">
-              <div className="flex items-center gap-3">
-                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getAvatarColor(selectedEmployee.employee_name)} flex items-center justify-center text-white text-sm font-black shadow-sm`}>
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between gap-2.5 bg-gradient-to-r from-slate-50 to-white shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-gradient-to-br ${getAvatarColor(selectedEmployee.employee_name)} flex items-center justify-center text-white text-xs sm:text-sm font-black shadow-sm shrink-0`}>
                   {getInitials(selectedEmployee.employee_name)}
                 </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-black text-slate-900 truncate">
                     {selectedEmployee.employee_name} — Shift &amp; Pay Breakdown
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-0.5 truncate">
                     ID: #{selectedEmployee.device_user_id} • Daily: ₱{selectedEmployee.daily_rate.toFixed(2)} • Hourly: ₱
                     {selectedEmployee.hourly_rate.toFixed(2)}/hr
                   </p>
@@ -1612,40 +1616,41 @@ export function PayrollClient({ branches }: PayrollClientProps) {
               </div>
               <button
                 onClick={() => setSelectedEmployee(null)}
-                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100"
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Content Table */}
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="p-3.5 sm:p-6 overflow-y-auto flex-1">
               {selectedEmployee.records.length === 0 ? (
                 <div className="text-center py-16 text-slate-400">
                   <Clock className="w-10 h-10 text-slate-300 mx-auto mb-2" />
                   <p className="font-bold text-slate-600">No attendance punches recorded in this period.</p>
                 </div>
               ) : (
-                <table className="w-full text-xs">
+                <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
+                <table className="w-full text-xs whitespace-nowrap">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-left font-bold text-slate-600 uppercase tracking-wider">
-                      <th className="px-4 py-3">Date</th>
-                      <th className="px-4 py-3">Type</th>
-                      <th className="px-4 py-3">Time In</th>
-                      <th className="px-4 py-3">Time Out</th>
-                      <th className="px-4 py-3 text-right">Hours</th>
-                      <th className="px-4 py-3 text-right text-amber-700">Holiday Pay</th>
-                      <th className="px-4 py-3 text-right text-purple-700">OT Pay</th>
-                      <th className="px-4 py-3 text-right">Night Diff</th>
-                      <th className="px-4 py-3 text-right text-rose-700">Late Ded.</th>
-                      <th className="px-4 py-3 text-right font-black text-slate-900">Day Total</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3">Date</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3">Type</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3">Time In</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3">Time Out</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right">Hours</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-amber-700">Holiday Pay</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-purple-700">OT Pay</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right">Night Diff</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-rose-700">Late Ded.</th>
+                      <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right font-black text-slate-900">Day Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {selectedEmployee.records.map((rec) => (
                       <tr key={rec.work_date} className="hover:bg-slate-50/70 transition-colors">
-                        <td className="px-4 py-3 font-bold text-slate-900">{rec.work_date}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 font-bold text-slate-900">{rec.work_date}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3">
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${rec.day_type.includes('holiday')
                             ? 'bg-amber-100 text-amber-800 border border-amber-200'
                             : 'bg-slate-100 text-slate-700'
@@ -1653,14 +1658,14 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                             {rec.day_type_label}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-emerald-700 font-bold">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-emerald-700 font-bold">
                           {formatTime(rec.first_check_in)}
                         </td>
-                        <td className="px-4 py-3 text-rose-700 font-bold">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-rose-700 font-bold">
                           {formatTime(rec.last_check_out)}
                         </td>
-                        <td className="px-4 py-3 text-right font-bold text-slate-800">{formatHours(rec.hours_worked)}</td>
-                        <td className="px-4 py-3 text-right font-bold text-amber-700">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right font-bold text-slate-800">{formatHours(rec.hours_worked)}</td>
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right font-bold text-amber-700">
                           {rec.holiday_premium_pay > 0 ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
                               +{formatCurrency(rec.holiday_premium_pay)}
@@ -1669,7 +1674,7 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                             <span className="text-slate-300">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right text-purple-700 font-bold">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-purple-700 font-bold">
                           {rec.overtime_pay > 0 ? (
                             <div>
                               <span>+{formatCurrency(rec.overtime_pay)}</span>
@@ -1677,10 +1682,10 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                             </div>
                           ) : '—'}
                         </td>
-                        <td className="px-4 py-3 text-right text-indigo-700 font-bold">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-indigo-700 font-bold">
                           {rec.night_diff_hours > 0 ? `${rec.night_diff_hours.toFixed(1)}h` : '—'}
                         </td>
-                        <td className="px-4 py-3 text-right text-rose-600 font-bold">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-rose-600 font-bold">
                           {rec.tardiness_deduction > 0 ? (
                             <div>
                               <span>-{formatCurrency(rec.tardiness_deduction)}</span>
@@ -1688,18 +1693,19 @@ export function PayrollClient({ branches }: PayrollClientProps) {
                             </div>
                           ) : '—'}
                         </td>
-                        <td className="px-4 py-3 text-right font-black text-emerald-700 text-sm">
+                        <td className="px-3 sm:px-4 py-2.5 sm:py-3 text-right font-black text-emerald-700 text-sm">
                           {formatCurrency(rec.total_day_pay)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </div>
 
             {/* Footer Summary */}
-            <div className="p-5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs">
+            <div className="p-4 sm:p-5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs shrink-0">
               <span className="font-bold text-slate-700">
                 Period Gross Total ({selectedEmployee.days_worked} days):
               </span>

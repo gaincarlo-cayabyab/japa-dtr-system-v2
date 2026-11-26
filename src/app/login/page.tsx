@@ -298,12 +298,12 @@ export default function LoginPage() {
   const RoleIcon = selectedRole.icon
 
   return (
-    <div className="min-h-screen lg:h-screen w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-slate-100 select-none">
-      {/* ── LEFT HALF: JAPA 3D Print Studio Showcase ───────── */}
-      <div className="w-full lg:w-[48%] h-[520px] lg:h-full relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80">
+    <div className="min-h-[100dvh] lg:h-screen w-full flex flex-col lg:flex-row overflow-y-auto lg:overflow-hidden bg-slate-100 select-none">
+      {/* ── LEFT HALF (Desktop) / SECOND (Mobile): JAPA 3D Print Studio Showcase ───────── */}
+      <div className="order-2 lg:order-1 w-full lg:w-[48%] h-[390px] sm:h-[460px] lg:h-full relative overflow-hidden bg-gradient-to-b from-white to-[#f1f3f8] flex flex-col justify-between border-t lg:border-t-0 lg:border-r border-slate-200/80 shrink-0">
         {/* Top-Left Brand Pill (Positioned cleanly above shifted .studio-intro) */}
-        <div className="absolute top-4 left-4 sm:top-5 sm:left-6 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white shadow-sm border border-slate-200/90">
-          <div className="relative w-7 h-7 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-white">
+        <div className="absolute top-3.5 left-3.5 sm:top-5 sm:left-6 z-20 flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-2xl bg-white shadow-sm border border-slate-200/90">
+          <div className="relative w-6 h-6 sm:w-7 sm:h-7 rounded-lg overflow-hidden border border-slate-200 flex-shrink-0 bg-white">
             <Image
               src="/japa-logo.jpg"
               alt="JAPA Logo"
@@ -313,8 +313,8 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <p className="text-xs font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
-            <p className="text-[10px] font-semibold text-slate-600 leading-none mt-1">
+            <p className="text-[11px] sm:text-xs font-black text-slate-900 tracking-tight leading-none">JAPA Global</p>
+            <p className="text-[9px] sm:text-[10px] font-semibold text-slate-600 leading-none mt-0.5 sm:mt-1">
               Enterprise Operations Workspace
             </p>
           </div>
@@ -342,9 +342,9 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* ── RIGHT HALF: Balanced Spacious Auth Container (Fits 100vh cleanly, Zero Lag) ── */}
+      {/* ── RIGHT HALF (Desktop) / FIRST (Mobile): Balanced Auth Container ─ */}
       <div
-        className="w-full lg:w-[52%] lg:h-full flex flex-col items-center p-4 sm:p-5 relative overflow-y-auto"
+        className="order-1 lg:order-2 w-full lg:w-[52%] lg:h-full flex flex-col items-center p-3.5 sm:p-5 relative lg:overflow-y-auto"
         style={{
           background:
             'linear-gradient(135deg, #f0fdf4 0%, #eff6ff 28%, #f5f3ff 56%, #fdf2f8 82%, #ecfeff 100%)',
@@ -365,11 +365,11 @@ export default function LoginPage() {
         </div>
 
         <div className="w-full flex flex-col items-center my-auto relative z-10">
-          {/* ── Balanced Enlarged Auth Card (Fits compact laptop viewports without clipping) ─ */}
-          <div className="w-full max-w-[540px] bg-white rounded-3xl px-5 py-4 sm:px-6 sm:py-5 shadow-2xl shadow-indigo-500/10 border border-slate-200/90">
+          {/* ── Balanced Enlarged Auth Card (Fits compact mobile & laptop viewports without clipping) ─ */}
+          <div className="w-full max-w-[540px] bg-white rounded-2xl sm:rounded-3xl px-4 py-4 sm:px-6 sm:py-5 shadow-2xl shadow-indigo-500/10 border border-slate-200/90">
             {/* Card Top Brand Row */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3.5">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className="relative w-9 h-9 rounded-xl overflow-hidden border border-slate-200/90 shadow-xs flex-shrink-0 bg-white">
                   <Image
                     src="/japa-logo.jpg"
@@ -379,13 +379,13 @@ export default function LoginPage() {
                     priority
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h2 className="text-sm sm:text-base font-black text-slate-900 leading-tight">JAPA Global</h2>
-                  <p className="text-[11px] font-semibold text-slate-500">Enterprise Operations</p>
+                  <p className="text-[11px] font-semibold text-slate-500 truncate">Enterprise Operations</p>
                 </div>
               </div>
 
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 <span>DAG &amp; MNL</span>
               </span>
@@ -394,7 +394,7 @@ export default function LoginPage() {
             {/* ── STEP 1: Select Role View (Bigger & Readable, Fits Cleanly) ─ */}
             {step === 1 && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-tight">
                       Select Role
@@ -403,12 +403,12 @@ export default function LoginPage() {
                       Choose your authorized profile to sign in
                     </p>
                   </div>
-                  <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                  <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
                     Step 1 of 2
                   </span>
                 </div>
 
-                <div className="space-y-2.5 pt-0.5">
+                <div className="space-y-2 sm:space-y-2.5 pt-0.5">
                   {ROLES.map((role) => {
                     const Icon = role.icon
                     return (
@@ -416,16 +416,16 @@ export default function LoginPage() {
                         key={role.id}
                         type="button"
                         onClick={() => handleSelectRole(role)}
-                        className="w-full flex items-center justify-between px-4 py-3 rounded-2xl border-2 border-slate-200/80 bg-white hover:bg-indigo-50/40 hover:border-indigo-400 hover:shadow-sm transition-colors duration-100 text-left group active:scale-[0.99] touch-manipulation"
+                        className="w-full flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl border-2 border-slate-200/80 bg-white hover:bg-indigo-50/40 hover:border-indigo-400 hover:shadow-sm transition-colors duration-100 text-left group active:scale-[0.99] touch-manipulation"
                       >
-                        <div className="flex items-center gap-3.5 min-w-0 pr-2">
+                        <div className="flex items-center gap-3 sm:gap-3.5 min-w-0 pr-2">
                           <div
-                            className={`w-11 h-11 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-xs`}
+                            className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${role.iconBg} ${role.iconColor} flex items-center justify-center flex-shrink-0 shadow-xs`}
                           >
                             <Icon className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                               <span className="text-sm sm:text-base font-extrabold text-slate-900 group-hover:text-indigo-700">
                                 {role.title}
                               </span>
@@ -435,7 +435,7 @@ export default function LoginPage() {
                                 {role.badge}
                               </span>
                             </div>
-                            <p className="text-xs text-slate-600 mt-0.5 leading-snug">
+                            <p className="text-[11px] sm:text-xs text-slate-600 mt-0.5 leading-snug">
                               {role.desc}
                             </p>
                           </div>
@@ -453,7 +453,7 @@ export default function LoginPage() {
             {step === 2 && (
               <div ref={pinSectionRef} tabIndex={-1} className="space-y-3 outline-none">
                 {/* Navigation Row */}
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -469,7 +469,7 @@ export default function LoginPage() {
                     <span>Change Role</span>
                   </button>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     <button
                       type="button"
                       onClick={() => setSoundEnabled((prev) => !prev)}
@@ -498,24 +498,24 @@ export default function LoginPage() {
                 </div>
 
                 {/* Selected Role Banner */}
-                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-slate-50 border border-slate-200">
-                  <div className="flex items-center gap-3">
+                <div className="flex items-center justify-between gap-2 px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-2xl bg-slate-50 border border-slate-200">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                     <div
-                      className={`w-10 h-10 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-xs`}
+                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl ${selectedRole.iconBg} ${selectedRole.iconColor} flex items-center justify-center flex-shrink-0 shadow-xs`}
                     >
                       <RoleIcon className="w-5 h-5" />
                     </div>
-                    <div>
-                      <p className="text-sm sm:text-base font-black text-slate-900 leading-tight">
+                    <div className="min-w-0">
+                      <p className="text-sm sm:text-base font-black text-slate-900 leading-tight truncate">
                         {selectedRole.title}
                       </p>
-                      <p className="text-xs text-slate-500 font-medium">
+                      <p className="text-[11px] sm:text-xs text-slate-500 font-medium">
                         Enter 6-digit Security PIN (keyboard or tap below)
                       </p>
                     </div>
                   </div>
                   <span
-                    className={`hidden sm:inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${selectedRole.badgeColor}`}
+                    className={`hidden sm:inline-flex text-[11px] font-bold px-2.5 py-0.5 rounded-full border shrink-0 ${selectedRole.badgeColor}`}
                   >
                     {selectedRole.badge}
                   </span>
@@ -523,14 +523,14 @@ export default function LoginPage() {
 
                 {/* Crisp 6-Digit Visual PIN Slots (Balanced Size) */}
                 <div className={`py-0.5 ${shake ? 'animate-shake' : ''}`}>
-                  <div className="grid grid-cols-6 gap-2.5 max-w-[360px] mx-auto">
+                  <div className="grid grid-cols-6 gap-1.5 sm:gap-2.5 max-w-[360px] mx-auto">
                     {[0, 1, 2, 3, 4, 5].map((idx) => {
                       const isFilled = pin.length > idx
                       const isActive = pin.length === idx && !loading
                       return (
                         <div
                           key={idx}
-                          className={`h-12 rounded-xl border-2 flex items-center justify-center ${
+                          className={`h-11 sm:h-12 rounded-xl border-2 flex items-center justify-center ${
                             isFilled
                               ? 'bg-indigo-50/70 border-indigo-500 shadow-xs'
                               : isActive
@@ -559,7 +559,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Balanced 3x4 Keypad Grid (Fast Response, Comfortably Sized) */}
-                <div className="grid grid-cols-3 gap-2.5 max-w-[340px] mx-auto w-full touch-manipulation">
+                <div className="grid grid-cols-3 gap-2 sm:gap-2.5 max-w-[340px] mx-auto w-full touch-manipulation">
                   {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
                     <button
                       key={digit}

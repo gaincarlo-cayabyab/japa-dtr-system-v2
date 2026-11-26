@@ -12,10 +12,10 @@ export function AppFooter() {
   }
 
   return (
-    <footer className="w-full bg-white border-t border-slate-200/90 mt-12 py-7 px-4 sm:px-6 select-none">
+    <footer className="w-full bg-white border-t border-slate-200/90 mt-8 sm:mt-12 py-6 sm:py-7 px-3.5 sm:px-6 select-none">
       <div className="max-w-7xl mx-auto space-y-5">
         {/* Main Brand & Architect Row (No Duplicate Strings) */}
-        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-5 pb-5 border-b border-slate-100 text-center md:text-left">
+        <div className="flex flex-col md:flex-row items-center md:items-start justify-between gap-4 sm:gap-5 pb-5 border-b border-slate-100 text-center md:text-left">
           <div className="flex flex-col sm:flex-row items-center gap-3.5">
             <div className="relative w-12 h-12 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white flex-shrink-0">
               <Image
@@ -41,7 +41,7 @@ export function AppFooter() {
           </div>
 
           {/* Single Lead Developer & Maintainer Card */}
-          <div className="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-indigo-800/50">
+          <div className="inline-flex flex-wrap sm:flex-nowrap items-center justify-center gap-2.5 px-3.5 sm:px-4 py-2.5 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-indigo-800/50 max-w-full">
             <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center flex-shrink-0">
               <Code2 className="w-4 h-4 text-emerald-400" />
             </div>

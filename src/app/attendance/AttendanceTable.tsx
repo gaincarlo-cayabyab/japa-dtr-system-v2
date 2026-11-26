@@ -567,10 +567,10 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
   }, [logs])
 
   return (
-    <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Floating Non-Blocking Save / Edit / Delete Timer Banner (shown ONLY for explicit user actions) */}
       {(savingPunch || isDeletingSingle || isClearing) && (
-        <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 min-w-[260px] max-w-xs space-y-2 backdrop-blur-sm">
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:bottom-5 sm:right-5 z-40 bg-slate-900/95 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700/80 sm:min-w-[260px] sm:max-w-xs space-y-2 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3 text-xs font-bold">
             <span className="flex items-center gap-2 text-blue-300">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
@@ -594,43 +594,45 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       {/* Toast Alert (Middle Top) */}
       {toastMessage && (
         <div
-          className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
+          className={`fixed top-4 left-4 right-4 sm:top-6 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-auto sm:max-w-lg z-50 flex items-center justify-between sm:justify-start gap-3 px-4 sm:px-5 py-3 rounded-2xl shadow-2xl border text-xs sm:text-sm font-semibold transition-all animate-in fade-in slide-in-from-top-4 ${
             toastMessage.type === 'success'
               ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-emerald-500/10'
               : 'bg-rose-50 text-rose-800 border-rose-200 shadow-rose-500/10'
           }`}
         >
-          {toastMessage.type === 'success' ? (
-            <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
-          )}
-          <span>{toastMessage.text}</span>
-          <button onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {toastMessage.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+            )}
+            <span>{toastMessage.text}</span>
+          </div>
+          <button onClick={() => setToastMessage(null)} className="ml-2 text-slate-400 hover:text-slate-600 font-bold flex-shrink-0">
             ×
           </button>
         </div>
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20">
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-md shadow-blue-500/20 flex-shrink-0">
               <Clock className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight">Attendance Logs Management</h1>
+              <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">Attendance Logs Management</h2>
               <p className="text-xs text-slate-500">Live biometric punch records · Full Administrator Edit &amp; Add Controls</p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {canAddEditDelete ? (
             <button
               onClick={openAddModal}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95"
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/20 transition-all active:scale-95"
             >
               <Plus className="w-4 h-4" />
               Add Punch
@@ -676,9 +678,9 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       </div>
 
       {/* Stats summary strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold flex-shrink-0">
             <Clock className="w-5 h-5" />
           </div>
           <div>
@@ -688,8 +690,8 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold flex-shrink-0">
             <Users className="w-5 h-5" />
           </div>
           <div>
@@ -699,8 +701,8 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+        <div className="bg-white rounded-2xl p-3.5 sm:p-4 border border-slate-200/80 shadow-xs flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold flex-shrink-0">
             <Calendar className="w-5 h-5" />
           </div>
           <div>
@@ -716,9 +718,9 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-4 flex flex-wrap gap-3 items-end">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-3.5 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap gap-3 lg:items-end">
         {/* Search */}
-        <div className="flex-1 min-w-[200px]">
+        <div className="sm:col-span-2 lg:flex-1 lg:min-w-[200px]">
           <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Search Employee</label>
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -739,7 +741,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
             type="date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
 
@@ -749,7 +751,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
           <select
             value={employeeFilter}
             onChange={(e) => setEmployeeFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="">All Employees ({employeesList.length})</option>
             {[...employeesList]
@@ -768,7 +770,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            className="w-full lg:w-auto border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="all">All Types</option>
             <option value="in">🟢 Time In</option>
@@ -785,17 +787,17 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
               setStatusFilter('all')
               setNameSearch('')
             }}
-            className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+            className="sm:col-span-2 lg:col-span-1 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
           >
             Reset
           </button>
         )}
       </div>
 
-      {/* Attendance Logs Table */}
+      {/* Attendance Logs Table / Mobile Cards */}
       <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
         {paged.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+          <div className="flex flex-col items-center justify-center py-20 sm:py-24 px-4 text-center text-slate-400">
             <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3">
               <Clock className="w-8 h-8 text-slate-300" />
             </div>
@@ -803,94 +805,161 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
             <p className="text-xs text-slate-400 mt-1">Adjust filters or click &ldquo;Add Punch&rdquo; to insert records manually.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-200 text-left">
-                  <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Employee Name</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">ID</th>
-                  <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Punch Time</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Smart Type</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Raw Status</th>
-                  <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
-                    {canAddEditDelete ? 'Actions' : ''}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {paged.map((log) => {
-                  const empName = getEmployeeName(log.device_user_id, employeesList)
-                  const role = smartRoles.get(log.id)
-                  const gradient = getAvatarColor(empName)
-                  const initials = getInitials(empName)
+          <>
+            {/* Mobile Punch Cards */}
+            <div className="md:hidden divide-y divide-slate-100">
+              {paged.map((log) => {
+                const empName = getEmployeeName(log.device_user_id, employeesList)
+                const role = smartRoles.get(log.id)
+                const gradient = getAvatarColor(empName)
+                const initials = getInitials(empName)
 
-                  return (
-                    <tr key={log.id} className="hover:bg-slate-50/70 transition-colors group">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
-                            {initials}
-                          </div>
-                          <span className="font-bold text-slate-900">{empName}</span>
+                return (
+                  <div key={log.id} className="p-3.5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-2.5">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
+                          {initials}
                         </div>
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <span className="font-mono text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
-                          #{log.device_user_id}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-slate-700 font-semibold text-xs">
-                        {formatPunchTime(log.punch_time)}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        {role ? (
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${role.badgeClass}`}>
-                            <span>{role.icon}</span>
-                            {role.label}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-xs">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        <span className="text-[11px] font-semibold text-slate-500">
-                          {log.status === 0 ? 'Check In (0)' : log.status === 1 ? 'Check Out (1)' : `Status ${log.status}`}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        {canAddEditDelete ? (
-                          <div className="inline-flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => openEditModal(log)}
-                              className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                              title="Edit this punch"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteTarget(log)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
-                              title="Delete this punch"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 text-sm truncate">{empName}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="font-mono text-[11px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-md">
+                              #{log.device_user_id}
+                            </span>
+                            <span className="text-[11px] font-medium text-slate-500">
+                              {log.status === 0 ? 'Check In (0)' : log.status === 1 ? 'Check Out (1)' : `Status ${log.status}`}
+                            </span>
                           </div>
-                        ) : (
-                          <span className="text-slate-300 text-xs" title="1-Hour Edit Access required to edit/delete punches">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </div>
+                      </div>
+
+                      {role && (
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border flex-shrink-0 ${role.badgeClass}`}>
+                          <span>{role.icon}</span>
+                          {role.label}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-50">
+                      <span className="text-xs font-semibold text-slate-700">
+                        {formatPunchTime(log.punch_time)}
+                      </span>
+                      {canAddEditDelete && (
+                        <div className="inline-flex items-center gap-1">
+                          <button
+                            onClick={() => openEditModal(log)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(log)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop Attendance Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-200 text-left">
+                    <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Employee Name</th>
+                    <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">ID</th>
+                    <th className="px-5 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Punch Time</th>
+                    <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Smart Type</th>
+                    <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Raw Status</th>
+                    <th className="px-4 py-3.5 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">
+                      {canAddEditDelete ? 'Actions' : ''}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paged.map((log) => {
+                    const empName = getEmployeeName(log.device_user_id, employeesList)
+                    const role = smartRoles.get(log.id)
+                    const gradient = getAvatarColor(empName)
+                    const initials = getInitials(empName)
+
+                    return (
+                      <tr key={log.id} className="hover:bg-slate-50/70 transition-colors group">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-8 h-8 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white text-xs font-black shadow-xs flex-shrink-0`}>
+                              {initials}
+                            </div>
+                            <span className="font-bold text-slate-900">{empName}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="font-mono text-xs font-bold bg-slate-100 text-slate-700 px-2 py-0.5 rounded-lg">
+                            #{log.device_user_id}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-slate-700 font-semibold text-xs">
+                          {formatPunchTime(log.punch_time)}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          {role ? (
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${role.badgeClass}`}>
+                              <span>{role.icon}</span>
+                              {role.label}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <span className="text-[11px] font-semibold text-slate-500">
+                            {log.status === 0 ? 'Check In (0)' : log.status === 1 ? 'Check Out (1)' : `Status ${log.status}`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          {canAddEditDelete ? (
+                            <div className="inline-flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => openEditModal(log)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="Edit this punch"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setDeleteTarget(log)}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                title="Delete this punch"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs" title="1-Hour Edit Access required to edit/delete punches">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
         {/* Pagination */}
         {pageCount > 1 && (
-          <div className="flex items-center justify-between px-5 py-4 border-t border-slate-100 bg-slate-50/50">
-            <p className="text-xs font-medium text-slate-500">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 sm:px-5 py-3.5 sm:py-4 border-t border-slate-100 bg-slate-50/50">
+            <p className="text-xs font-medium text-slate-500 text-center sm:text-left">
               Showing <span className="font-bold text-slate-800">{page * PAGE_SIZE + 1}</span> to{' '}
               <span className="font-bold text-slate-800">{Math.min((page + 1) * PAGE_SIZE, filtered.length)}</span> of{' '}
               <span className="font-bold text-slate-800">{filtered.length}</span> logs
@@ -904,7 +973,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
                 <ChevronLeft className="w-3.5 h-3.5" />
                 Previous
               </button>
-              <span className="text-xs font-bold text-slate-600 px-2">
+              <span className="text-xs font-bold text-slate-600 px-2 whitespace-nowrap">
                 Page {page + 1} of {pageCount}
               </span>
               <button
@@ -922,8 +991,8 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
 
       {/* Add / Edit Punch Modal */}
       {punchModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 sm:p-7 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-4 sm:p-7 space-y-4 animate-in fade-in zoom-in-95 max-h-[90dvh] overflow-y-auto my-auto">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
@@ -954,7 +1023,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">Punch Date</label>
                   <input
@@ -1005,7 +1074,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-end gap-2.5 sm:gap-3 pt-3 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setPunchModalOpen(false)}
@@ -1028,10 +1097,10 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
 
       {/* Delete Single Punch Modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4 animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-5 sm:p-6 space-y-4 animate-in fade-in zoom-in-95 max-h-[90dvh] overflow-y-auto my-auto">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold flex-shrink-0">
                 <Trash2 className="w-5 h-5" />
               </div>
               <div>
@@ -1045,7 +1114,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
               Time: <span className="font-bold text-slate-900">{formatPunchTime(deleteTarget.punch_time)}</span>
             </p>
 
-            <div className="flex items-center justify-end gap-2.5 pt-1">
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => setDeleteTarget(null)}
@@ -1068,17 +1137,17 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
 
       {/* Smart Clear Logs Modal */}
       {showClearModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-6 sm:p-7 w-full max-w-lg border border-slate-100 animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-4 mb-5">
-              <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl p-4 sm:p-7 w-full max-w-lg border border-slate-100 animate-in fade-in zoom-in-95 max-h-[90dvh] overflow-y-auto my-auto">
+            <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-5">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-900">Clear Attendance Logs</h3>
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-black text-slate-900">Clear Attendance Logs</h3>
                 <p className="text-xs text-slate-400">Super Admin · Select what to remove</p>
               </div>
-              <button onClick={() => setShowClearModal(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl">
+              <button onClick={() => setShowClearModal(false)} className="ml-auto text-slate-400 hover:text-slate-600 p-1.5 rounded-xl flex-shrink-0">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -1086,7 +1155,7 @@ export function AttendanceTable({ initialLogs, employees, initialTotalCount }: A
             {/* Mode Selector */}
             <div className="mb-5">
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Clear Mode</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {([
                   { mode: 'date', label: '📅 By Date', desc: 'Clear all employees on a specific day' },
                   { mode: 'employee', label: '👤 By Employee', desc: 'Clear all logs for one employee' },

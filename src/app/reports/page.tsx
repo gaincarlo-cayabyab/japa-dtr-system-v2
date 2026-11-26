@@ -35,7 +35,7 @@ export default async function ReportsPage() {
   const completedCount = (dtrData ?? []).filter((r) => r.shift_status === 'Completed').length
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6">
       <PageBanner
         theme="reports"
         pattern="diagonal"

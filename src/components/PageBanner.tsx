@@ -272,7 +272,7 @@ export function PageBanner({
 
   return (
     <section
-      className={`${palette.container} rounded-3xl px-6 py-5 sm:px-7 sm:py-6 min-h-[156px] flex items-center relative overflow-hidden ${className}`}
+      className={`${palette.container} rounded-2xl sm:rounded-3xl px-4 py-4 sm:px-7 sm:py-6 min-h-0 sm:min-h-[156px] flex items-center relative overflow-hidden ${className}`}
     >
       {/* Top Signature Accent Strip */}
       <div
@@ -289,26 +289,26 @@ export function PageBanner({
 
       <PatternOverlay pattern={pattern} color={palette.patternColor} />
 
-      <div className="relative z-10 w-full flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div className="flex-1 min-w-0 space-y-2.5">
+      <div className="relative z-10 w-full flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5 sm:gap-4">
+        <div className="flex-1 min-w-0 space-y-2 sm:space-y-2.5">
           {/* Eyebrow Tag */}
           <div
-            className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full border text-[11px] font-bold ${palette.eyebrowPill}`}
+            className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 rounded-full border text-[10px] sm:text-[11px] font-bold max-w-full ${palette.eyebrowPill}`}
           >
             {eyebrowIcon}
-            <span>{eyebrow}</span>
+            <span className="truncate">{eyebrow}</span>
           </div>
 
           {/* Glossy Gradient Icon + High-Contrast Ink Title */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
             {icon && (
               <div
-                className={`w-10 h-10 sm:w-11 sm:h-11 rounded-2xl flex items-center justify-center shrink-0 ${palette.iconBox}`}
+                className={`w-9 h-9 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 ${palette.iconBox}`}
               >
                 {icon}
               </div>
             )}
-            <h1 className="text-xl sm:text-2xl md:text-[26px] font-black tracking-tight text-slate-900 leading-tight">
+            <h1 className="text-lg sm:text-2xl md:text-[26px] font-black tracking-tight text-slate-900 leading-tight">
               {title}
             </h1>
           </div>
@@ -319,11 +319,11 @@ export function PageBanner({
 
           {/* Clean Light Status Chips */}
           {chips.length > 0 && (
-            <div className="pt-0.5 flex flex-wrap gap-2 text-xs">
+            <div className="pt-0.5 flex flex-wrap gap-1.5 sm:gap-2 text-[11px] sm:text-xs">
               {chips.map((chip, idx) => (
                 <span
                   key={`${chip.label}-${idx}`}
-                  className={`px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-semibold shadow-sm ${palette.chipClass}`}
+                  className={`px-2 sm:px-2.5 py-1 rounded-xl border flex items-center gap-1.5 font-semibold shadow-sm ${palette.chipClass}`}
                 >
                   {chip.icon}
                   <span>{chip.label}</span>
@@ -334,7 +334,7 @@ export function PageBanner({
         </div>
 
         {/* Right Action Controls */}
-        {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
+        {actions && <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">{actions}</div>}
       </div>
     </section>
   )

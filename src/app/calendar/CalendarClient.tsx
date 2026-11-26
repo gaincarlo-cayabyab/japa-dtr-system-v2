@@ -59,7 +59,7 @@ export function CalendarClient() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header Banner */}
       <PageBanner
         theme="calendar"
@@ -86,7 +86,7 @@ export function CalendarClient() {
         actions={
           <Link
             href={`/reports?date=${selectedDateStr}`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-500/20 transition-all active:scale-95"
+            className="w-full sm:w-auto justify-center inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white rounded-xl text-xs font-bold shadow-md shadow-rose-500/20 transition-all active:scale-95"
           >
             <FileText className="w-4 h-4" />
             View DTR on {format(selectedDate, 'MMM d')}
@@ -95,13 +95,13 @@ export function CalendarClient() {
       />
 
       {/* Main Calendar Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Calendar Grid (2 Cols) */}
-        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200/90 shadow-xs p-5 sm:p-6 space-y-4">
+        <div className="lg:col-span-2 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xs p-3.5 sm:p-6 space-y-3 sm:space-y-4 min-w-0">
           {/* Calendar Toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-black text-slate-900">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 sm:gap-3 pb-3 border-b border-slate-100">
+            <div className="flex items-center justify-between sm:justify-start gap-2">
+              <h2 className="text-base sm:text-lg font-black text-slate-900">
                 {format(currentDate, 'MMMM yyyy')}
               </h2>
               <button
@@ -116,8 +116,8 @@ export function CalendarClient() {
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center border border-slate-200 rounded-xl overflow-hidden p-0.5 bg-slate-50 gap-0.5">
+            <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto min-w-0">
+              <div className="flex-1 sm:flex-none overflow-x-auto max-w-full flex items-center border border-slate-200 rounded-xl p-0.5 bg-slate-50 gap-0.5">
                 {[
                   { id: 'all', label: 'All' },
                   { id: 'pangasinan', label: '📍 Pangasinan' },
@@ -129,7 +129,7 @@ export function CalendarClient() {
                     key={f.id}
                     type="button"
                     onClick={() => setFilterType(f.id as any)}
-                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all ${
+                    className={`px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all whitespace-nowrap shrink-0 ${
                       filterType === f.id
                         ? 'bg-white text-blue-700 shadow-xs'
                         : 'text-slate-600 hover:text-slate-900'
@@ -140,7 +140,7 @@ export function CalendarClient() {
                 ))}
               </div>
 
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   onClick={() => setCurrentDate(subMonths(currentDate, 1))}
@@ -166,7 +166,7 @@ export function CalendarClient() {
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
               <div
                 key={day}
-                className={`py-2 text-[11px] font-black uppercase tracking-wider ${
+                className={`py-1.5 sm:py-2 text-[10px] sm:text-[11px] font-black uppercase tracking-wider ${
                   idx === 6 ? 'text-rose-600' : idx === 5 ? 'text-purple-600' : 'text-slate-500'
                 }`}
               >
@@ -176,7 +176,7 @@ export function CalendarClient() {
           </div>
 
           {/* Calendar Grid Days */}
-          <div className="grid grid-cols-7 gap-1.5">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
             {calendarDays.map((day) => {
               const dateStr = format(day, 'yyyy-MM-dd')
               const isCurrentMonth = isSameMonth(day, monthStart)
@@ -198,7 +198,7 @@ export function CalendarClient() {
                   key={dateStr}
                   type="button"
                   onClick={() => setSelectedDate(day)}
-                  className={`min-h-[85px] sm:min-h-[96px] p-2 rounded-2xl border text-left flex flex-col justify-between transition-all relative ${
+                  className={`min-h-[54px] sm:min-h-[96px] p-1 sm:p-2 rounded-xl sm:rounded-2xl border text-left flex flex-col justify-between transition-all relative ${
                     isSelected
                       ? 'ring-2 ring-blue-600 border-blue-600 bg-blue-50/40 shadow-xs'
                       : !isCurrentMonth
@@ -210,7 +210,7 @@ export function CalendarClient() {
                 >
                   <div className="flex items-center justify-between w-full">
                     <span
-                      className={`text-xs font-black w-6 h-6 rounded-full flex items-center justify-center ${
+                      className={`text-[11px] sm:text-xs font-black w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center ${
                         isToday
                           ? 'bg-blue-600 text-white shadow-xs'
                           : isSunday
@@ -221,14 +221,33 @@ export function CalendarClient() {
                       {format(day, 'd')}
                     </span>
                     {holiday && (
-                      <span className="text-[10px]" title={holiday.name}>
+                      <span className="text-[9px] sm:text-[10px] leading-none" title={holiday.name}>
                         {holiday.scope === 'pangasinan' ? '📍' : '🎌'}
                       </span>
                     )}
                   </div>
 
-                  {/* Badges / Events inside day cell */}
-                  <div className="space-y-1 w-full mt-1">
+                  {/* Mobile Compact Event Indicators (Tap day for full details below) */}
+                  <div className="sm:hidden flex items-center gap-1 mt-1 px-0.5 min-h-[10px]">
+                    {holiday && showPill && (
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          holiday.scope === 'pangasinan'
+                            ? 'bg-purple-500'
+                            : holiday.type === 'regular'
+                            ? 'bg-rose-500'
+                            : 'bg-amber-500'
+                        }`}
+                      />
+                    )}
+                    {payday && showPill && <span className="w-2 h-2 rounded-full bg-emerald-500" />}
+                    {isSunday && !holiday && isCurrentMonth && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-rose-300" />
+                    )}
+                  </div>
+
+                  {/* Desktop/Tablet Badges inside day cell */}
+                  <div className="hidden sm:block space-y-1 w-full mt-1">
                     {holiday && showPill && (
                       <div
                         className={`px-1.5 py-0.5 rounded-md text-[9px] font-bold truncate leading-tight border ${
@@ -261,11 +280,11 @@ export function CalendarClient() {
         </div>
 
         {/* Selected Day Details Panel (1 Col) */}
-        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs p-6 space-y-5 flex flex-col justify-between">
+        <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xs p-4 sm:p-6 space-y-4 sm:space-y-5 flex flex-col justify-between">
           <div className="space-y-4">
             <div>
               <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Selected Date</p>
-              <h3 className="text-xl font-black text-slate-900 mt-1">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1">
                 {format(selectedDate, 'EEEE, MMMM d, yyyy')}
               </h3>
             </div>
@@ -321,8 +340,8 @@ export function CalendarClient() {
             )}
 
             {/* Rest Day Status */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
-              <div className="flex items-center justify-between">
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-bold text-slate-700">Work Schedule Classification:</span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
@@ -377,20 +396,20 @@ export function CalendarClient() {
       </div>
 
       {/* Pangasinan Holidays Reference Cards */}
-      <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xs p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200/90 shadow-xs p-4 sm:p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h3 className="text-base font-black text-slate-900">Official Pangasinan Provincial Holidays Reference</h3>
+            <h3 className="text-sm sm:text-base font-black text-slate-900">Official Pangasinan Provincial Holidays Reference</h3>
             <p className="text-xs text-slate-400">Mandated by Republic Acts for the province of Pangasinan</p>
           </div>
-          <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+          <span className="text-xs font-bold px-3 py-1 rounded-full bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
             3 Local Observances
           </span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 sm:gap-4">
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
               <span className="text-xs font-mono font-black text-purple-700">January 9</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Special Non-Working</span>
             </div>
@@ -402,7 +421,7 @@ export function CalendarClient() {
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
               <span className="text-xs font-mono font-black text-purple-700">April 5</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">Special Working</span>
             </div>
@@ -414,7 +433,7 @@ export function CalendarClient() {
           </div>
 
           <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
               <span className="text-xs font-mono font-black text-purple-700">November 13</span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">Special Non-Working</span>
             </div>

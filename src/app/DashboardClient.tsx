@@ -257,8 +257,8 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
     const avgPresent =
       visibleTrends.length > 0
         ? Math.round(
-            (visibleTrends.reduce((a, t) => a + t.present, 0) / visibleTrends.length) * 10
-          ) / 10
+          (visibleTrends.reduce((a, t) => a + t.present, 0) / visibleTrends.length) * 10
+        ) / 10
         : 0
     const peakDay = visibleTrends.reduce(
       (best, t) => (t.present > best.present ? t : best),
@@ -420,7 +420,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
   }, [stats.allTimePunches])
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-7">
+    <div className="p-3.5 sm:p-6 max-w-7xl mx-auto space-y-5 sm:space-y-7">
       {/* ──── Light-Theme Hero Banner & Executive Controls ─────────────────────────────── */}
       <PageBanner
         theme="dashboard"
@@ -456,11 +456,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
               Refresh Data
             </button>
             <span
-              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border shadow-sm ${
-                isLive
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border shadow-sm ${isLive
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                   : 'bg-amber-50 border-amber-200 text-amber-700'
-              }`}
+                }`}
             >
               <Radio className={`w-3.5 h-3.5 ${isLive ? 'animate-pulse text-emerald-600' : ''}`} />
               {isLive ? 'Live Telemetry' : 'Sync Active'}
@@ -470,96 +469,96 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       />
 
       {/* Quick Navigation Pills */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <Link
           href="/reports"
-          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 hover:border-blue-400 hover:shadow-sm transition-all group"
+          className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200/80 hover:border-blue-400 hover:shadow-sm transition-all group min-w-0"
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold flex-shrink-0">
               <FileSpreadsheet className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-700 group-hover:text-blue-600 transition-colors">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 group-hover:text-blue-600 transition-colors truncate">
               Full DTR Reports
             </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
         </Link>
 
         <Link
           href="/attendance"
-          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 hover:border-indigo-400 hover:shadow-sm transition-all group"
+          className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200/80 hover:border-indigo-400 hover:shadow-sm transition-all group min-w-0"
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold flex-shrink-0">
               <Clock className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 group-hover:text-indigo-600 transition-colors truncate">
               Attendance Logs
             </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
         </Link>
 
         <Link
           href="/payroll"
-          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-400 hover:shadow-sm transition-all group"
+          className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200/80 hover:border-emerald-400 hover:shadow-sm transition-all group min-w-0"
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold flex-shrink-0">
               <Zap className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-700 group-hover:text-emerald-600 transition-colors">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 group-hover:text-emerald-600 transition-colors truncate">
               Payroll Export
             </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
         </Link>
 
         <Link
           href="/sync"
-          className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200/80 hover:border-purple-400 hover:shadow-sm transition-all group"
+          className="flex items-center justify-between gap-2 p-2.5 sm:p-3 rounded-xl bg-white border border-slate-200/80 hover:border-purple-400 hover:shadow-sm transition-all group min-w-0"
         >
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center font-bold flex-shrink-0">
               <Activity className="w-4 h-4" />
             </div>
-            <span className="text-xs font-bold text-slate-700 group-hover:text-purple-600 transition-colors">
+            <span className="text-[11px] sm:text-xs font-bold text-slate-700 group-hover:text-purple-600 transition-colors truncate">
               Hardware Bridge
             </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform" />
+          <ChevronRight className="w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition-transform flex-shrink-0" />
         </Link>
       </div>
 
       {/* ──── Executive KPI Strip (5 Cards) ──────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Card 1: Registered Workforce */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Workforce</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
-              <Users className="w-4 h-4" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Workforce</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <p className="text-3xl font-black text-slate-900 mt-2">{stats.totalEmployees}</p>
-          <div className="mt-2.5 flex items-center gap-1.5 text-xs text-slate-500 font-medium truncate">
+          <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{stats.totalEmployees}</p>
+          <div className="mt-2.5 flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 font-medium truncate">
             <span className="inline-block w-2 h-2 rounded-full bg-blue-500 shrink-0" />
             <span className="truncate">{branchSummaryText}</span>
           </div>
         </div>
 
         {/* Card 2: Present Today */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Present Today</span>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <UserCheck className="w-4 h-4" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Present Today</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+              <UserCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <p className="text-3xl font-black text-emerald-700">{stats.todayPresent}</p>
-            <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+          <div className="flex flex-wrap items-baseline gap-1.5 sm:gap-2 mt-2">
+            <p className="text-2xl sm:text-3xl font-black text-emerald-700">{stats.todayPresent}</p>
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-600 bg-emerald-50 px-1.5 sm:px-2 py-0.5 rounded-full border border-emerald-200 whitespace-nowrap">
               {stats.attendanceRate}% Rate
             </span>
           </div>
@@ -572,35 +571,35 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         {/* Card 3: Monthly Hours Worked */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Monthly Hours</span>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <Clock className="w-4 h-4" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Monthly Hours</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <p className="text-3xl font-black text-indigo-700 mt-2">
+          <p className="text-2xl sm:text-3xl font-black text-indigo-700 mt-2">
             {Math.round(stats.totalMonthHours).toLocaleString()}h
           </p>
-          <div className="mt-2.5 flex items-center gap-1.5 text-xs text-slate-500 font-medium">
-            <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] border border-amber-200">
+          <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[11px] sm:text-xs text-slate-500 font-medium">
+            <span className="font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] border border-amber-200 whitespace-nowrap">
               +{stats.totalMonthOvertime}h OT
             </span>
-            <span className="text-slate-400">{stats.avgDailyHours}h avg/shift</span>
+            <span className="text-slate-400 whitespace-nowrap">{stats.avgDailyHours}h avg/shift</span>
           </div>
         </div>
 
         {/* Card 4: On-Time Punctuality */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Punctuality</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Timer className="w-4 h-4" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 shadow-xs relative overflow-hidden">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Punctuality</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
+              <Timer className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <div className="flex items-baseline gap-2 mt-2">
-            <p className="text-3xl font-black text-purple-700">{stats.punctualityRate}%</p>
-            <span className="text-[11px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+          <div className="flex flex-wrap items-baseline gap-1.5 sm:gap-2 mt-2">
+            <p className="text-2xl sm:text-3xl font-black text-purple-700">{stats.punctualityRate}%</p>
+            <span className="text-[10px] sm:text-[11px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 whitespace-nowrap">
               {stats.avgCheckInLabel} avg
             </span>
           </div>
@@ -613,14 +612,14 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         {/* Card 5: Biometric Punches */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs relative overflow-hidden col-span-2 md:col-span-1">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Punches</span>
-            <div className="w-8 h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
-              <Activity className="w-4 h-4" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-3.5 sm:p-5 shadow-xs relative overflow-hidden col-span-2 md:col-span-1">
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-400 truncate">Total Punches</span>
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center flex-shrink-0">
+              <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </div>
           </div>
-          <p className="text-3xl font-black text-slate-900 mt-2">{stats.allTimePunches.toLocaleString()}</p>
+          <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">{stats.allTimePunches.toLocaleString()}</p>
           <div className="mt-2.5 flex items-center justify-between text-xs font-bold">
             <span className="inline-flex items-center gap-1 text-emerald-600">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -632,9 +631,9 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       </div>
 
       {/* ──── Visual Analytics Row 1: Interactive Multi-Mode Trend + Hourly Wave Curve ─────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         {/* Hero Chart 1 (7 cols): Multi-Mode Workday Analytics (Headcount Bars / Area Rate Curve / Regular vs OT Stacked) */}
-        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2.5">
@@ -657,33 +656,30 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                   <button
                     type="button"
                     onClick={() => setTrendMode('headcount')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      trendMode === 'headcount'
+                    className={`px-2.5 py-1 rounded-md transition-all ${trendMode === 'headcount'
                         ? 'bg-white text-blue-700 shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800'
-                    }`}
+                      }`}
                   >
                     Headcount
                   </button>
                   <button
                     type="button"
                     onClick={() => setTrendMode('area')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      trendMode === 'area'
+                    className={`px-2.5 py-1 rounded-md transition-all ${trendMode === 'area'
                         ? 'bg-white text-indigo-700 shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800'
-                    }`}
+                      }`}
                   >
                     Rate Curve
                   </button>
                   <button
                     type="button"
                     onClick={() => setTrendMode('hours')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      trendMode === 'hours'
+                    className={`px-2.5 py-1 rounded-md transition-all ${trendMode === 'hours'
                         ? 'bg-white text-amber-700 shadow-2xs'
                         : 'text-slate-500 hover:text-slate-800'
-                    }`}
+                      }`}
                   >
                     Hours + OT
                   </button>
@@ -693,18 +689,16 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                   <button
                     type="button"
                     onClick={() => setTrendRange(7)}
-                    className={`px-2 py-1 rounded-md transition-all ${
-                      trendRange === 7 ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
-                    }`}
+                    className={`px-2 py-1 rounded-md transition-all ${trendRange === 7 ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
+                      }`}
                   >
                     7D
                   </button>
                   <button
                     type="button"
                     onClick={() => setTrendRange(14)}
-                    className={`px-2 py-1 rounded-md transition-all ${
-                      trendRange === 14 ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
-                    }`}
+                    className={`px-2 py-1 rounded-md transition-all ${trendRange === 14 ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500'
+                      }`}
                   >
                     14D
                   </button>
@@ -801,6 +795,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                           className="cursor-pointer"
                           onMouseEnter={() => setHoveredTrendIdx(idx)}
                           onMouseLeave={() => setHoveredTrendIdx(null)}
+                          onClick={() => setHoveredTrendIdx((prev) => (prev === idx ? null : idx))}
                         >
                           {(isHovered || isLatest) && (
                             <line
@@ -826,9 +821,8 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                             x={pt.x}
                             y={areaChartGeom.height - 6}
                             textAnchor="middle"
-                            className={`text-[10px] font-bold ${
-                              isLatest ? 'fill-indigo-600' : 'fill-slate-500'
-                            }`}
+                            className={`text-[10px] font-bold ${isLatest ? 'fill-indigo-600' : 'fill-slate-500'
+                              }`}
                           >
                             {trendRange === 14 ? pt.item.date.slice(8) : pt.item.shortDay}
                           </text>
@@ -846,7 +840,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
 
                   {/* Dynamic Hover Readout Bar */}
                   {hoveredTrendIdx !== null && visibleTrends[hoveredTrendIdx] && (
-                    <div className="mt-1 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs flex items-center justify-between">
+                    <div className="mt-2 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] sm:text-xs flex flex-wrap items-center justify-between gap-1.5">
                       <span className="font-bold">{visibleTrends[hoveredTrendIdx].label}</span>
                       <span className="text-slate-300">
                         {visibleTrends[hoveredTrendIdx].present}/{stats.totalEmployees} Present (
@@ -861,7 +855,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
             ) : trendMode === 'hours' ? (
               /* MODE 3: Stacked Regular + Overtime Hours Columns */
               <div className="pt-3 pb-1">
-                <div className="h-52 flex items-end justify-between gap-1.5 md:gap-3 px-2 border-b border-slate-100 relative">
+                <div className="h-52 flex items-end justify-between gap-1 sm:gap-2 px-1 sm:px-2 border-b border-slate-100 relative">
                   {visibleTrends.map((t, idx) => {
                     const regH = t.regularHours
                     const otH = t.overtime
@@ -874,25 +868,25 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                     return (
                       <div
                         key={t.date}
-                        className="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer"
+                        className="flex-1 min-w-0 flex flex-col items-center h-full justify-end group relative cursor-pointer"
                         onMouseEnter={() => setHoveredTrendIdx(idx)}
                         onMouseLeave={() => setHoveredTrendIdx(null)}
+                        onClick={() => setHoveredTrendIdx((prev) => (prev === idx ? null : idx))}
                       >
                         {isHovered && (
-                          <div className="absolute -top-16 z-30 bg-slate-900 text-white text-xs rounded-xl py-1.5 px-3 shadow-lg whitespace-nowrap pointer-events-none">
+                          <div className="hidden sm:block absolute -top-16 z-30 bg-slate-900 text-white text-xs rounded-xl py-1.5 px-3 shadow-lg whitespace-nowrap pointer-events-none">
                             <p className="font-bold">{t.label}</p>
                             <p className="text-[11px] text-slate-300">
                               Reg: {regH}h · <span className="text-amber-300 font-bold">OT: {otH}h</span> · Total: {totalH}h
                             </p>
                           </div>
                         )}
-                        <span className="text-[10px] font-bold text-slate-600 mb-1">
+                        <span className="text-[9px] sm:text-[10px] font-bold text-slate-600 mb-1 truncate max-w-full">
                           {Math.round(totalH)}h
                         </span>
                         <div
-                          className={`w-full ${trendRange === 14 ? 'max-w-[26px]' : 'max-w-[42px]'} rounded-t-xl overflow-hidden flex flex-col justify-end transition-all duration-300 shadow-2xs ${
-                            isToday ? 'ring-2 ring-amber-400/50' : ''
-                          }`}
+                          className={`w-full ${trendRange === 14 ? 'max-w-[26px]' : 'max-w-[42px]'} rounded-t-lg sm:rounded-t-xl overflow-hidden flex flex-col justify-end transition-all duration-300 shadow-2xs ${isToday ? 'ring-2 ring-amber-400/50' : ''
+                            }`}
                           style={{ height: `${totalPct}%` }}
                         >
                           {otSharePct > 0 && (
@@ -907,26 +901,34 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                     )
                   })}
                 </div>
-                <div className="flex justify-between gap-1.5 md:gap-3 px-2 mt-2">
+                <div className="flex justify-between gap-1 sm:gap-2 px-1 sm:px-2 mt-2">
                   {visibleTrends.map((t, idx) => {
                     const isToday = idx === visibleTrends.length - 1
                     return (
-                      <div key={t.date} className="flex-1 text-center">
-                        <p className={`text-[11px] font-bold ${isToday ? 'text-indigo-600' : 'text-slate-600'}`}>
+                      <div key={t.date} className="flex-1 min-w-0 text-center">
+                        <p className={`text-[10px] sm:text-[11px] font-bold truncate ${isToday ? 'text-indigo-600' : 'text-slate-600'}`}>
                           {trendRange === 14 ? t.date.slice(8) : t.shortDay}
                         </p>
-                        <p className="text-[9px] text-amber-600 font-semibold mt-0.5">
+                        <p className="text-[8px] sm:text-[9px] text-amber-600 font-semibold mt-0.5 truncate">
                           {t.overtime > 0 ? `+${t.overtime}h` : '—'}
                         </p>
                       </div>
                     )
                   })}
                 </div>
+                {hoveredTrendIdx !== null && visibleTrends[hoveredTrendIdx] && (
+                  <div className="mt-2 sm:hidden px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] flex flex-wrap items-center justify-between gap-1">
+                    <span className="font-bold">{visibleTrends[hoveredTrendIdx].label}</span>
+                    <span className="text-slate-300">
+                      Reg: {visibleTrends[hoveredTrendIdx].regularHours}h · <strong className="text-amber-300">OT: {visibleTrends[hoveredTrendIdx].overtime}h</strong> · Total: {visibleTrends[hoveredTrendIdx].regularHours + visibleTrends[hoveredTrendIdx].overtime}h
+                    </span>
+                  </div>
+                )}
               </div>
             ) : (
               /* MODE 1: Headcount Turnout Columns with Capacity Track + Average Line */
               <div className="pt-3 pb-1">
-                <div className="h-52 flex items-end justify-between gap-1.5 md:gap-3 px-2 border-b border-slate-100 relative">
+                <div className="h-52 flex items-end justify-between gap-1 sm:gap-2 px-1 sm:px-2 border-b border-slate-100 relative">
                   {/* Average Turnout Dashed Benchmark Line */}
                   {trendStats.avgPresent > 0 && (
                     <div
@@ -955,12 +957,13 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                     return (
                       <div
                         key={t.date}
-                        className="flex-1 flex flex-col items-center h-full justify-end group relative cursor-pointer"
+                        className="flex-1 min-w-0 flex flex-col items-center h-full justify-end group relative cursor-pointer"
                         onMouseEnter={() => setHoveredTrendIdx(idx)}
                         onMouseLeave={() => setHoveredTrendIdx(null)}
+                        onClick={() => setHoveredTrendIdx((prev) => (prev === idx ? null : idx))}
                       >
                         {isHovered && (
-                          <div className="absolute -top-16 z-30 bg-slate-900 text-white text-xs rounded-xl py-1.5 px-3 shadow-lg whitespace-nowrap pointer-events-none">
+                          <div className="hidden sm:block absolute -top-16 z-30 bg-slate-900 text-white text-xs rounded-xl py-1.5 px-3 shadow-lg whitespace-nowrap pointer-events-none">
                             <p className="font-bold">{t.label}</p>
                             <p className="text-[11px] text-slate-300">
                               {t.present} Present ({t.rate}%) · {t.hours}h · {t.completed} Completed
@@ -969,25 +972,22 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                         )}
 
                         <span
-                          className={`text-[11px] font-bold mb-1 transition-colors ${
-                            isToday ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'
-                          }`}
+                          className={`text-[10px] sm:text-[11px] font-bold mb-1 transition-colors ${isToday ? 'text-indigo-600' : 'text-slate-600 group-hover:text-slate-900'
+                            }`}
                         >
                           {t.present}
                         </span>
 
                         {/* Full-Height Light Capacity Backdrop + Foreground Present Bar */}
                         <div
-                          className={`w-full ${
-                            trendRange === 14 ? 'max-w-[26px]' : 'max-w-[42px]'
-                          } h-[88%] rounded-t-xl bg-slate-100/80 flex items-end overflow-hidden`}
+                          className={`w-full ${trendRange === 14 ? 'max-w-[26px]' : 'max-w-[42px]'
+                            } h-[88%] rounded-t-lg sm:rounded-t-xl bg-slate-100/80 flex items-end overflow-hidden`}
                         >
                           <div
-                            className={`w-full rounded-t-xl transition-all duration-300 ${
-                              isToday
+                            className={`w-full rounded-t-lg sm:rounded-t-xl transition-all duration-300 ${isToday
                                 ? 'bg-gradient-to-t from-indigo-600 to-purple-500 shadow-md shadow-indigo-500/20'
                                 : 'bg-gradient-to-t from-blue-500 to-indigo-400 group-hover:from-blue-600 group-hover:to-indigo-500'
-                            }`}
+                              }`}
                             style={{ height: `${heightPercent}%` }}
                           />
                         </div>
@@ -996,21 +996,29 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                   })}
                 </div>
 
-                <div className="flex justify-between gap-1.5 md:gap-3 px-2 mt-2">
+                <div className="flex justify-between gap-1 sm:gap-2 px-1 sm:px-2 mt-2">
                   {visibleTrends.map((t, idx) => {
                     const isToday = idx === visibleTrends.length - 1
                     return (
-                      <div key={t.date} className="flex-1 text-center">
-                        <p className={`text-[11px] font-bold ${isToday ? 'text-indigo-600' : 'text-slate-600'}`}>
+                      <div key={t.date} className="flex-1 min-w-0 text-center">
+                        <p className={`text-[10px] sm:text-[11px] font-bold truncate ${isToday ? 'text-indigo-600' : 'text-slate-600'}`}>
                           {trendRange === 14 ? t.date.slice(8) : t.shortDay}
                         </p>
-                        <p className="text-[10px] text-slate-400 mt-0.5">
+                        <p className="text-[9px] sm:text-[10px] text-slate-400 mt-0.5 truncate">
                           {t.hours > 0 ? `${t.hours}h` : '—'}
                         </p>
                       </div>
                     )
                   })}
                 </div>
+                {hoveredTrendIdx !== null && visibleTrends[hoveredTrendIdx] && (
+                  <div className="mt-2 sm:hidden px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[11px] flex flex-wrap items-center justify-between gap-1">
+                    <span className="font-bold">{visibleTrends[hoveredTrendIdx].label}</span>
+                    <span className="text-slate-300">
+                      {visibleTrends[hoveredTrendIdx].present} Present ({visibleTrends[hoveredTrendIdx].rate}%) · {visibleTrends[hoveredTrendIdx].hours}h
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1048,9 +1056,9 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         {/* Hero Chart 2 (5 cols): Workday Hourly Pulse (SVG Density Curve + Dual Check-In/Out Columns) */}
-        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
                   <Activity className="w-4 h-4" />
@@ -1116,6 +1124,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                       className="cursor-pointer"
                       onMouseEnter={() => setHoveredHour(h.hour)}
                       onMouseLeave={() => setHoveredHour(null)}
+                      onClick={() => setHoveredHour((prev) => (prev === h.hour ? null : h.hour))}
                     >
                       <rect
                         x={pt.x - 6}
@@ -1204,9 +1213,9 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       </div>
 
       {/* ──── Visual Analytics Row 2: Donut Chart · Punctuality Gauge · Branch Radials & Weekday Heatmap ──── */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
         {/* Card A: Shift Outcomes Multi-Segment SVG Donut Chart */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -1276,7 +1285,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         {/* Card B: Arrival Punctuality 100% Segmented Strip & Breakdown */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -1369,7 +1378,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         {/* Card C: Branch Radial Rings + Mon–Sat Weekday Performance */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex flex-col justify-between">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -1455,13 +1464,13 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
       </div>
 
       {/* ──── Detailed Reports Explorer + Live Biometric Infrastructure ──────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
         {/* Left (8 cols): Interactive Multi-Report Table Card */}
-        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-5 md:p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center">
+                <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center flex-shrink-0">
                   <Table2 className="w-4 h-4" />
                 </div>
                 <div>
@@ -1473,15 +1482,14 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
               </div>
 
               {/* Report Tab Switcher */}
-              <div className="inline-flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
+              <div className="w-full sm:w-auto max-w-full overflow-x-auto flex sm:inline-flex rounded-xl bg-slate-100 p-1 text-xs font-bold">
                 <button
                   type="button"
                   onClick={() => setReportTab('today')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                    reportTab === 'today'
+                  className={`inline-flex flex-1 sm:flex-none justify-center whitespace-nowrap items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all ${reportTab === 'today'
                       ? 'bg-white text-blue-700 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
-                  }`}
+                    }`}
                 >
                   <UserCheck className="w-3.5 h-3.5" />
                   Today Roster
@@ -1489,11 +1497,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                 <button
                   type="button"
                   onClick={() => setReportTab('leaders')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                    reportTab === 'leaders'
+                  className={`inline-flex flex-1 sm:flex-none justify-center whitespace-nowrap items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all ${reportTab === 'leaders'
                       ? 'bg-white text-indigo-700 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
-                  }`}
+                    }`}
                 >
                   <Award className="w-3.5 h-3.5" />
                   Hours &amp; OT
@@ -1501,11 +1508,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                 <button
                   type="button"
                   onClick={() => setReportTab('ledger')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all ${
-                    reportTab === 'ledger'
+                  className={`inline-flex flex-1 sm:flex-none justify-center whitespace-nowrap items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg transition-all ${reportTab === 'ledger'
                       ? 'bg-white text-purple-700 shadow-2xs'
                       : 'text-slate-500 hover:text-slate-800'
-                  }`}
+                    }`}
                 >
                   <CalendarDays className="w-3.5 h-3.5" />
                   14-Day Ledger
@@ -1523,11 +1529,10 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                         key={st}
                         type="button"
                         onClick={() => setRosterFilter(st)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${
-                          rosterFilter === st
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-all ${rosterFilter === st
                             ? 'bg-blue-600 text-white border-blue-600'
                             : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                        }`}
+                          }`}
                       >
                         {st === 'all' ? `All (${todayRoster.length})` : st}
                       </button>
@@ -1543,7 +1548,7 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                   aria-label="Filter by branch"
                   value={branchFilter}
                   onChange={(e) => setBranchFilter(e.target.value)}
-                  className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full sm:w-auto text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 sm:py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Branches</option>
                   {branchStats.map((b) => (
@@ -1613,15 +1618,14 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                           </td>
                           <td className="py-2 px-3 text-right whitespace-nowrap">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                                row.status === 'Completed'
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${row.status === 'Completed'
                                   ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                   : row.status === 'On Duty'
                                     ? 'bg-blue-50 text-blue-700 border-blue-200'
                                     : row.status === 'Incomplete'
                                       ? 'bg-amber-50 text-amber-700 border-amber-200'
                                       : 'bg-slate-100 text-slate-500 border-slate-200'
-                              }`}
+                                }`}
                             >
                               {row.status}
                             </span>
@@ -1714,13 +1718,12 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
                         </td>
                         <td className="py-2 px-2 text-right">
                           <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                              row.rate >= 80
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${row.rate >= 80
                                 ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                                 : row.rate >= 60
                                   ? 'bg-blue-50 text-blue-700 border-blue-200'
                                   : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}
+                              }`}
                           >
                             {row.rate}%
                           </span>
@@ -1770,28 +1773,26 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
         </div>
 
         {/* Right (4 cols): Biometric Infrastructure & Bridge v18.9 Health Card */}
-        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 p-5 md:p-6 shadow-xs flex flex-col justify-between">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-6 shadow-xs flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
                   <Cpu className="w-4 h-4" />
                 </div>
                 <h3 className="text-sm font-bold text-slate-900">Biometric Infrastructure</h3>
               </div>
               <span
-                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  bridgeMeta.bridgeOnline && bridgeMeta.ta500Online
+                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${bridgeMeta.bridgeOnline && bridgeMeta.ta500Online
                     ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                     : 'bg-amber-50 text-amber-700 border-amber-200'
-                }`}
+                  }`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    bridgeMeta.bridgeOnline && bridgeMeta.ta500Online
+                  className={`w-1.5 h-1.5 rounded-full ${bridgeMeta.bridgeOnline && bridgeMeta.ta500Online
                       ? 'bg-emerald-500 animate-pulse'
                       : 'bg-amber-500'
-                  }`}
+                    }`}
                 />
                 {bridgeMeta.bridgeOnline && bridgeMeta.ta500Online ? 'Online' : 'Standby'}
               </span>
@@ -1799,32 +1800,30 @@ export function DashboardClient({ initialData }: DashboardClientProps) {
             <p className="text-xs text-slate-400 mb-4">Hardware link &amp; cloud sync health</p>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-1.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                 <span className="text-slate-600 font-medium">TA500 Terminal</span>
                 <span
-                  className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded border ${
-                    bridgeMeta.ta500Online
+                  className={`inline-flex items-center gap-1 font-bold px-2 py-0.5 rounded border ${bridgeMeta.ta500Online
                       ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
                       : 'text-slate-600 bg-slate-100 border-slate-200'
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      bridgeMeta.ta500Online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
-                    }`}
+                    className={`w-1.5 h-1.5 rounded-full ${bridgeMeta.ta500Online ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'
+                      }`}
                   />
                   192.168.0.58:4370
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-1.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                 <span className="text-slate-600 font-medium">Sync Engine</span>
                 <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
                   {bridgeMeta.bridgeVersion} Iron Sentinel
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-1.5 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                 <span className="text-slate-600 font-medium">Heartbeat</span>
                 <span className="font-bold text-slate-800">
                   {bridgeMeta.heartbeatAgeSec < 9000
